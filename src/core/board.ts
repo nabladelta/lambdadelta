@@ -154,12 +154,12 @@ export class BulletinBoard {
         return opcore.key.toString('hex')
     }
 
-    async newMessage(threadId: string, msg: string) {
+    async newMessage(threadId: string, post: IPost) {
         console.log(threadId)
         if (!this.threads[threadId]) {
             await this.joinThread(threadId)
         }
-        await this.threads[threadId].base.append(msg)
+        await this.threads[threadId].base.append(post)
     }
 
     async getThreadContent(threadId: string, start?: number, end?: number) {
@@ -168,11 +168,14 @@ export class BulletinBoard {
         await view.ready()
         await view.update()
 
-        const messages: string[] = []
+        const thread: IThread = {posts: []}
         for (let i = start || 0; i < (end || view.length); i++) {
             const node = await view.get(i)
-            messages.push(node.value.toString())
+            thread.posts.push({com: node.value.toString()})
         }
-        return messages
+        return thread
+    }
+    getThreadList() {
+        return this.threadsList
     }
 }
