@@ -162,14 +162,14 @@ export class BulletinBoard {
         await this.threads[threadId].base.append(msg)
     }
 
-    async getThreadCausalStream(threadId: string) {
+    async getThreadContent(threadId: string, start?: number, end?: number) {
         const view = this.threads[threadId].base.view
 
         await view.ready()
         await view.update()
 
         const messages: string[] = []
-        for (let i=0; i < view.length; i++) {
+        for (let i = start || 0; i < (end || view.length); i++) {
             const node = await view.get(i)
             messages.push(node.value.toString())
         }
