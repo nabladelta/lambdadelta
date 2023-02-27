@@ -76,7 +76,7 @@ export class BulletinBoard {
     }
 
     async attachStreamToThreads(stream: any) {
-        this.threadsList.forEach((tid: string)=> {
+        this.threadsList.forEach((tid: string) => {
             this.threads[tid].attachStream(stream)
         })
     }
@@ -102,7 +102,10 @@ export class BulletinBoard {
 
     async buildThread(opcore: any, inputCore: any) {
         const threadId = opcore.key.toString('hex')
-        const output = this.stores.outputs.get({ name: threadId })
+        const output = this.stores.outputs.get(
+            { 
+                name: threadId
+            })
         await output.ready()
 
         const base = new Autobase({
@@ -116,7 +119,8 @@ export class BulletinBoard {
             base,
             () => true,
             this.corestore.get.bind(this.corestore),
-            this.corestore.storage)
+            this.corestore.storage
+        )
         
         this.threadsList.push(threadId)
         this.threads[threadId] = manager
@@ -124,6 +128,13 @@ export class BulletinBoard {
             manager.attachStream(s)
         })
         await manager.ready()
+        await manager.base.start({
+            async apply(batch: any) {
+                batch = batch.map(({ value }: any) => Buffer.from(value.toString('utf-8').toUpperCase(), 'utf-8'))
+                await manager.base.view.append(batch)
+            }
+        })
+        await manager.base.view.update()
         return manager
     }
 
@@ -136,7 +147,8 @@ export class BulletinBoard {
     }
 
     async newThread(): Promise<string> {
-        const opcore = this.stores.op.get({ name: `${getThreadEpoch()}` })
+        const opcore = this.stores.op.get(
+            { name: `${getThreadEpoch()}`})
         await opcore.ready()
         await this.buildThread(opcore, opcore)
         return opcore.key.toString('hex')
@@ -151,11 +163,15 @@ export class BulletinBoard {
     }
 
     async getThreadCausalStream(threadId: string) {
-        console.log(this.threads[threadId].base)
-        await this.threads[threadId].base.view.update()
+        const view = this.threads[threadId].base.view
+
+        await view.ready()
+        await view.update()
+
         const messages: string[] = []
-        for await (const node of this.threads[threadId].base.view.createReadStream()) {
-            messages.push(node.toString())
+        for (let i=0; i < view.length; i++) {
+            const node = await view.get(i)
+            messages.push(node.value.toString())
         }
         return messages
     }
