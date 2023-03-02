@@ -1,0 +1,70 @@
+import React, { useMemo } from 'react'
+import {
+  ChakraProvider,
+  Box,
+  Text,
+  Link,
+  VStack,
+  Code,
+  Grid,
+  Card,
+  Image,
+  Stack,
+  Heading,
+  Button,
+  HStack,
+} from "@chakra-ui/react"
+import { CardHeader, CardBody, CardFooter } from '@chakra-ui/react'
+
+function formatBytes(bytes: number, decimals = 0) {
+    if (!+bytes) return '0 Bytes'
+
+    const k = 1024
+    const dm = decimals < 0 ? 0 : decimals
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
+
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`
+}
+
+function truncate(str: string, n: number){
+    return (str.length > n) ? str.slice(0, n-1) + '(…)' : str;
+};
+
+function Post({post}:{post: IPost}) {
+    const dateString = useMemo(()=> {
+        const date = new Date(post.time * 1000)
+        const weekday = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+        return `${date.getDate()}/${date.getMonth()}/${date.getFullYear()}(${weekday[date.getDay()]})${date.toLocaleTimeString()}`
+    }, [post.time])
+    return (
+        <Card
+            direction={{ base: 'column', sm: 'row' }}
+            overflow='hidden'
+            variant='outline'>
+                {post.tim && <Image
+                    objectFit='cover'
+                    maxW={{ base: '100%', sm: '200px' }}
+                    src={'https://images.unsplash.com/photo-1667489022797-ab608913feeb?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxlZGl0b3JpYWwtZmVlZHw5fHx8ZW58MHx8fHw%3D&auto=format&fit=crop&w=800&q=60'}
+                    alt={`${post.filename}${post.ext}`}
+                />}
+            <Stack>
+                <CardHeader>
+                <HStack spacing={7}>{post.sub && <Text as='b'>{post.sub}</Text>}<Text as='b'>{post.name || "Anonymous"}</Text><Text>{dateString}</Text><Text>No. {post.no}</Text>{/*<Text fontSize='sm' as='u'>&gt;&gt;Z55ASQDFBS7FFQ</Text>*/}</HStack> 
+                </CardHeader>
+                <CardBody>
+                    <Text align={'left'} py='2'>
+                        {post.com}
+                    </Text>
+                </CardBody>
+
+                <CardFooter>
+                <HStack spacing={7}>{post.filename && <Text as='i'>{`File: ${truncate(post.filename, 24)}${post.ext}`}</Text>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}</HStack>
+                </CardFooter>
+            </Stack>
+        </Card>
+  )
+}
+
+export default Post
