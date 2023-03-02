@@ -1,7 +1,6 @@
 import { ColorModeScript } from "@chakra-ui/react"
 import * as React from "react"
 import * as ReactDOM from "react-dom/client"
-import Home from './pages/home/home'
 import { App } from "./App"
 import reportWebVitals from "./reportWebVitals"
 import * as serviceWorker from "./serviceWorker"
@@ -9,17 +8,10 @@ import * as serviceWorker from "./serviceWorker"
 import {
   createBrowserRouter,
   createRoutesFromElements,
+  BrowserRouter,
   Route,
   RouterProvider,
 } from "react-router-dom"
-
-const router = createBrowserRouter(
-  createRoutesFromElements(
-    <Route path="/" element={<Home />}>
-      <Route path="dashboard" element={<Home />} />
-    </Route>
-  )
-)
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -28,9 +20,9 @@ const root = ReactDOM.createRoot(
 root.render(
   <React.StrictMode>
     <ColorModeScript />
-    <App>
-    <RouterProvider router={router} />
-    </App>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </React.StrictMode>,
 )
 

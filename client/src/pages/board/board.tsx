@@ -1,6 +1,6 @@
 import React from 'react';
 
-function App() {
+function BoardPage() {
   return (
     <div className="App">
       <header className="App-header">
@@ -10,11 +10,11 @@ function App() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          Learn React
+          Board
         </a>
       </header>
     </div>
   );
 }
 
-export default App;
+export default BoardPage;
