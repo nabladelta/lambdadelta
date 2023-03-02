@@ -24,7 +24,7 @@ function ThreadPage() {
     .then(data => setData(data))
   }, [])
   return (
-    <VStack spacing={8}>
+    <VStack align="flex-start" spacing={8}>
       {data.posts.map(p => <Post key={p.no} post={p as any}/>)}
     </VStack>
   );
