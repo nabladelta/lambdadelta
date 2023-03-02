@@ -34,7 +34,7 @@ app.get('/api/:topic', async (req: Request, res: Response) => {
   res.send({threads})
 })
 
-app.use('/', express.static('client/build'))
+app.use('/', express.static('../client/build'))
 
 app.listen(port, () => {
   console.log(`⚡️[server]: Server is running at http://localhost:${port}`)
