@@ -1,6 +1,7 @@
 import express, { Express, Request, Response } from 'express'
 import dotenv from 'dotenv'
 import { BulletinBoard } from './core/board'
+import path from 'path'
 
 dotenv.config()
 
@@ -34,7 +35,9 @@ app.get('/api/:topic', async (req: Request, res: Response) => {
   res.send({threads})
 })
 
-app.use('/', express.static('../client/build'))
+app.get('/*', function (req, res) {
+   res.sendFile(path.join('../client', 'build', 'index.html'));
+ });
 
 app.listen(port, () => {
   console.log(`⚡️[server]: Server is running at http://localhost:${port}`)
