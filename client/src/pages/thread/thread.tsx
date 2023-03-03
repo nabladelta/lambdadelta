@@ -14,16 +14,18 @@ import {
   Link as CLink,
   HStack,
   IconButton,
-  Tooltip
+  Tooltip,
+  useDisclosure
 } from "@chakra-ui/react"
-import { ArrowBackIcon, ArrowDownIcon, ArrowUpIcon, RepeatClockIcon } from '@chakra-ui/icons'
+import { ArrowBackIcon, ArrowDownIcon, ArrowUpIcon, RepeatClockIcon, ChatIcon } from '@chakra-ui/icons'
 import Post from '../../components/Post'
-import { Link, NavLink } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
+import Reply from '../../components/Reply'
 
 function ThreadPage() {
-  const [data, setData] = useState<{posts: any[]}>({posts: []})
   const toast = useToast()
+  const [data, setData] = useState<{posts: any[]}>({posts: []})
   async function updateData() {
     const r = await fetch('/512.json')
     setData(await r.json())
@@ -34,10 +36,21 @@ function ThreadPage() {
       duration: 1500,
     })
   }
-
   useEffect(() => {
     updateData()
   }, [])
+
+  async function post() {
+    toast({
+      // title: 'Thread Updated',
+      description: "Post Successful",
+      status: 'success',
+      duration: 1500,
+    })
+    onClose()
+  }
+
+  const { isOpen, onOpen, onClose } = useDisclosure()
   return (
     <VStack align="flex-start" spacing={8}>
     <HStack id={'top'} spacing={6}>
@@ -72,6 +85,16 @@ function ThreadPage() {
           onClick={updateData}
           icon={<RepeatClockIcon />}
         />
+      </Tooltip>
+      <Tooltip label='Reply'>
+      <IconButton
+        variant='outline'
+        colorScheme='gray'
+        aria-label='Reply'
+        fontSize='20px'
+        onClick={onOpen}
+        icon={<ChatIcon />}
+      />
       </Tooltip>
     </HStack>
     <VStack align="flex-start" spacing={8}>
@@ -110,7 +133,18 @@ function ThreadPage() {
         icon={<RepeatClockIcon />}
       />
       </Tooltip>
+      <Tooltip label='Reply'>
+      <IconButton
+        variant='outline'
+        colorScheme='gray'
+        aria-label='Reply'
+        fontSize='20px'
+        onClick={onOpen}
+        icon={<ChatIcon />}
+      />
+      </Tooltip>
     </HStack>
+    <Reply isOpen={isOpen} onClose={onClose} onPost={post} />
     </VStack>
   );
 }
