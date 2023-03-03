@@ -65,7 +65,7 @@ function Reply({isOpen, onClose, onPost}: {isOpen: boolean, onClose: () => void,
 
             <DrawerFooter borderTopWidth='1px'>
                 <Button variant='outline' mr={3} onClick={onClose}>
-                Cancel
+                Close
                 </Button>
                 <Button colorScheme={'gray'} onClick={onPost}>Post</Button>
             </DrawerFooter>
