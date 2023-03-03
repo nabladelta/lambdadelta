@@ -13,6 +13,7 @@ import {
   Heading,
   Button,
   HStack,
+  Tooltip
 } from "@chakra-ui/react"
 import { CardHeader, CardBody, CardFooter } from '@chakra-ui/react'
 
@@ -45,7 +46,7 @@ function Post({post}:{post: IPost}) {
             variant='outline'>
                 {post.tim && <Image
                     objectFit='cover'
-                    maxW={{ base: '100%', sm: '200px' }}
+                    maxW={{ base: '100%', sm: `${post.tn_w}px` }}
                     src={'https://images.unsplash.com/photo-1667489022797-ab608913feeb?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxlZGl0b3JpYWwtZmVlZHw5fHx8ZW58MHx8fHw%3D&auto=format&fit=crop&w=800&q=60'}
                     alt={`${post.filename}${post.ext}`}
                 />}
@@ -60,7 +61,7 @@ function Post({post}:{post: IPost}) {
                 </CardBody>
 
                 <CardFooter>
-                <HStack spacing={7}>{post.filename && <Text as='i'>{`File: ${truncate(post.filename, 24)}${post.ext}`}</Text>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}</HStack>
+                <HStack spacing={7}>{post.filename && <Tooltip label={`${post.filename}${post.ext}`}><Text as='i'>{`File: ${truncate(post.filename, 24)}${post.ext}`}</Text></Tooltip>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}</HStack>
                 </CardFooter>
             </Stack>
         </Card>
