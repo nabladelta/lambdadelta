@@ -12,7 +12,7 @@ import { ColorModeSwitcher } from "./components/ColorModeSwitcher"
 import { Routes, Route } from 'react-router-dom'
 import Home from "./pages/home/home"
 import ThreadPage from "./pages/thread/thread"
-import BoardPage from "./pages/board/board"
+import Catalog from "./pages/board/catalog"
 import theme from "./theme"
 
 export const App = () => (
@@ -23,7 +23,7 @@ export const App = () => (
         <VStack spacing={8}>
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/:board/catalog" element={<BoardPage />} />
+            <Route path="/:board/catalog" element={<Catalog />} />
             <Route path="/:board/thread/:id" element={<ThreadPage />} />
           </Routes>
         </VStack> 

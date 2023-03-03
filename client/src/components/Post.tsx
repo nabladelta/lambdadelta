@@ -33,7 +33,7 @@ function truncate(str: string, n: number){
     return (str.length > n) ? str.slice(0, n-1) + '(…)' : str;
 };
 
-function Post({post}:{post: IPost}) {
+function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
     const dateString = useMemo(()=> {
         const date = new Date(post.time * 1000)
         const weekday = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
@@ -42,27 +42,28 @@ function Post({post}:{post: IPost}) {
     
     return (
         <Card
-            direction={{ base: 'column', sm: 'row' }}
+            direction={vertical ? undefined : { base: 'column', sm: 'row' }}
             overflow='hidden'
             variant='outline'>
                 {post.tim && <Image
                     objectFit='cover'
-                    maxW={{ base: '100%', sm: `${post.tn_w}px` }}
+                    maxW={vertical ? undefined : { base: '100%', sm: `${post.tn_w}px` }}
                     src={'https://images.unsplash.com/photo-1667489022797-ab608913feeb?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxlZGl0b3JpYWwtZmVlZHw5fHx8ZW58MHx8fHw%3D&auto=format&fit=crop&w=800&q=60'}
                     alt={`${post.filename}${post.ext}`}
                 />}
             <Stack>
                 <CardHeader>
-                <HStack spacing={7}>{post.sub && <Text as='b'>{post.sub}</Text>}<Text as='b'>{post.name || "Anonymous"}</Text><Text>{dateString}</Text><Text>No. {post.no}</Text>{/*<Text fontSize='sm' as='u'>&gt;&gt;Z55ASQDFBS7FFQ</Text>*/}</HStack> 
+                {post.sub && vertical && <Text as='b'>{post.sub}</Text>}
+                {!vertical && <HStack spacing={7}>{post.sub && <Text as='b'>{post.sub}</Text>}<Text as='b'>{post.name || "Anonymous"}</Text><Text>{dateString}</Text><Text>No. {post.no}</Text>{/*<Text fontSize='sm' as='u'>&gt;&gt;Z55ASQDFBS7FFQ</Text>*/}</HStack>}
                 </CardHeader>
                 <CardBody>
-                    <Text align={'left'} py='2'>
+                    <Text noOfLines={vertical ? 3 : undefined} align={'left'} py='2'>
                         {post.com}
                     </Text>
                 </CardBody>
 
                 <CardFooter>
-                <HStack spacing={7}>{post.filename && <Tooltip label={`${post.filename}${post.ext}`}><Text as='i'>{`File: ${truncate(post.filename, 24)}${post.ext}`}</Text></Tooltip>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}</HStack>
+                {!vertical && <HStack spacing={7}>{post.filename && <Tooltip label={`${post.filename}${post.ext}`}><Text as='i'>{`File: ${truncate(post.filename, 24)}${post.ext}`}</Text></Tooltip>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}</HStack>}
                 </CardFooter>
             </Stack>
         </Card>

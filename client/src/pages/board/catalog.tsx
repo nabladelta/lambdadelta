@@ -11,7 +11,9 @@ import {
   Stack,
   Heading,
   Button,
+  Flex,
   Link as CLink,
+  SimpleGrid,
   HStack,
   IconButton,
   Tooltip,
@@ -23,16 +25,16 @@ import { Link, useParams } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
 
-function ThreadPage() {
+function Catalog() {
   const toast = useToast()
-  const [data, setData] = useState<{posts: any[]}>({posts: []})
-  const { board, id } = useParams()
+  const { board } = useParams()
+  const [data, setData] = useState<{page: number, threads: any[]}[]>([])
 
   async function updateData() {
-    const r = await fetch(`/${id}.json`)
+    const r = await fetch('/catalog.json')
     setData(await r.json())
     toast({
-      title: 'Posts Updated',
+      title: 'Threads Updated',
       status: 'success',
       duration: 1500,
     })
@@ -43,7 +45,7 @@ function ThreadPage() {
 
   async function post() {
     toast({
-      title: "Post Successful",
+      title: 'New Thread Created',
       status: 'success',
       duration: 1500,
     })
@@ -55,7 +57,7 @@ function ThreadPage() {
     <VStack align="flex-start" spacing={8}>
     <HStack id={'top'} spacing={6}>
       <Tooltip label='Return'>
-      <Link to={`/${board}/catalog`} >
+      <Link to="/" >
         <IconButton
           variant='outline'
           colorScheme='gray'
@@ -86,23 +88,24 @@ function ThreadPage() {
           icon={<RepeatClockIcon />}
         />
       </Tooltip>
-      <Tooltip label='Reply'>
+      <Tooltip label='New Thread'>
       <IconButton
         variant='outline'
         colorScheme='gray'
-        aria-label='Reply'
+        aria-label='New Thread'
         fontSize='20px'
         onClick={onOpen}
         icon={<ChatIcon />}
       />
       </Tooltip>
     </HStack>
-    <VStack align="flex-start" spacing={8}>
-      {data.posts.map(p => <Post key={p.no} post={p as any}/>)}
-    </VStack>
+    <SimpleGrid minChildWidth='lg' spacing='40px' >
+      {data.map(page => page.threads
+        .map(p => <Post key={p.no} post={p as any} vertical={true} />))}
+    </SimpleGrid>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>
-        <Link to={`/${board}/catalog`} >
+        <Link to="/" >
         <IconButton
           variant='outline'
           colorScheme='gray'
@@ -149,4 +152,4 @@ function ThreadPage() {
   );
 }
 
-export default ThreadPage;
+export default Catalog;
