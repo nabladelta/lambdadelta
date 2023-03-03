@@ -37,8 +37,9 @@ function Post({post}:{post: IPost}) {
     const dateString = useMemo(()=> {
         const date = new Date(post.time * 1000)
         const weekday = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-        return `${date.getDate()}/${date.getMonth()}/${date.getFullYear()}(${weekday[date.getDay()]})${date.toLocaleTimeString()}`
+        return `${date.getDate()}/${date.getMonth()}/${date.getFullYear().toString().slice(2)}(${weekday[date.getDay()]})${date.toLocaleTimeString()}`
     }, [post.time])
+    
     return (
         <Card
             direction={{ base: 'column', sm: 'row' }}
