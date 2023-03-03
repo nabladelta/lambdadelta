@@ -1,16 +1,19 @@
 import express, { Express, Request, Response } from 'express'
+import cors from 'cors'
 import dotenv from 'dotenv'
 import { BulletinBoard } from './core/board'
 import path from 'path'
 
 dotenv.config()
 
-const app: Express = express()
 const port = process.env.PORT
 const topic = process.env.TOPIC!
 const client = new BulletinBoard(process.env.SECRET!, topic, process.env.MEMSTORE == 'true')
 
+const app: Express = express()
+
 app.use(express.json())
+app.use(cors())
 
 app.get('/api/:topic/thread/:id', async (req: Request, res: Response) => {
     const thread = await client.getThreadContent(req.params.id)

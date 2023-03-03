@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   ChakraProvider,
   Box,
@@ -26,9 +26,12 @@ import {
     DrawerContent,
     DrawerCloseButton,
   } from '@chakra-ui/react'
+
 import { AddIcon } from '@chakra-ui/icons'
 
-function Reply({isOpen, onClose, onPost}: {isOpen: boolean, onClose: () => void, onPost: () => void}) {
+function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, onClose: () => void, onPost: (post: IPost) => void}) {
+    const [post, setPost] = useState<IPost>({com : "", sub: undefined, name: undefined, time: undefined, no: ""})
+
     const firstField: any = React.useRef()
     return (
         <>
@@ -51,14 +54,28 @@ function Reply({isOpen, onClose, onPost}: {isOpen: boolean, onClose: () => void,
                 <Box>
                     <FormLabel htmlFor='name'>Name</FormLabel>
                     <Input
-                    id='name'
-                    placeholder='Anonymous'
+                        value={post.name}
+                        id='name'
+                        placeholder='Anonymous'
+                        onChange={(e) => setPost((p) => {p.name = e.target.value; return p})}
                     />
                 </Box>
 
+                {op && <Box>
+                    <FormLabel htmlFor='sub'>Subject</FormLabel>
+                    <Input
+                    value={post.sub}
+                    onChange={(e) => setPost((p) => {p.sub = e.target.value; return p})}
+                    id='sub'
+                    />
+                </Box>}
+
                 <Box>
                     <FormLabel htmlFor='desc'>Comment</FormLabel>
-                    <Textarea size={'lg'} id='desc' ref={firstField} />
+                    <Textarea 
+                    value={post.com}
+                    onChange={(e) => setPost((p) => {p.com = e.target.value; return p})}
+                    size={'lg'} id='desc' ref={firstField} />
                 </Box>
                 </Stack>
             </DrawerBody>
@@ -67,7 +84,7 @@ function Reply({isOpen, onClose, onPost}: {isOpen: boolean, onClose: () => void,
                 <Button variant='outline' mr={3} onClick={onClose}>
                 Close
                 </Button>
-                <Button colorScheme={'gray'} onClick={onPost}>Post</Button>
+                <Button colorScheme={'gray'} onClick={() => onPost(post)}>Post</Button>
             </DrawerFooter>
             </DrawerContent>
         </Drawer>

@@ -43,7 +43,17 @@ function Catalog() {
     updateData()
   }, [])
 
-  async function post() {
+  async function post(post: IPost) {
+    const r = await fetch('https://httpbin.org/post', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(post)
+    })
+    const content = await r.json()
+    console.log(content)
     toast({
       title: 'New Thread Created',
       status: 'success',
@@ -147,7 +157,7 @@ function Catalog() {
       />
       </Tooltip>
     </HStack>
-    <Reply isOpen={isOpen} onClose={onClose} onPost={post} />
+    <Reply op={true} isOpen={isOpen} onClose={onClose} onPost={post} />
     </VStack>
   );
 }
