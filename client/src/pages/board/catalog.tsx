@@ -12,6 +12,7 @@ import {
   Heading,
   Button,
   Flex,
+  LinkBox,
   Link as CLink,
   SimpleGrid,
   HStack,
@@ -111,7 +112,7 @@ function Catalog() {
     </HStack>
     <SimpleGrid minChildWidth='lg' spacing='40px' >
       {data.map(page => page.threads
-        .map(p => <Post key={p.no} post={p as any} vertical={true} />))}
+        .map(p => <Link key={p.no} to={`/${board}/thread/${p.no}`}><Post post={p as any} vertical={true} /></Link> ))}
     </SimpleGrid>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>
