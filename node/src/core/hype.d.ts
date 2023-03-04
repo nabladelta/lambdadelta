@@ -7,7 +7,6 @@ declare module 'random-access-memory'
 declare module 'protomux'
 declare module 'compact-encoding'
 declare module 'b4a'
-declare module 'cors'
 
 interface OutputNode {
     header: { protocol: '@autobase/input/v1' },

@@ -7,7 +7,7 @@ import ram from 'random-access-memory'
 import Protomux from 'protomux'
 import c from 'compact-encoding'
 
-import { Thread } from './thread.js'
+import { Thread } from './thread'
 
 function getTimestampInSeconds () {
     return Math.floor(Date.now() / 1000)
