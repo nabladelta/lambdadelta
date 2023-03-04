@@ -73,7 +73,6 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
                 <Box>
                     <FormLabel htmlFor='desc'>Comment</FormLabel>
                     <Textarea 
-                    value={post.com}
                     onChange={(e) => setPost((p) => {p.com = e.target.value; return p})}
                     size={'lg'} id='desc' ref={firstField} />
                 </Box>
@@ -84,7 +83,7 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
                 <Button variant='outline' mr={3} onClick={onClose}>
                 Close
                 </Button>
-                <Button colorScheme={'gray'} onClick={() => onPost(post)}>Post</Button>
+                <Button colorScheme={'gray'} onClick={() => {post.time = Math.floor(Date.now()/1000); onPost(post)}}>Post</Button>
             </DrawerFooter>
             </DrawerContent>
         </Drawer>

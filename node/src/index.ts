@@ -20,14 +20,19 @@ app.use(cors())
 
 app.get('/api/:topic/thread/:id', async (req: Request, res: Response) => {
     const thread = await clients[req.params.topic].getThreadContent(req.params.id)
-    res.send({posts: thread})
+    if (!thread) {
+      res.status(404)
+      res.send({error: "Not Found"})
+      return
+    }
+    res.send(thread)
 })
 
 app.post('/api/:topic/thread/:id', async (req: Request, res: Response) => {
     const client = clients[req.params.topic]
     await client.newMessage(req.params.id, req.body)
     const thread = await client.getThreadContent(req.params.id)
-    res.send(thread)
+    res.send({success: true, posts: thread!.posts})
 })
 
 app.post('/api/:topic', async (req: Request, res: Response) => {
@@ -36,19 +41,19 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
   const threadId = await client.newThread()
   await client.newMessage(threadId, req.body)
   const thread = await client.getThreadContent(threadId)
-  res.send({op: threadId, thread: thread})
+  res.send({success: true, op: threadId, thread: thread})
 })
 
 app.get('/api/:topic/catalog.json', async (req: Request, res: Response) => {
   const client = clients[req.params.topic]
 
-  const threads = client.getThreadList()
-  res.send({threads})
+  const catalog = await client.getCatalog()
+  res.send(catalog)
 })
 
-app.get('/*', function (req, res) {
-   res.sendFile(path.join('../client', 'build', 'index.html'));
- })
+// app.get('/*', function (req, res) {
+//    res.sendFile(path.join('../client', 'build', 'index.html'));
+//  })
 
 app.listen(port, () => {
   console.log(`⚡️[server]: Server is running at http://localhost:${port}`)

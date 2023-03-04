@@ -32,7 +32,7 @@ function Catalog() {
   const [data, setData] = useState<{page: number, threads: any[]}[]>([])
 
   async function updateData() {
-    const r = await fetch('/catalog.json')
+    const r = await fetch('http://localhost:8089/api/a/catalog.json')
     setData(await r.json())
     toast({
       title: 'Threads Updated',
@@ -45,7 +45,7 @@ function Catalog() {
   }, [])
 
   async function post(post: IPost) {
-    const r = await fetch('https://httpbin.org/post', {
+    const r = await fetch('http://localhost:8089/api/a', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -112,7 +112,7 @@ function Catalog() {
     </HStack>
     <SimpleGrid minChildWidth='lg' spacing='40px' >
       {data.map(page => page.threads
-        .map(p => <Link key={p.no} to={`/${board}/thread/${p.no}`}><Post post={p as any} vertical={true} /></Link> ))}
+        .map(p => <Link key={p.no} to={`/${board}/thread/${p.no.split('>')[0]}`}><Post post={p} vertical={true} /></Link> ))}
     </SimpleGrid>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>

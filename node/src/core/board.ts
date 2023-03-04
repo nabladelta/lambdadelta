@@ -129,9 +129,14 @@ export class BulletinBoard {
         })
         await manager.ready()
         await manager.base.start({
-            async apply(batch: any) {
-                batch = batch.map(({ value }: any) => Buffer.from(value.toString('utf-8').toUpperCase(), 'utf-8'))
-                await manager.base.view.append(batch)
+            async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
+                const pBatch = batch.map((node) => {
+                    const post: IPost = JSON.parse(node.value.toString())
+                    post.no = node.id + '>' + node.seq
+                    console.log(post)
+                    return Buffer.from(JSON.stringify(post), 'utf-8')
+                })
+                await view.append(pBatch)
             }
         })
         await manager.base.view.update()
@@ -159,23 +164,59 @@ export class BulletinBoard {
         if (!this.threads[threadId]) {
             await this.joinThread(threadId)
         }
-        await this.threads[threadId].base.append(post)
+        await this.threads[threadId].base.append(JSON.stringify(post))
     }
 
     async getThreadContent(threadId: string, start?: number, end?: number) {
+        if (!this.threads[threadId]) return undefined
+
         const view = this.threads[threadId].base.view
 
         await view.ready()
         await view.update()
 
         const thread: IThread = {posts: []}
+
         for (let i = start || 0; i < (end || view.length); i++) {
             const node = await view.get(i)
-            thread.posts.push({com: node.value.toString()})
+            thread.posts.push(JSON.parse(node.value.toString()))
+        }
+
+        if (!start && thread.posts.length) {
+            thread.posts[0].replies = view.length
         }
         return thread
     }
+    async getThreadLength(threadId: string) {
+        const view = this.threads[threadId].base.view
+
+        await view.ready()
+        await view.update()
+        return view.length
+    }
+
     getThreadList() {
         return this.threadsList
+    }
+
+    async getCatalog() {
+        const catalog: {page: number, threads: IPost[]}[] = []
+        const threads = []
+        for (let threadId of this.threadsList) {
+            const thread = (await this.getThreadContent(threadId))!
+            const op = thread.posts[0]
+            op.last_replies = thread.posts.slice(1).slice(-3)
+            threads.push(op)
+        }
+        for (let i = 0; i <= 16; i++)  {
+            if (threads.slice(i*16).length == 0) {
+                break
+            }
+            catalog.push({
+                page: i+1,
+                threads: threads.slice(i*16, (i*16)+16)
+            })
+        }
+        return catalog
     }
 }

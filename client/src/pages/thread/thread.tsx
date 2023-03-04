@@ -29,7 +29,7 @@ function ThreadPage() {
   const { board, id } = useParams()
 
   async function updateData() {
-    const r = await fetch(`/${id}.json`)
+    const r = await fetch(`http://localhost:8089/api/a/thread/${id}`)
     setData(await r.json())
     toast({
       title: 'Posts Updated',
@@ -42,7 +42,7 @@ function ThreadPage() {
   }, [])
 
   async function post(post: IPost) {
-    const r = await fetch('https://httpbin.org/post', {
+    const r = await fetch(`http://localhost:8089/api/a/thread/${id}` , {
       method: 'POST',
       headers: {
         'Accept': 'application/json',

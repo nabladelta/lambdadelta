@@ -8,6 +8,7 @@ interface IPost {
     name?: string, // Name user posted with. Defaults to Anonymous
     trip?: string, // The user's tripcode, in format: !tripcode or !!securetripcode
     resto?: string, // For replies: this is the ID of the thread being replied to. For OP: this value is zero
+    replies?: number,
     filename?: string, // Filename as it appeared on the poster's device
     ext?: string, // Filetype
     tim?: string, // File ID

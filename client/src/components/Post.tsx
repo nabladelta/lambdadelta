@@ -53,8 +53,15 @@ function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
                 />}
             <Stack>
                 <CardHeader>
-                {post.sub && vertical && <Text as='b'>{post.sub}</Text>}
-                {!vertical && <HStack spacing={7}>{post.sub && <Text as='b'>{post.sub}</Text>}<Text as='b'>{post.name || "Anonymous"}</Text><Text>{dateString}</Text><Text>No. {post.no}</Text>{/*<Text fontSize='sm' as='u'>&gt;&gt;Z55ASQDFBS7FFQ</Text>*/}</HStack>}
+                {vertical && 
+                    <VStack spacing={3}>
+                        {post.sub && <Text as='b'>{post.sub}</Text>}
+                        {post.replies && <HStack spacing={3}><Text as='i'>R: </Text><Text as='b'>{post.replies}</Text></HStack>}
+                    </VStack>
+                }
+                {!vertical && 
+                <HStack spacing={7}>{post.sub && <Text as='b'>{post.sub}</Text>}<Text as='b'>{post.name || "Anonymous"}</Text><Text>{dateString}</Text><Text>No. {post.no.slice(-16)}</Text>{/*<Text fontSize='sm' as='u'>&gt;&gt;Z55ASQDFBS7FFQ</Text>*/}</HStack>
+                }
                 </CardHeader>
                 <CardBody>
                     <Text noOfLines={vertical ? 3 : undefined} align={'left'} py='2'>
