@@ -9,12 +9,7 @@ import {
   Tooltip,
   FormLabel,
   Input,
-  InputGroup,
-  InputLeftAddon,
-  InputRightAddon,
-  Select,
-  Textarea,
-  useDisclosure
+  Textarea
 } from "@chakra-ui/react"
 
 import {
@@ -27,14 +22,11 @@ import {
     DrawerCloseButton,
   } from '@chakra-ui/react'
 
-import { AddIcon } from '@chakra-ui/icons'
-
 function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, onClose: () => void, onPost: (post: IPost) => void}) {
     const [post, setPost] = useState<IPost>({com : "", sub: undefined, name: undefined, time: undefined, no: ""})
 
     const firstField: any = React.useRef()
     return (
-        <>
         <Drawer
             isOpen={isOpen}
             placement='right'
@@ -44,50 +36,44 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
         >
             <DrawerOverlay />
             <DrawerContent>
-            <DrawerCloseButton />
-            <DrawerHeader borderBottomWidth='1px'>
-                Write a new post
-            </DrawerHeader>
+                <DrawerCloseButton />
+                <DrawerHeader borderBottomWidth='1px'>
+                    Write a new post
+                </DrawerHeader>
+                <DrawerBody>
+                    <Stack spacing='24px'>
+                    <Box>
+                        <FormLabel htmlFor='name'>Name</FormLabel>
+                        <Input
+                            value={post.name}
+                            id='name'
+                            placeholder='Anonymous'
+                            onChange={(e) => setPost((p) => {p.name = e.target.value; return p})}
+                        />
+                    </Box>
 
-            <DrawerBody>
-                <Stack spacing='24px'>
-                <Box>
-                    <FormLabel htmlFor='name'>Name</FormLabel>
-                    <Input
-                        value={post.name}
-                        id='name'
-                        placeholder='Anonymous'
-                        onChange={(e) => setPost((p) => {p.name = e.target.value; return p})}
-                    />
-                </Box>
+                    {op && <Box>
+                        <FormLabel htmlFor='sub'>Subject</FormLabel>
+                        <Input
+                            value={post.sub}
+                            onChange={(e) => setPost((p) => {p.sub = e.target.value; return p})}
+                            id='sub' />
+                    </Box>}
 
-                {op && <Box>
-                    <FormLabel htmlFor='sub'>Subject</FormLabel>
-                    <Input
-                    value={post.sub}
-                    onChange={(e) => setPost((p) => {p.sub = e.target.value; return p})}
-                    id='sub'
-                    />
-                </Box>}
-
-                <Box>
-                    <FormLabel htmlFor='desc'>Comment</FormLabel>
-                    <Textarea 
-                    onChange={(e) => setPost((p) => {p.com = e.target.value; return p})}
-                    size={'lg'} id='desc' ref={firstField} />
-                </Box>
-                </Stack>
-            </DrawerBody>
-
-            <DrawerFooter borderTopWidth='1px'>
-                <Button variant='outline' mr={3} onClick={onClose}>
-                Close
-                </Button>
-                <Button colorScheme={'gray'} onClick={() => {post.time = Math.floor(Date.now()/1000); onPost(post)}}>Post</Button>
-            </DrawerFooter>
+                    <Box>
+                        <FormLabel htmlFor='desc'>Comment</FormLabel>
+                        <Textarea 
+                        onChange={(e) => setPost((p) => {p.com = e.target.value; return p})}
+                        size={'lg'} id='desc' ref={firstField} />
+                    </Box>
+                    </Stack>
+                </DrawerBody>
+                <DrawerFooter borderTopWidth='1px'>
+                    <Button variant='outline' mr={3} onClick={onClose}>Close</Button>
+                    <Button colorScheme={'gray'} onClick={() => {post.time = Math.floor(Date.now()/1000); onPost(post)}}>Post</Button>
+                </DrawerFooter>
             </DrawerContent>
         </Drawer>
-    </>
     )
 }
 

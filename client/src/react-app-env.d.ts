@@ -19,3 +19,12 @@ interface IPost {
     tn_w?: number, // Thumb w
     tn_h?: number, // Thumb h
 }
+
+interface IThread {
+    posts: IPost[]
+}
+
+interface ICatalogPage {
+    page: number,
+    threads: IPost[]
+}

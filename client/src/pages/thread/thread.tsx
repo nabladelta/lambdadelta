@@ -1,16 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import {
-  ChakraProvider,
-  Box,
-  Text,
   VStack,
-  Code,
-  Grid,
-  Card,
-  Image,
-  Stack,
-  Heading,
-  Button,
   Link as CLink,
   HStack,
   IconButton,
@@ -25,11 +15,20 @@ import Reply from '../../components/Reply'
 
 function ThreadPage() {
   const toast = useToast()
-  const [data, setData] = useState<{posts: any[]}>({posts: []})
+  const [data, setData] = useState<IThread>({posts: []})
   const { board, id } = useParams()
 
   async function updateData() {
-    const r = await fetch(`http://localhost:8089/api/a/thread/${id}`)
+    const r = await fetch(`http://localhost:8089/api/a/thread/${id}.json`)
+    if (!r.ok) {
+      const emsg: {error: string} = await r.json()
+      toast({
+        title: emsg.error,
+        status: 'error',
+        duration: 2000,
+      })
+      return
+    }
     setData(await r.json())
     toast({
       title: 'Posts Updated',
@@ -37,12 +36,13 @@ function ThreadPage() {
       duration: 1500,
     })
   }
+
   useEffect(() => {
     updateData()
-  }, [])
+  }, [board, id])
 
   async function post(post: IPost) {
-    const r = await fetch(`http://localhost:8089/api/a/thread/${id}` , {
+    const r = await fetch(`http://localhost:8089/api/a/thread/${id}.json` , {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -51,6 +51,14 @@ function ThreadPage() {
       body: JSON.stringify(post)
     })
     const content = await r.json()
+    if (!r.ok) {
+      toast({
+        title: "Error Posting",
+        status: 'error',
+        duration: 2000,
+      })
+      return
+    }
     console.log(content)
     toast({
       title: "Post Successful",
@@ -156,7 +164,7 @@ function ThreadPage() {
     </HStack>
     <Reply isOpen={isOpen} onClose={onClose} onPost={post} />
     </VStack>
-  );
+  )
 }
 
-export default ThreadPage;
+export default ThreadPage

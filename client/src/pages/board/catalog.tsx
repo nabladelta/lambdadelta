@@ -29,7 +29,7 @@ import Reply from '../../components/Reply'
 function Catalog() {
   const toast = useToast()
   const { board } = useParams()
-  const [data, setData] = useState<{page: number, threads: any[]}[]>([])
+  const [data, setData] = useState<ICatalogPage[]>([])
 
   async function updateData() {
     const r = await fetch('http://localhost:8089/api/a/catalog.json')
@@ -42,7 +42,7 @@ function Catalog() {
   }
   useEffect(() => {
     updateData()
-  }, [])
+  }, [board])
 
   async function post(post: IPost) {
     const r = await fetch('http://localhost:8089/api/a', {
@@ -111,8 +111,10 @@ function Catalog() {
       </Tooltip>
     </HStack>
     <SimpleGrid minChildWidth='lg' spacing='40px' >
-      {data.map(page => page.threads
-        .map(p => <Link key={p.no} to={`/${board}/thread/${p.no.split('>')[0]}`}><Post post={p} vertical={true} /></Link> ))}
+      {data.map(page => 
+          page.threads.map(p => 
+          <Link key={p.no} to={`/${board}/thread/${p.no.split('>')[0]}`}><Post post={p} vertical={true} /></Link> 
+      ))}
     </SimpleGrid>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>

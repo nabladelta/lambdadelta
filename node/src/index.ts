@@ -18,7 +18,7 @@ const app: Express = express()
 app.use(express.json())
 app.use(cors())
 
-app.get('/api/:topic/thread/:id', async (req: Request, res: Response) => {
+app.get('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
     const thread = await clients[req.params.topic].getThreadContent(req.params.id)
     if (!thread) {
       res.status(404)
@@ -28,7 +28,7 @@ app.get('/api/:topic/thread/:id', async (req: Request, res: Response) => {
     res.send(thread)
 })
 
-app.post('/api/:topic/thread/:id', async (req: Request, res: Response) => {
+app.post('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
     const client = clients[req.params.topic]
     await client.newMessage(req.params.id, req.body)
     const thread = await client.getThreadContent(req.params.id)
