@@ -58,12 +58,12 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
     return (
         <Drawer
             isOpen={isOpen}
-            placement='right'
+            placement='bottom'
             initialFocusRef={firstField}
             onClose={onClose}
             size={'lg'}
         >
-            <DrawerOverlay />
+            {/* <DrawerOverlay /> */}
             <DrawerContent>
                 <DrawerCloseButton />
                 <DrawerHeader borderBottomWidth='1px'>New post</DrawerHeader>
