@@ -9,7 +9,7 @@ import c from 'compact-encoding'
 
 import { Thread } from './thread'
 
-function getTimestampInSeconds () {
+function getTimestampInSeconds() {
     return Math.floor(Date.now() / 1000)
 }
 
