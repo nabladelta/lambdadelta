@@ -12,6 +12,7 @@ import Post from '../../components/Post'
 import { Link, useParams } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
+import { buttonStyle } from '../board/catalog'
 
 function ThreadPage() {
   const toast = useToast()
@@ -74,46 +75,18 @@ function ThreadPage() {
     <VStack align="flex-start" spacing={8}>
     <HStack id={'top'} spacing={6}>
       <Tooltip label='Return'>
-      <Link to={`/${board}/catalog`} >
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Return'
-          fontSize='20px'
-          icon={<ArrowBackIcon />}
-        />
-        </Link>
+        <Link to="/" ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
       </Tooltip>
       <Tooltip label='Bottom'>
-      <CLink href="#bottom" _hover={{ textDecoration: "none" }}>
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Bottom'
-          fontSize='20px'
-          icon={<ArrowDownIcon />}
-        />
-      </CLink>
+        <CLink href="#bottom" _hover={{ textDecoration: "none" }}>
+          <IconButton aria-label='Bottom' icon={<ArrowDownIcon />} {...buttonStyle} />
+        </CLink>
       </Tooltip>
       <Tooltip label='Update'>
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Update'
-          fontSize='20px'
-          onClick={updateData}
-          icon={<RepeatClockIcon />}
-        />
+        <IconButton aria-label='Update' icon={<RepeatClockIcon />} {...buttonStyle} onClick={updateData} />
       </Tooltip>
       <Tooltip label='Reply'>
-      <IconButton
-        variant='outline'
-        colorScheme='gray'
-        aria-label='Reply'
-        fontSize='20px'
-        onClick={onOpen}
-        icon={<ChatIcon />}
-      />
+        <IconButton aria-label='Reply' icon={<ChatIcon />} {...buttonStyle} onClick={onOpen} />
       </Tooltip>
     </HStack>
     <VStack align="flex-start" spacing={8}>
@@ -121,47 +94,19 @@ function ThreadPage() {
     </VStack>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>
-        <Link to={`/${board}/catalog`} >
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Return'
-          fontSize='20px'
-          icon={<ArrowBackIcon />}
-        />
-        </Link>
-      </Tooltip>
-      <Tooltip label='Top'>
-      <CLink href="#top" _hover={{ textDecoration: "none" }}>
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Top'
-          fontSize='20px'
-          icon={<ArrowUpIcon />}
-        />
-      </CLink>
-      </Tooltip>
-      <Tooltip label='Update'>
-      <IconButton
-        variant='outline'
-        colorScheme='gray'
-        aria-label='Bottom'
-        fontSize='20px'
-        onClick={updateData}
-        icon={<RepeatClockIcon />}
-      />
-      </Tooltip>
-      <Tooltip label='Reply'>
-      <IconButton
-        variant='outline'
-        colorScheme='gray'
-        aria-label='Reply'
-        fontSize='20px'
-        onClick={onOpen}
-        icon={<ChatIcon />}
-      />
-      </Tooltip>
+          <Link to="/" ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
+        </Tooltip>
+        <Tooltip label='Top'>
+          <CLink href="#top" _hover={{ textDecoration: "none" }}>
+            <IconButton aria-label='Top' icon={<ArrowUpIcon />} {...buttonStyle} />
+          </CLink>
+        </Tooltip>
+        <Tooltip label='Update'>
+          <IconButton aria-label='Update' icon={<RepeatClockIcon />} {...buttonStyle} onClick={updateData} />
+        </Tooltip>
+        <Tooltip label='Reply'>
+          <IconButton aria-label='Reply' icon={<ChatIcon />} {...buttonStyle} onClick={onOpen} />
+        </Tooltip>
     </HStack>
     <Reply isOpen={isOpen} onClose={onClose} onPost={post} />
     </VStack>

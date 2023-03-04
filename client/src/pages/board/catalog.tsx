@@ -26,6 +26,8 @@ import { Link, useParams } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
 
+export const buttonStyle = { variant:'outline', colorScheme:'gray', fontSize:'20px' }
+
 function Catalog() {
   const toast = useToast()
   const { board } = useParams()
@@ -68,46 +70,18 @@ function Catalog() {
     <VStack align="flex-start" spacing={8}>
     <HStack id={'top'} spacing={6}>
       <Tooltip label='Return'>
-      <Link to="/" >
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Return'
-          fontSize='20px'
-          icon={<ArrowBackIcon />}
-        />
-        </Link>
+        <Link to="/" ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
       </Tooltip>
       <Tooltip label='Bottom'>
-      <CLink href="#bottom" _hover={{ textDecoration: "none" }}>
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Bottom'
-          fontSize='20px'
-          icon={<ArrowDownIcon />}
-        />
-      </CLink>
+        <CLink href="#bottom" _hover={{ textDecoration: "none" }}>
+          <IconButton aria-label='Bottom' icon={<ArrowDownIcon />} {...buttonStyle} />
+        </CLink>
       </Tooltip>
       <Tooltip label='Update'>
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Update'
-          fontSize='20px'
-          onClick={updateData}
-          icon={<RepeatClockIcon />}
-        />
+        <IconButton aria-label='Update' icon={<RepeatClockIcon />} {...buttonStyle} onClick={updateData} />
       </Tooltip>
       <Tooltip label='New Thread'>
-      <IconButton
-        variant='outline'
-        colorScheme='gray'
-        aria-label='New Thread'
-        fontSize='20px'
-        onClick={onOpen}
-        icon={<ChatIcon />}
-      />
+        <IconButton aria-label='New Thread' icon={<ChatIcon />} {...buttonStyle} onClick={onOpen} />
       </Tooltip>
     </HStack>
     <SimpleGrid minChildWidth='lg' spacing='40px' >
@@ -118,46 +92,18 @@ function Catalog() {
     </SimpleGrid>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>
-        <Link to="/" >
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Return'
-          fontSize='20px'
-          icon={<ArrowBackIcon />}
-        />
-        </Link>
+        <Link to="/" ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
       </Tooltip>
       <Tooltip label='Top'>
-      <CLink href="#top" _hover={{ textDecoration: "none" }}>
-        <IconButton
-          variant='outline'
-          colorScheme='gray'
-          aria-label='Top'
-          fontSize='20px'
-          icon={<ArrowUpIcon />}
-        />
-      </CLink>
+        <CLink href="#top" _hover={{ textDecoration: "none" }}>
+          <IconButton aria-label='Top' icon={<ArrowUpIcon />} {...buttonStyle} />
+        </CLink>
       </Tooltip>
       <Tooltip label='Update'>
-      <IconButton
-        variant='outline'
-        colorScheme='gray'
-        aria-label='Bottom'
-        fontSize='20px'
-        onClick={updateData}
-        icon={<RepeatClockIcon />}
-      />
+        <IconButton aria-label='Update' icon={<RepeatClockIcon />} {...buttonStyle} onClick={updateData} />
       </Tooltip>
-      <Tooltip label='Reply'>
-      <IconButton
-        variant='outline'
-        colorScheme='gray'
-        aria-label='Reply'
-        fontSize='20px'
-        onClick={onOpen}
-        icon={<ChatIcon />}
-      />
+      <Tooltip label='New Thread'>
+        <IconButton aria-label='New Thread' icon={<ChatIcon />} {...buttonStyle} onClick={onOpen} />
       </Tooltip>
     </HStack>
     <Reply op={true} isOpen={isOpen} onClose={onClose} onPost={post} />
