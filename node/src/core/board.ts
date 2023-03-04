@@ -8,15 +8,8 @@ import Protomux from 'protomux'
 import c from 'compact-encoding'
 
 import { Thread } from './thread'
+import { getThreadEpoch } from './utils/utils'
 
-function getTimestampInSeconds() {
-    return Math.floor(Date.now() / 1000)
-}
-
-// Rounded to 1000 seconds. This is the Thread-Epoch
-function getThreadEpoch () {
-    return Math.floor(Date.now() / 1000000)
-}
 
 export class BulletinBoard {
     secret: string

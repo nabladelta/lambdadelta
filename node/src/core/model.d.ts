@@ -1,5 +1,5 @@
 interface IPost {
-    no: string, // The post ID
+    no?: string, // The post ID
     time: integer, // UNIX timestamp the post was created
     com: string, // Comment
     sub?: string, // OP Subject text
