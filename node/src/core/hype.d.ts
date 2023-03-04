@@ -1,12 +1,8 @@
-declare module '@hyperswarm/dht'
-declare module 'hyperswarm'
 declare module 'corestore'
 declare module 'hypercore'
 declare module 'autobase'
-declare module 'random-access-memory'
 declare module 'protomux'
 declare module 'compact-encoding'
-declare module 'b4a'
 
 interface OutputNode {
     header: { protocol: '@autobase/input/v1' },

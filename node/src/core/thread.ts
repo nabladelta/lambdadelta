@@ -137,7 +137,7 @@ export class Thread {
   async _addKeys (keys: any, destination: any) {
     // Get & Ready Cores
     const cores = await Promise.all(Array.from(keys).map(async (key) => {
-      const core = this.get(b4a.from(key, 'hex'))
+      const core = this.get(b4a.from(key as any, 'hex'))
       // Necessary for autobase id (aka the core's id) setup
       await core.ready()
       return core

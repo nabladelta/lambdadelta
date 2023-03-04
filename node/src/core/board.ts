@@ -9,11 +9,10 @@ import c from 'compact-encoding'
 
 import { Thread } from './thread'
 import { getThreadEpoch } from './utils/utils'
+import { BBNode } from './node'
 
 
 export class BulletinBoard {
-    secret: string
-    secretDigest: string
     corestore: any
     stores: {
         op: any
@@ -22,50 +21,22 @@ export class BulletinBoard {
     }
     threadsList: string[]
     threads: any
-    _streams: any[]
+    _streams: Set<any>
     swarm: any
     topic: string
-    _initSwarmPromise: Promise<void>
     channel: any
 
-    constructor(secret: string, topic: string, memstore?: boolean) {
-        this.secret = secret
+    constructor(topic: string, corestore: any) {
+        this.corestore = corestore
         this.topic = topic
-        this.secretDigest = crypto.createHash('sha256').update(secret).digest('hex')
-        this.corestore = new Corestore(
-            memstore ? ram : `./data/${this.secretDigest}-${topic}`, 
-            {primaryKey: Buffer.from(this.secret)})
         this.stores = {
-            op: this.corestore.namespace(topic).namespace('op'),
-            reply: this.corestore.namespace(topic).namespace('reply'),
-            outputs: this.corestore.namespace(topic).namespace('outputs')
+            op: corestore.namespace('op'),
+            reply: corestore.namespace('reply'),
+            outputs: corestore.namespace('outputs')
         }
         this.threadsList = []
-        this._streams = []
+        this._streams = new Set()
         this.threads = {}
-        this._initSwarmPromise = this.initSwarm()
-    }
-    async initSwarm() {
-        await this.corestore.ready()
-        this.swarm = new Hyperswarm()
-        this.swarm.on('connection', (conn: any, info: any) => {
-            console.log('found peer', info.publicKey.toString('hex').slice(-6))
-            const stream = this.corestore.replicate(conn)
-            this._streams.push(stream)
-            this.attachStreamToThreads(stream)
-            stream.once('close', () => {
-                this._streams = this._streams.filter((s) => s != stream)
-            })
-            conn.on('close', function () {
-                console.log('Remote peer fully left')
-            })
-        })
-        const topic = crypto.createHash('sha256').update(this.topic).digest()
-        this.swarm.join(topic)
-    }
-
-    async ready() {
-        await this._initSwarmPromise
     }
 
     async attachStreamToThreads(stream: any) {
@@ -75,21 +46,10 @@ export class BulletinBoard {
     }
 
     async attachStream(stream: any) {
-        const self = this
-
-        const mux = Protomux.from(stream)
-        const channel = mux.createChannel({
-            protocol: 'bulletin-board',
-            id: Buffer.from(this.topic),
-            unique: false
-        })
-        channel.open()
-
-        const inputAnnouncer = channel.addMessage({
-        encoding: c.array(c.string),
-            async onmessage (msgs: any, session: any) {
-
-            }
+        this._streams.add(stream)
+        this.attachStreamToThreads(stream)
+        stream.once('close', () => {
+            this._streams.delete(stream)
         })
     }
 
