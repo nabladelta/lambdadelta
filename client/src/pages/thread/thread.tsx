@@ -75,7 +75,7 @@ function ThreadPage() {
     <VStack align="flex-start" spacing={8}>
     <HStack id={'top'} spacing={6}>
       <Tooltip label='Return'>
-        <Link to="/" ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
+        <Link to={`/${board}/catalog`} ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
       </Tooltip>
       <Tooltip label='Bottom'>
         <CLink href="#bottom" _hover={{ textDecoration: "none" }}>
@@ -94,7 +94,7 @@ function ThreadPage() {
     </VStack>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>
-          <Link to="/" ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
+          <Link to={`/${board}/catalog`} ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
         </Tooltip>
         <Tooltip label='Top'>
           <CLink href="#top" _hover={{ textDecoration: "none" }}>
