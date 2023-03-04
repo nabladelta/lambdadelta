@@ -42,6 +42,7 @@ function ThreadPage() {
   }, [board, id])
 
   async function post(post: IPost) {
+    post.resto = id
     const r = await fetch(`http://localhost:8089/api/a/thread/${id}.json` , {
       method: 'POST',
       headers: {
