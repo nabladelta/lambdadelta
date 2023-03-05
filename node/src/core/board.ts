@@ -8,7 +8,7 @@ import Protomux from 'protomux'
 import c from 'compact-encoding'
 
 import { Thread } from './thread'
-import { getThreadEpoch } from './utils/utils'
+import { difference, getThreadEpoch } from './utils/utils'
 import { BBNode } from './node'
 
 
@@ -21,7 +21,7 @@ export class BulletinBoard {
     }
     threadsList: string[]
     threads: any
-    _streams: Set<any>
+    _streams: Set<{stream: any, threadAnnouncer: any}>
     swarm: any
     topic: string
     channel: any
@@ -46,19 +46,71 @@ export class BulletinBoard {
     }
 
     async attachStream(stream: any) {
-        this._streams.add(stream)
+        const self = this
+        const mux = Protomux.from(stream)
+
+        const channel = mux.createChannel({
+            protocol: 'bbs-board-rep',
+            id: Buffer.from(this.topic),
+            unique: false
+        })
+        channel.open()
+
+        const threadAnnouncer = channel.addMessage({
+            encoding: c.array(c.string),
+            async onmessage (msgs: string[], session: any) {
+              const allowedKeys = msgs.filter((msg: string) => self.allow(msg, session))
+              console.log("session", session)
+              if (allowedKeys.length) {
+                // Find new threads
+                const newKeys = difference(allowedKeys, self.threadsList)
+                if (newKeys.size > 0) {
+                  await self._addThreads(newKeys)
+                  await self.announceAllThreadsToAll()
+                }
+              }
+            }
+        })
+        const streamData = {stream, threadAnnouncer}
+        this._streams.add(streamData)
+        this.announceAllThreads(streamData)
+
         this.attachStreamToThreads(stream)
         stream.once('close', () => {
-            this._streams.delete(stream)
+            this._streams.delete(streamData)
         })
+    }
+
+    async announceAllThreads(streamData: {stream: any, threadAnnouncer: any}) {
+        if (this.threadsList.length) await streamData.threadAnnouncer.send(this.threadsList)
+    }
+
+    async announceThreadsToAll(threadIds: string[] | Set<string>) {
+        if (!this.threadsList.length) return
+        for (let streamData of this._streams){
+            await streamData.threadAnnouncer.send(threadIds)
+        }
+    }
+
+    async announceAllThreadsToAll() {
+        for (let streamData of this._streams){
+            await this.announceAllThreads(streamData)
+        }
+    }
+
+    async _addThreads(threadIds: string[] | Set<string>) {
+        for (let threadId of threadIds) {
+            await this.joinThread(threadId)
+        }
+    }
+
+    async allow(msg: string, session: any) {
+        return true
     }
 
     async buildThread(opcore: any, inputCore: any) {
         const threadId = opcore.key.toString('hex')
-        const output = this.stores.outputs.get(
-            { 
-                name: threadId
-            })
+        const output = this.stores.outputs.get({name: threadId})
         await output.ready()
 
         const base = new Autobase({
@@ -108,7 +160,10 @@ export class BulletinBoard {
             { name: `${getThreadEpoch()}`})
         await opcore.ready()
         await this.buildThread(opcore, opcore)
-        return opcore.key.toString('hex')
+        const threadId = opcore.key.toString('hex')
+        // Announce new thread
+        await this.announceThreadsToAll([threadId])
+        return threadId
     }
 
     async newMessage(threadId: string, post: IPost) {

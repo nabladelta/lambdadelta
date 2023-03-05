@@ -3,40 +3,47 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import { BulletinBoard } from './core/board'
 import path from 'path'
+import { BBNode } from './core/node'
 
 dotenv.config()
 
 const port = process.env.PORT
 const topic = process.env.TOPIC!
 
-const clients = {
-  [topic]: new BulletinBoard(process.env.SECRET!, topic, process.env.MEMSTORE == 'true')
-}
+const node = new BBNode(process.env.SECRET!, process.env.MEMSTORE == 'true')
+node.ready().then(()=> node.join(topic))
 
 const app: Express = express()
 
 app.use(express.json())
 app.use(cors())
 
+function NotFoundError(res: express.Response) {
+  res.status(404)
+  res.send({error: "Not Found"})
+}
+
 app.get('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
-    const thread = await clients[req.params.topic].getThreadContent(req.params.id)
-    if (!thread) {
-      res.status(404)
-      res.send({error: "Not Found"})
-      return
-    }
+    const client = node.boards.get(req.params.topic)
+    if (!client) return NotFoundError(res)
+
+    const thread = await client.getThreadContent(req.params.id)
+    if (!thread) return NotFoundError(res)
     res.send(thread)
 })
 
 app.post('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
-    const client = clients[req.params.topic]
+    const client = node.boards.get(req.params.topic)
+    if (!client) return NotFoundError(res)
+
     await client.newMessage(req.params.id, req.body)
     const thread = await client.getThreadContent(req.params.id)
     res.send({success: true, posts: thread!.posts})
 })
 
 app.post('/api/:topic', async (req: Request, res: Response) => {
-  const client = clients[req.params.topic]
+  const client = node.boards.get(req.params.topic)
+  if (!client) return NotFoundError(res)
 
   const threadId = await client.newThread()
   await client.newMessage(threadId, req.body)
@@ -45,7 +52,8 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
 })
 
 app.get('/api/:topic/catalog.json', async (req: Request, res: Response) => {
-  const client = clients[req.params.topic]
+  const client = node.boards.get(req.params.topic)
+  if (!client) return NotFoundError(res)
 
   const catalog = await client.getCatalog()
   res.send(catalog)

@@ -2,14 +2,7 @@ import Protomux from 'protomux'
 import c from 'compact-encoding'
 import b4a from 'b4a'
 import Hypercore from 'hypercore'
-
-export function difference (setA: Set<any> | string[], setB: Set<any>) {
-  const _difference = new Set(setA)
-  for (const elem of setB) {
-    _difference.delete(elem)
-  }
-  return _difference
-}
+import { difference } from './utils/utils'
 export class Thread {
   uid: string
   base: any
@@ -54,7 +47,7 @@ export class Thread {
     const mux = Protomux.from(stream)
 
     const channel = mux.createChannel({
-      protocol: 'thread-rep',
+      protocol: 'bbs-thread-rep',
       id: Buffer.from(this.uid),
       unique: false
     })
