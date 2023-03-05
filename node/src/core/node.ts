@@ -58,7 +58,7 @@ export class BBNode {
             board.attachStream(s)
         })
         this.boards.set(topic, board)
-        const htopic = crypto.createHash('sha256').update(topic).digest()
+        const htopic = crypto.createHash('sha256').update("BBS>"+topic).digest()
         this.swarm.join(htopic)
         await this.swarm.flush()
     }
