@@ -70,7 +70,6 @@ export class BulletinBoard {
         const manager = new Thread(
             threadId,
             base,
-            () => true,
             this.corestore.get.bind(this.corestore),
             this.corestore.storage
         )
