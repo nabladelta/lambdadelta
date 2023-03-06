@@ -11,7 +11,6 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   get: any
   storage: any
   _inputKeys: Set<string>
-  _streams: Set<{stream: any, inputAnnouncer: any}>
   _ready: Promise<void | void[]>
 
   constructor (uid: string, base: any, get: any, storage: any) {
@@ -22,8 +21,6 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     this.storage = Hypercore.defaultStorage(storage)
 
     this._inputKeys = new Set()
-    this._streams = new Set()
-
     // Load storage
     this._ready = Promise.resolve().then(() => {
         const coresToLoad = []
@@ -44,61 +41,33 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     return this._ready
   }
 
-  attachStream(stream: any) {
-    const self = this
-
-    const mux = Protomux.from(stream)
-
-    const channel = mux.createChannel({
-      protocol: 'bbs-thread-rep',
-      id: Buffer.from(this.uid),
-      unique: true
-    })
-    channel.open()
-
-    const inputAnnouncer = channel.addMessage({
-      encoding: c.array(c.string),
-      async onmessage (msgs: string[], session: any) {
-        self.emit('receivedCores', msgs)
-        const allowedKeys = msgs.filter((msg: string) => self.allow(msg, session))
-        if (allowedKeys.length) {
-          // Check if any are new
-          const newKeys = difference(allowedKeys, self._inputKeys)
-          if (newKeys.size > 0) {
-            await self._addKeys(newKeys)
-            await self.updateStorageKeys()
-          }
-        }
+  async recv(msgs: string[]) {
+    this.emit('receivedCores', msgs)
+    const allowedKeys = msgs.filter((msg: string) => this.allow(msg))
+    if (allowedKeys.length) {
+      // Check if any are new
+      const newKeys = difference(allowedKeys, this._inputKeys)
+      if (newKeys.size > 0) {
+        await this._addKeys(newKeys)
+        await this.updateStorageKeys()
+        return this.allInputs()
       }
-    })
-
-    const streamRecord = { stream, inputAnnouncer }
-    this._streams.add(streamRecord)
-    stream.once('close', () => {
-      this._streams.delete(streamRecord)
-    })
-
-    if (this.base.localInput || this.base.inputs) this.announce(streamRecord)
+      return false
+    }
   }
 
-  async allow(msg: string, session: any) {
+  allInputs() {
+    // Ensure thread ID is first
+    return [this.uid].concat(this.base.inputs
+    .map((core: any) => core.key.toString('hex'))
+    .filter((k: string) => k != this.uid))
+  }
+
+  async allow(msg: string) {
     return true
   }
 
-  async announce(stream: { stream: any, inputAnnouncer: any}) {
-    await this.ready()
 
-    const keys = this.base.inputs.map((core: any) => core.key.toString('hex'))
-    if (keys.length) {
-      stream.inputAnnouncer.send(keys)
-    }
-  }
-
-  async announceAll() {
-    for (const stream of this._streams) {
-      await this.announce(stream)
-    }
-  }
 
   async _addKeys(keys: string[] | Set<string>) {
     // Get & Ready Cores
@@ -131,7 +100,6 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   async updateStorageKeys() {
     await this._updateStorageKey('inputs', this._inputKeys)
-    await this.announceAll()
   }
 
   _getStorage (file: string) {

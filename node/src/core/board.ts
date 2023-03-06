@@ -17,7 +17,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     }
     threadsList: string[]
     threads: {[tid: string]: Thread}
-    _streams: Set<{stream: any, threadAnnouncer: any}>
+    _streams: Set<{stream: any, inputAnnouncer: any}>
     swarm: any
     topic: string
     channel: any
@@ -36,12 +36,6 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         this.threads = {}
     }
 
-    async attachStreamToThreads(stream: any) {
-        this.threadsList.forEach((tid: string) => {
-            this.threads[tid].attachStream(stream)
-        })
-    }
-
     async attachStream(stream: any) {
         const self = this
         const mux = Protomux.from(stream)
@@ -49,49 +43,48 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         const channel = mux.createChannel({
             protocol: 'bbs-board-rep',
             id: Buffer.from(this.topic),
-            unique: false
+            unique: true
         })
         channel.open()
 
-        const threadAnnouncer = channel.addMessage({
-            encoding: c.array(c.string),
-            async onmessage (msgs: string[], session: any) {
-              const allowedKeys = msgs.filter((msg: string) => self.allow(msg, session))
-              if (allowedKeys.length) {
-                // Find new threads
-                const newKeys = difference(allowedKeys, self.threadsList)
-                if (newKeys.size > 0) {
-                  await self._addThreads(newKeys)
-                  await self.announceAllThreadsToAll()
+
+        const inputAnnouncer = channel.addMessage({
+            encoding: c.array(c.array(c.string)),
+            async onmessage(cids: string[][], session: any) {
+                console.log("msg")
+                const updated: string[][] = []
+                for (let threadInputs of cids) {
+                    let nt = false
+                    if (!self.threads[threadInputs[0]]) {
+                        await self._addThreads([threadInputs[0]])
+                        nt = true
+                    }
+                    const inputs = await self.threads[threadInputs[0]].recv(threadInputs)
+                    if (inputs || nt) updated.push(inputs || [threadInputs[0]])
                 }
-              }
+                if (updated.length > 0) self.announceInputsToAll(updated)
             }
         })
-        const streamData = {stream, threadAnnouncer}
+        
+        const streamData = {stream, inputAnnouncer}
         this._streams.add(streamData)
-        this.announceAllThreads(streamData)
+        this.announceAllInputs(streamData)
 
-        this.attachStreamToThreads(stream)
         stream.once('close', () => {
             this._streams.delete(streamData)
         })
     }
 
-    async announceAllThreads(streamData: {stream: any, threadAnnouncer: any}) {
-        if (this.threadsList.length) await streamData.threadAnnouncer.send(this.threadsList)
-    }
-
-    async announceThreadsToAll(threadIds: string[] | Set<string>) {
-        if (!this.threadsList.length) return
-        for (let streamData of this._streams){
-            await streamData.threadAnnouncer.send(threadIds)
+    async announceInputsToAll(inputs: string[][]) {
+        if (!inputs.length) return
+        for (let streamData of this._streams) {
+            await streamData.inputAnnouncer.send(inputs)
         }
     }
 
-    async announceAllThreadsToAll() {
-        for (let streamData of this._streams){
-            await this.announceAllThreads(streamData)
-        }
+    async announceAllInputs(streamData: {stream: any, inputAnnouncer: any}) {
+        const inputs = this.threadsList.map(tid => this.threads[tid].allInputs())
+        await streamData.inputAnnouncer.send(inputs)
     }
 
     async _addThreads(threadIds: string[] | Set<string>) {
@@ -124,9 +117,6 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         
         this.threadsList.push(threadId)
         this.threads[threadId] = manager
-        this._streams.forEach((s) => {
-            manager.attachStream(s.stream)
-        })
         await manager.ready()
         await manager.base.start({
             async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
@@ -139,6 +129,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
             }
         })
         await manager.base.view.update()
+        this.announceInputsToAll([manager.allInputs()])
         return manager
     }
 
@@ -158,8 +149,6 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         await opcore.ready()
         await this.buildThread(opcore, opcore)
         const threadId = opcore.key.toString('hex')
-        // Announce new thread
-        await this.announceThreadsToAll([threadId])
         return threadId
     }
 
@@ -177,7 +166,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         }
         await this._getUpdatedView(threadId)
         await this.threads[threadId].base.append(JSON.stringify(post))
-        
+
         return this.threads[threadId].base.localInput.key.toString('hex')
     }
 
