@@ -17,3 +17,8 @@ interface IThread {
 interface IBoard {
     threads: string[]
 }
+
+interface ICatalogPage {
+    page: number
+    threads: IPost[]
+}

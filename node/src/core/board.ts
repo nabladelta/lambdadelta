@@ -1,18 +1,14 @@
-import Corestore from 'corestore'
-import Hyperswarm from 'hyperswarm'
 import Autobase from 'autobase'
-import crypto from 'crypto'
 import b4a from 'b4a'
-import ram from 'random-access-memory'
 import Protomux from 'protomux'
 import c from 'compact-encoding'
+import { TypedEmitter } from 'tiny-typed-emitter'
 
 import { Thread } from './thread'
 import { difference, getThreadEpoch } from './utils/utils'
-import { BBNode } from './node'
+import { BoardEvents } from './events'
 
-
-export class BulletinBoard {
+export class BulletinBoard extends TypedEmitter<BoardEvents> {
     corestore: any
     stores: {
         op: any
@@ -20,13 +16,14 @@ export class BulletinBoard {
         outputs: any
     }
     threadsList: string[]
-    threads: any
+    threads: {[tid: string]: Thread}
     _streams: Set<{stream: any, threadAnnouncer: any}>
     swarm: any
     topic: string
     channel: any
 
     constructor(topic: string, corestore: any) {
+        super()
         this.corestore = corestore
         this.topic = topic
         this.stores = {
@@ -60,7 +57,6 @@ export class BulletinBoard {
             encoding: c.array(c.string),
             async onmessage (msgs: string[], session: any) {
               const allowedKeys = msgs.filter((msg: string) => self.allow(msg, session))
-              console.log("session", session)
               if (allowedKeys.length) {
                 // Find new threads
                 const newKeys = difference(allowedKeys, self.threadsList)
@@ -129,7 +125,7 @@ export class BulletinBoard {
         this.threadsList.push(threadId)
         this.threads[threadId] = manager
         this._streams.forEach((s) => {
-            manager.attachStream(s)
+            manager.attachStream(s.stream)
         })
         await manager.ready()
         await manager.base.start({
@@ -137,7 +133,6 @@ export class BulletinBoard {
                 const pBatch = batch.map((node) => {
                     const post: IPost = JSON.parse(node.value.toString())
                     post.no = node.id + '>' + node.seq
-                    console.log(post)
                     return Buffer.from(JSON.stringify(post), 'utf-8')
                 })
                 await view.append(pBatch)
@@ -152,7 +147,9 @@ export class BulletinBoard {
         const input = this.stores.reply.get({ name: threadId })
         await opcore.ready()
         await input.ready()
-        return await this.buildThread(opcore, input)
+        const thread = await this.buildThread(opcore, input)
+        this.emit("joinedThread", threadId, thread)
+        return thread
     }
 
     async newThread(): Promise<string> {
@@ -166,12 +163,22 @@ export class BulletinBoard {
         return threadId
     }
 
+    async _getUpdatedView(threadId: string) {
+        const view = this.threads[threadId].base.view
+
+        await view.ready()
+        await view.update()
+        return view
+    }
+
     async newMessage(threadId: string, post: IPost) {
-        console.log(threadId)
         if (!this.threads[threadId]) {
-            await this.joinThread(threadId)
+            return false
         }
+        await this._getUpdatedView(threadId)
         await this.threads[threadId].base.append(JSON.stringify(post))
+        
+        return this.threads[threadId].base.localInput.key.toString('hex')
     }
 
     async getThreadContent(threadId: string, start?: number, end?: number) {
@@ -190,10 +197,11 @@ export class BulletinBoard {
         }
 
         if (!start && thread.posts.length) {
-            thread.posts[0].replies = view.length
+            thread.posts[0].replies = view.length - 1
         }
         return thread
     }
+
     async getThreadLength(threadId: string) {
         const view = this.threads[threadId].base.view
 

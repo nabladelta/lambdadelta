@@ -3,7 +3,9 @@ import c from 'compact-encoding'
 import b4a from 'b4a'
 import Hypercore from 'hypercore'
 import { difference } from './utils/utils'
-export class Thread {
+import { TypedEmitter } from 'tiny-typed-emitter'
+import { ThreadEvents } from './events'
+export class Thread extends TypedEmitter<ThreadEvents> {
   uid: string
   base: any
   get: any
@@ -13,6 +15,7 @@ export class Thread {
   _ready: Promise<void | void[]>
 
   constructor (uid: string, base: any, get: any, storage: any) {
+    super()
     this.uid = uid
     this.base = base
     this.get = get
@@ -41,7 +44,7 @@ export class Thread {
     return this._ready
   }
 
-  attachStream (stream: any) {
+  attachStream(stream: any) {
     const self = this
 
     const mux = Protomux.from(stream)
@@ -49,15 +52,15 @@ export class Thread {
     const channel = mux.createChannel({
       protocol: 'bbs-thread-rep',
       id: Buffer.from(this.uid),
-      unique: false
+      unique: true
     })
     channel.open()
 
     const inputAnnouncer = channel.addMessage({
       encoding: c.array(c.string),
       async onmessage (msgs: string[], session: any) {
+        self.emit('receivedCores', msgs)
         const allowedKeys = msgs.filter((msg: string) => self.allow(msg, session))
-        console.log("session", session)
         if (allowedKeys.length) {
           // Check if any are new
           const newKeys = difference(allowedKeys, self._inputKeys)
@@ -107,13 +110,18 @@ export class Thread {
     }))
 
     // Add to the corresponding place in autobase
+    const ids = []
     for (const core of cores) {
       if (core.fork != 0) {
         console.log("Forked Core")
       }
-      this._inputKeys.add(core.key.toString('hex'))
+      const id = core.key.toString('hex')
+      ids.push(id)
+
+      this._inputKeys.add(id)
       await this.base.addInput(core)
     }
+    this.emit("addedCores", ids)
   }
 
   async readStorageKeys() {
