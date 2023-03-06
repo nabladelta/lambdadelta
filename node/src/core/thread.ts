@@ -5,6 +5,8 @@ import Hypercore from 'hypercore'
 import { difference } from './utils/utils'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { ThreadEvents } from './events'
+import Autobase from 'autobase'
+
 export class Thread extends TypedEmitter<ThreadEvents> {
   uid: string
   base: any
@@ -12,31 +14,38 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   storage: any
   _ready: Promise<void | void[]>
 
-  constructor (uid: string, base: any, get: any, storage: any) {
+  constructor (uid: string, corestore: any, opcore: any, inputCore: any, output: any) {
     super()
     this.uid = uid
-    this.base = base
-    this.get = get
-    this.storage = Hypercore.defaultStorage(storage)
+    this.get = corestore.get.bind(corestore)
+    this.storage = Hypercore.defaultStorage(corestore.storage)
+
+    this.base = new Autobase({
+      inputs: opcore == inputCore ? [opcore] : [opcore,inputCore],
+      localInput: inputCore,
+      localOutput: output
+    })
 
     // Load storage
-    this._ready = Promise.resolve().then(() => {
-        const coresToLoad = []
-
-        // Load local cores first
-        if (this.base.localInput) {
-          coresToLoad.push(this._addKeys([this.base.localInput.key.toString('hex')]))
-        }
-
-        // Load storage cores
-        coresToLoad.push(this.readStorageKeys())
-
-        return Promise.all(coresToLoad)
-    })
+    this._ready = this.readStorageKeys()
   }
 
   ready() {
     return this._ready
+  }
+
+  async start() {
+    await this.base.start({
+        async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
+          const pBatch = batch.map((node) => {
+            const post: IPost = JSON.parse(node.value.toString())
+            post.no = node.id + '>' + node.seq
+            return Buffer.from(JSON.stringify(post), 'utf-8')
+          })
+          await view.append(pBatch)
+        }
+    })
+    await this.base.view.update()
   }
 
   allInputs() {

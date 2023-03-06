@@ -98,15 +98,15 @@ describe('Environment', () => {
             await c.newMessage(threadId, {com: "test3", time: getTimestampInSeconds()})
         ])
 
-        // const threadId2 = await b.newThread()
-        // await b.newMessage(threadId2, {com: "test4", time: getTimestampInSeconds()})
+        const threadId2 = await b.newThread()
+        await b.newMessage(threadId2, {com: "test4", time: getTimestampInSeconds()})
 
-        // await waitForThreadJoins([c,a, b], [threadId2])
+        await waitForThreadJoins([c,a, b], [threadId2])
 
-        // await waitForHypercoresReceiveMulti([a, c, b], threadId2, [
-        //     await a.newMessage(threadId2, {com: "test5", time: getTimestampInSeconds()}),
-        //     await c.newMessage(threadId2, {com: "test6", time: getTimestampInSeconds()})
-        // ])
+        await waitForHypercoresReceiveMulti([a, c, b], threadId2, [
+            await a.newMessage(threadId2, {com: "test5", time: getTimestampInSeconds()}),
+            await c.newMessage(threadId2, {com: "test6", time: getTimestampInSeconds()})
+        ])
 
         await sleep(1000)
         console.log("a", formatCatalog(await a.getCatalog()))

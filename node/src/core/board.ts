@@ -102,33 +102,12 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         const output = this.stores.outputs.get({name: threadId})
         await output.ready()
 
-        const base = new Autobase({
-            inputs: opcore == inputCore ? [opcore] : [opcore,inputCore],
-            localInput: inputCore,
-            localOutput: output
-        })
-
-        const manager = new Thread(
-            threadId,
-            base,
-            this.corestore.get.bind(this.corestore),
-            this.corestore.storage
-        )
+        const manager = new Thread(threadId, this.corestore, opcore, inputCore, output)
         
         this.threadsList.push(threadId)
         this.threads[threadId] = manager
         await manager.ready()
-        await manager.base.start({
-            async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
-                const pBatch = batch.map((node) => {
-                    const post: IPost = JSON.parse(node.value.toString())
-                    post.no = node.id + '>' + node.seq
-                    return Buffer.from(JSON.stringify(post), 'utf-8')
-                })
-                await view.append(pBatch)
-            }
-        })
-        await manager.base.view.update()
+        await manager.start()
         this.announceInputsToAll([manager.allInputs()])
         return manager
     }
