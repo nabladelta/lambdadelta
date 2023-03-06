@@ -10,7 +10,6 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   base: any
   get: any
   storage: any
-  _inputKeys: Set<string>
   _ready: Promise<void | void[]>
 
   constructor (uid: string, base: any, get: any, storage: any) {
@@ -20,7 +19,6 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     this.get = get
     this.storage = Hypercore.defaultStorage(storage)
 
-    this._inputKeys = new Set()
     // Load storage
     this._ready = Promise.resolve().then(() => {
         const coresToLoad = []
@@ -37,23 +35,8 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     })
   }
 
-  ready () {
+  ready() {
     return this._ready
-  }
-
-  async recv(msgs: string[]) {
-    this.emit('receivedCores', msgs)
-    const allowedKeys = msgs.filter((msg: string) => this.allow(msg))
-    if (allowedKeys.length) {
-      // Check if any are new
-      const newKeys = difference(allowedKeys, this._inputKeys)
-      if (newKeys.size > 0) {
-        await this._addKeys(newKeys)
-        await this.updateStorageKeys()
-        return this.allInputs()
-      }
-      return false
-    }
   }
 
   allInputs() {
@@ -67,7 +50,21 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     return true
   }
 
-
+  async recv(msgs: string[]) {
+    this.emit('receivedCores', msgs)
+    const allowedKeys = msgs.filter((msg: string) => this.allow(msg))
+    if (allowedKeys.length) {
+      // Check if any are new
+      const allKeys = new Set(this.allInputs())
+      const newKeys = difference(allowedKeys, allKeys)
+      if (newKeys.size > 0) {
+        await this._addKeys(newKeys)
+        await this.updateStorageKeys()
+        return this.allInputs()
+      }
+      return false
+    }
+  }
 
   async _addKeys(keys: string[] | Set<string>) {
     // Get & Ready Cores
@@ -77,29 +74,21 @@ export class Thread extends TypedEmitter<ThreadEvents> {
       await core.ready()
       return core
     }))
-
     // Add to the corresponding place in autobase
-    const ids = []
     for (const core of cores) {
-      if (core.fork != 0) {
-        console.log("Forked Core")
-      }
-      const id = core.key.toString('hex')
-      ids.push(id)
-
-      this._inputKeys.add(id)
       await this.base.addInput(core)
     }
-    this.emit("addedCores", ids)
+    this.emit("addedCores", cores.map(c => c.key.toString('hex')))
   }
 
   async readStorageKeys() {
-    await this._readStorageKey('inputs', this._inputKeys)
-    await this._addKeys(this._inputKeys)
+    const loadedInputs = new Set<string>()
+    await this._readStorageKey('inputs', loadedInputs)
+    await this._addKeys(loadedInputs)
   }
 
   async updateStorageKeys() {
-    await this._updateStorageKey('inputs', this._inputKeys)
+    await this._updateStorageKey('inputs', new Set(this.allInputs()))
   }
 
   _getStorage (file: string) {
