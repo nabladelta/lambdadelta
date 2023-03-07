@@ -8,13 +8,13 @@ import { Keystorage } from './keystorage'
 
 export class Thread extends TypedEmitter<ThreadEvents> {
   public tid: string
+  private opCore: any
   public base: any
 
   // Whether we have posted to this thread, determines if we gossip our localInput core
   private written: boolean
 
   private get: any
-  private storage: any
   private keystore: Keystorage
   private _ready: Promise<void | void[]>
   public localInput: string
@@ -90,8 +90,15 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   }
 
   public async start() {
+    const self = this
     await this.base.start({
         async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
+          if (view.length == 0) {
+            const op = self.get(b4a.from(self.tid, 'hex'))
+            await op.ready()
+            const opp: Buffer = await op.get(0)
+            console.log(opp.toString())
+          }
           const pBatch = batch.map((node) => {
             const post: IPost = JSON.parse(node.value.toString())
             post.no = node.id + '>' + node.seq
