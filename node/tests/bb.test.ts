@@ -3,8 +3,6 @@ import { BulletinBoard } from '../src/core/board'
 import { difference, getTimestampInSeconds } from '../src/core/utils/utils'
 import createTestnet from '@hyperswarm/testnet'
 import { BBNode } from '../src/core/node'
-import Hyperswarm from 'hyperswarm'
-import crypto from 'crypto'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -94,8 +92,8 @@ describe('Environment', () => {
         await waitForThreadJoins([c,b], [threadId])
 
         await waitForHypercoresReceiveMulti([a, c, b], threadId, [
-            await b.newMessage(threadId, {com: "test2", time: getTimestampInSeconds()}),
-            await c.newMessage(threadId, {com: "test3", time: getTimestampInSeconds()})
+            await b.newMessage(threadId, {com: "test2", time: getTimestampInSeconds()})||"",
+            await c.newMessage(threadId, {com: "test3", time: getTimestampInSeconds()})||""
         ])
 
         const threadId2 = await b.newThread()
@@ -104,8 +102,8 @@ describe('Environment', () => {
         await waitForThreadJoins([c,a, b], [threadId2])
 
         await waitForHypercoresReceiveMulti([a, c, b], threadId2, [
-            await a.newMessage(threadId2, {com: "test5", time: getTimestampInSeconds()}),
-            await c.newMessage(threadId2, {com: "test6", time: getTimestampInSeconds()})
+            await a.newMessage(threadId2, {com: "test5", time: getTimestampInSeconds()})||"",
+            await c.newMessage(threadId2, {com: "test6", time: getTimestampInSeconds()})||""
         ])
 
         await sleep(1000)

@@ -36,7 +36,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
 
         const inputAnnouncer = channel.addMessage({
             encoding: c.array(c.array(c.string)),
-            async onmessage(cids: string[][], _: any) { await self.recv(cids)}
+            async onmessage(cids: string[][], _: any) { await self.recv(cids) }
         })
         
         const streamData = {stream, inputAnnouncer}
