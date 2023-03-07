@@ -62,6 +62,7 @@ function ThreadPage() {
       return
     }
     console.log(content)
+    setData(content)
     toast({
       title: "Post Successful",
       status: 'success',

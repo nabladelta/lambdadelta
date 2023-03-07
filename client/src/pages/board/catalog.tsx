@@ -22,7 +22,7 @@ import {
 } from "@chakra-ui/react"
 import { ArrowBackIcon, ArrowDownIcon, ArrowUpIcon, RepeatClockIcon, ChatIcon } from '@chakra-ui/icons'
 import Post from '../../components/Post'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
 
@@ -32,6 +32,7 @@ function Catalog() {
   const toast = useToast()
   const { board } = useParams()
   const [data, setData] = useState<ICatalogPage[]>([])
+  const navigate = useNavigate()
 
   async function updateData() {
     const r = await fetch('http://localhost:8089/api/a/catalog.json')
@@ -57,6 +58,7 @@ function Catalog() {
     })
     const content = await r.json()
     console.log(content)
+    navigate(`/${board}/thread/${content.op}`)
     toast({
       title: 'New Thread Created',
       status: 'success',
