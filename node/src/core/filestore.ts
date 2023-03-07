@@ -1,4 +1,5 @@
 import Hyperblobs from 'hyperblobs'
+import b4a from 'b4a'
 
 export class Filestore {
     private corestore: any
@@ -11,11 +12,11 @@ export class Filestore {
         const core = this.corestore.namespace('op').get({ name: tid})
         await core.ready()
         const blobs = new Hyperblobs(core)
-        return await blobs.put(data)
+        return { cid: core.key.toString('hex'), blobId: await blobs.put(data) }
     }
 
-    public async retrieve(tid: string, id: BlobID) {
-        const core = this.corestore.namespace('op').get({ name: tid})
+    public async retrieve(cid: string, id: BlobID) {
+        const core = this.corestore.get(b4a.from(cid, 'hex'))
         await core.ready()
         const blobs = new Hyperblobs(core)
         return await blobs.get(id)
