@@ -90,16 +90,12 @@ async function waitForHypercoresReceiveMulti(bs: BulletinBoard[], tid: string, h
     }
 }
 
-describe('Environment', () => {
+describe('Test BulletinBoard', () => {
     let anode: BBNode
     let bnode: BBNode
     let cnode: BBNode
 
     beforeEach(async () => {
-        
-    })
-    jest.setTimeout(120000)
-    it('streams', async () => {
         const {bootstrap} = await createTestnet(3)
         anode = new BBNode('secret1secret1secret1', true, {bootstrap})
         bnode = new BBNode('secret1secret1secret2', true, {bootstrap})
@@ -110,7 +106,11 @@ describe('Environment', () => {
         await bnode.join(T)
         await cnode.ready()
         await cnode.join(T)
+    })
 
+    jest.setTimeout(120000)
+
+    it('Creates new threads, posts in them, and replicates', async () => {
         const a = anode.boards.get(T)!
         const b = bnode.boards.get(T)!
         const c = cnode.boards.get(T)!
@@ -146,14 +146,14 @@ describe('Environment', () => {
 
         await sleep(1000)
 
+        // Ensure all threads replicated fully on all nodes
         expect(await validateThread([a, b, c], threadId, ["test", "test-2", "test-3", "test2", "test3", "test3-2"], true)).toBe(true)
         expect(await validateThread([a, b, c], threadId2, ["test4", "test5", "test6", "test6-2", "test5-2", "test6-3"], true)).toBe(true)
 
-        console.log("a", formatCatalog(await a.getCatalog()))
-        console.log("b", formatCatalog(await b.getCatalog()))
-        console.log("c", formatCatalog(await c.getCatalog()))
+        // console.log("a", formatCatalog(await a.getCatalog()))
+        // console.log("b", formatCatalog(await b.getCatalog()))
+        // console.log("c", formatCatalog(await c.getCatalog()))
 
-        console.log((await a.getThreadContent(threadId)))
-
+        console.log((await a.getThreadContent(threadId))?.posts)
     })
 })
