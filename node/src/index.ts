@@ -26,7 +26,6 @@ function AlreadyPresentError(res: express.Response) {
   res.send({error: "Thread Already Exists"})
 }
 
-
 app.get('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
     const client = node.boards.get(req.params.topic)
     if (!client) return NotFoundError(res)
