@@ -91,7 +91,7 @@ function ThreadPage() {
       </Tooltip>
     </HStack>
     <VStack align="flex-start" spacing={8}>
-      {data.posts.map(p => <Post key={p.no} post={p as any}/>)}
+      {data.posts.map(p => <Post key={p.no} post={p as any}/>)} 
     </VStack>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>
