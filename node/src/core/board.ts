@@ -8,35 +8,25 @@ import { Thread } from './thread'
 import { difference, getThreadEpoch } from './utils/utils'
 import { BoardEvents } from './events'
 
+const MAX_THREADS = 256
+
 export class BulletinBoard extends TypedEmitter<BoardEvents> {
-    corestore: any
-    stores: {
-        op: any
-        reply: any
-        outputs: any
-    }
-    threadsList: string[]
-    threads: {[tid: string]: Thread}
-    _streams: Set<{stream: any, inputAnnouncer: any}>
-    swarm: any
-    topic: string
-    channel: any
+    private corestore: any
+    public threadsList: string[]
+    public threads: {[tid: string]: Thread}
+    private _streams: Set<{stream: any, inputAnnouncer: any}>
+    public topic: string
 
     constructor(topic: string, corestore: any) {
         super()
         this.corestore = corestore
         this.topic = topic
-        this.stores = {
-            op: corestore.namespace('op'),
-            reply: corestore.namespace('reply'),
-            outputs: corestore.namespace('outputs')
-        }
         this.threadsList = []
         this._streams = new Set()
         this.threads = {}
     }
 
-    async attachStream(stream: any) {
+    public async attachStream(stream: any) {
         const self = this
         const mux = Protomux.from(stream)
 
@@ -47,23 +37,9 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         })
         channel.open()
 
-
         const inputAnnouncer = channel.addMessage({
             encoding: c.array(c.array(c.string)),
-            async onmessage(cids: string[][], session: any) {
-                console.log("msg")
-                const updated: string[][] = []
-                for (let threadInputs of cids) {
-                    let nt = false
-                    if (!self.threads[threadInputs[0]]) {
-                        await self._addThreads([threadInputs[0]])
-                        nt = true
-                    }
-                    const inputs = await self.threads[threadInputs[0]].recv(threadInputs)
-                    if (inputs || nt) updated.push(inputs || [threadInputs[0]])
-                }
-                if (updated.length > 0) self.announceInputsToAll(updated)
-            }
+            async onmessage(cids: string[][], _: any) { await self.recv(cids)}
         })
         
         const streamData = {stream, inputAnnouncer}
@@ -75,87 +51,75 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         })
     }
 
-    async announceInputsToAll(inputs: string[][]) {
+    private async recv(cids: string[][]) {
+        const updated: string[][] = []
+        for (let threadInputs of cids) {
+            const threadId = threadInputs[0]
+
+            let newThread = false
+            if (!this.threads[threadId]) {
+                const t = await Thread.load(threadId, this.corestore)
+                await this._addThread(t)
+                this.emit("joinedThread", t.tid, t)
+                newThread = true
+            }
+
+            const thread = this.threads[threadId]
+            const inputs = await thread.recv(threadInputs)
+            if (inputs || newThread) updated.push(inputs || thread.allInputs())
+        }
+        if (updated.length > 0) this.announceInputsToAll(updated)
+    }
+
+    private async announceInputsToAll(inputs: string[][]) {
         if (!inputs.length) return
         for (let streamData of this._streams) {
             await streamData.inputAnnouncer.send(inputs)
         }
     }
 
-    async announceAllInputs(streamData: {stream: any, inputAnnouncer: any}) {
+    private async announceAllInputs(streamData: {stream: any, inputAnnouncer: any}) {
         const inputs = this.threadsList.map(tid => this.threads[tid].allInputs())
         await streamData.inputAnnouncer.send(inputs)
     }
 
-    async _addThreads(threadIds: string[] | Set<string>) {
-        for (let threadId of threadIds) {
-            await this.joinThread(threadId)
+    private async _addThread(t: Thread) {
+        this.threadsList.push(t.tid)
+        this.threads[t.tid] = t
+        this.bumpOff()
+        await t.start()
+    }
+    
+    private async bumpOff() {
+        if (this.threadsList.length < MAX_THREADS) {
+            return
         }
+        const removed = this.threadsList.shift()!
+        await this.threads[removed].destroy()
+        delete this.threads[removed]
     }
 
-    async allow(msg: string, session: any) {
-        return true
+    public async newThread(): Promise<string> {
+        const t = await Thread.create(this.corestore)
+        await this._addThread(t)
+        this.announceInputsToAll([t.allInputs()])
+        return t.tid
     }
 
-    async buildThread(opcore: any, inputCore: any) {
-        const threadId = opcore.key.toString('hex')
-        const output = this.stores.outputs.get({name: threadId})
-        await output.ready()
+    public async newMessage(threadId: string, post: IPost) {
+        const t = this.threads[threadId]
+        if (!t) return false
 
-        const manager = new Thread(threadId, this.corestore, opcore, inputCore, output)
-        
-        this.threadsList.push(threadId)
-        this.threads[threadId] = manager
-        await manager.ready()
-        await manager.start()
-        this.announceInputsToAll([manager.allInputs()])
-        return manager
-    }
-
-    async joinThread(threadId: string) {
-        const opcore = this.corestore.get(b4a.from(threadId, 'hex'))
-        const input = this.stores.reply.get({ name: threadId })
-        await opcore.ready()
-        await input.ready()
-        const thread = await this.buildThread(opcore, input)
-        this.emit("joinedThread", threadId, thread)
-        return thread
-    }
-
-    async newThread(): Promise<string> {
-        const opcore = this.stores.op.get(
-            { name: `${getThreadEpoch()}`})
-        await opcore.ready()
-        await this.buildThread(opcore, opcore)
-        const threadId = opcore.key.toString('hex')
-        return threadId
-    }
-
-    async _getUpdatedView(threadId: string) {
-        const view = this.threads[threadId].base.view
-
-        await view.ready()
-        await view.update()
-        return view
-    }
-
-    async newMessage(threadId: string, post: IPost) {
-        if (!this.threads[threadId]) {
-            return false
+        if (await t.newMessage(post)) {
+            this.announceInputsToAll([t.allInputs()])
         }
-        await this._getUpdatedView(threadId)
-        await this.threads[threadId].base.append(JSON.stringify(post))
-
-        return this.threads[threadId].base.localInput.key.toString('hex')
+        return t.localInput
     }
 
-    async getThreadContent(threadId: string, start?: number, end?: number) {
+    public async getThreadContent(threadId: string, start?: number, end?: number) {
         if (!this.threads[threadId]) return undefined
 
-        const view = this.threads[threadId].base.view
-
-        await view.ready()
-        await view.update()
+        const view = await this.threads[threadId].getUpdatedView()
 
         const thread: IThread = {posts: []}
 
@@ -170,7 +134,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         return thread
     }
 
-    async getThreadLength(threadId: string) {
+    public async getThreadLength(threadId: string) {
         const view = this.threads[threadId].base.view
 
         await view.ready()
@@ -178,14 +142,10 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         return view.length
     }
 
-    getThreadList() {
-        return this.threadsList
-    }
-
-    async getCatalog() {
+    public async getCatalog() {
         const catalog: {page: number, threads: IPost[]}[] = []
         const threads = []
-        for (let threadId of this.threadsList) {
+        for (let threadId of this.threadsList.slice().reverse()) {
             const thread = (await this.getThreadContent(threadId))!
             const op = thread.posts[0]
             op.last_replies = thread.posts.slice(1).slice(-3)

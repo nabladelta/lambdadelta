@@ -2,39 +2,94 @@ import Protomux from 'protomux'
 import c from 'compact-encoding'
 import b4a from 'b4a'
 import Hypercore from 'hypercore'
-import { difference } from './utils/utils'
+import { difference, getThreadEpoch } from './utils/utils'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { ThreadEvents } from './events'
 import Autobase from 'autobase'
 
 export class Thread extends TypedEmitter<ThreadEvents> {
-  uid: string
-  base: any
-  get: any
-  storage: any
-  _ready: Promise<void | void[]>
+  public tid: string
+  public base: any
 
-  constructor (uid: string, corestore: any, opcore: any, inputCore: any, output: any) {
+  // Whether we have posted to this thread, determines if we gossip our localInput core
+  private written: boolean
+
+  private get: any
+  private storage: any
+  private _ready: Promise<void | void[]>
+  public localInput: string
+
+  constructor(tid: string, corestore: any, autobase: any, written?: boolean) {
     super()
-    this.uid = uid
+    this.tid = tid
     this.get = corestore.get.bind(corestore)
     this.storage = Hypercore.defaultStorage(corestore.storage)
+    this.base = autobase
 
-    this.base = new Autobase({
-      inputs: opcore == inputCore ? [opcore] : [opcore,inputCore],
-      localInput: inputCore,
-      localOutput: output
-    })
+    this.written = !!written
+    this.localInput = this.base.localInput.key.toString('hex')
 
     // Load storage
-    this._ready = this.readStorageKeys()
+    this._ready = (async () => {
+        await this.readStorageKeys()
+    })()
   }
 
-  ready() {
+  public static async create(corestore: any) {
+    const opcore = corestore.namespace('op').get({ name: `${getThreadEpoch()}`})
+    await opcore.ready()
+    const tid = opcore.key.toString('hex')
+
+    const outputCore = corestore.namespace('output').get({name: tid})
+    await outputCore.ready()
+
+    const base = new Autobase({
+          inputs: [opcore],
+          localInput: opcore,
+          localOutput: outputCore
+    })
+    
+    // Newly created thread is always "written" because we will write the OP
+    const thread = new Thread(tid, corestore, base, true)
+    await thread.ready()
+    return thread
+  }
+
+  public static async load(tid: string, corestore: any) {
+    const opcore = corestore.get(b4a.from(tid, 'hex'))
+    await opcore.ready()
+    const inputCore = corestore.namespace('reply').get({name: tid})
+    await inputCore.ready()
+
+    const outputCore = corestore.namespace('output').get({name: tid})
+    await outputCore.ready()
+
+    const base = new Autobase({
+      inputs: [opcore, inputCore],
+      localInput: inputCore,
+      localOutput: outputCore
+    })
+
+    // If inputcore is already written to, set thread to already written
+    const thread = new Thread(tid, corestore, base, inputCore.length > 0)
+    await thread.ready()
+    return thread
+  }
+
+  public ready() {
     return this._ready
   }
 
-  async start() {
+  public async destroy() {
+    for (let core of this.base.inputs) {
+      await core.close()
+    }
+    for (let core of this.base.outputs) {
+      await core.close()
+    }
+  }
+
+  public async start() {
     await this.base.start({
         async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
           const pBatch = batch.map((node) => {
@@ -48,34 +103,57 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     await this.base.view.update()
   }
 
-  allInputs() {
+  public allInputs() {
     // Ensure thread ID is first
-    return [this.uid].concat(this.base.inputs
+    return [this.tid].concat(this.base.inputs
     .map((core: any) => core.key.toString('hex'))
-    .filter((k: string) => k != this.uid))
+    .filter((k: string) => 
+      // Thread ID already added at the start
+      k != this.tid 
+      && 
+      // Do not return (and gossip) localinput if the thread has not been written to by us
+      (this.written || (k != this.localInput) )))
   }
 
-  async allow(msg: string) {
+  public async getUpdatedView() {
+    const view = this.base.view
+    await view.ready()
+    await view.update()
+    return view
+  }
+
+  public async newMessage(post: IPost) {
+    await this.getUpdatedView()
+    this.base.append(JSON.stringify(post))
+
+    if (!this.written) {
+      this.written = true
+      return true // Is the first message we posted
+    }
+    return false
+  }
+
+  private async allow(msg: string) {
     return true
   }
 
-  async recv(msgs: string[]) {
+  public async recv(msgs: string[]) {
     this.emit('receivedCores', msgs)
+
     const allowedKeys = msgs.filter((msg: string) => this.allow(msg))
-    if (allowedKeys.length) {
-      // Check if any are new
-      const allKeys = new Set(this.allInputs())
-      const newKeys = difference(allowedKeys, allKeys)
-      if (newKeys.size > 0) {
-        await this._addKeys(newKeys)
-        await this.updateStorageKeys()
-        return this.allInputs()
-      }
-      return false
-    }
+
+    if (allowedKeys.length == 0) return false
+    // Check if any are new
+    const allKeys = new Set(this.allInputs())
+    const newKeys = difference(allowedKeys, allKeys)
+    if (newKeys.size == 0) return false
+
+    await this._addKeys(newKeys)
+    await this.updateStorageKeys()
+    return this.allInputs()
   }
 
-  async _addKeys(keys: string[] | Set<string>) {
+  private async _addKeys(keys: string[] | Set<string>) {
     // Get & Ready Cores
     const cores = await Promise.all(Array.from(keys).map(async (key) => {
       const core = this.get(b4a.from(key, 'hex'))
@@ -90,21 +168,21 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     this.emit("addedCores", cores.map(c => c.key.toString('hex')))
   }
 
-  async readStorageKeys() {
+  private async readStorageKeys() {
     const loadedInputs = new Set<string>()
     await this._readStorageKey('inputs', loadedInputs)
     await this._addKeys(loadedInputs)
   }
 
-  async updateStorageKeys() {
+  private async updateStorageKeys() {
     await this._updateStorageKey('inputs', new Set(this.allInputs()))
   }
 
-  _getStorage (file: string) {
-    return this.storage('thread-rep/' + this.uid + '/' + file)
+  private _getStorage (file: string) {
+    return this.storage('thread-rep/' + this.tid + '/' + file)
   }
 
-  _readStorageKey (file: string, output: Set<string>) {
+  private _readStorageKey (file: string, output: Set<string>) {
     const store = this._getStorage(file)
     return new Promise<void>((resolve, reject) => {
       store.stat(async (err: any, stat: any) => {
@@ -132,7 +210,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     )
   }
 
-  async _updateStorageKey (file: string, input: Set<string>) {
+  private async _updateStorageKey (file: string, input: Set<string>) {
     const store = this._getStorage(file)
     let i = 0
     for (const data of input) {
