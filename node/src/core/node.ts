@@ -3,6 +3,7 @@ import Hyperswarm from 'hyperswarm'
 import crypto from 'crypto'
 import ram from 'random-access-memory'
 import { BulletinBoard } from './board'
+import { Filestore } from './filestore'
 
 
 export class BBNode {
@@ -12,6 +13,7 @@ export class BBNode {
     boards: Map<string, BulletinBoard>
     _streams: Set<any>
     swarm: Hyperswarm
+    filestore: Filestore
     _initSwarmPromise: Promise<void>
 
     constructor(secret: string, memstore?: boolean, swarmOpts?: any) {
@@ -23,6 +25,7 @@ export class BBNode {
         this.boards = new Map()
         this._streams = new Set()
         this.swarm = new Hyperswarm(swarmOpts)
+        this.filestore = new Filestore(this.corestore)
         this._initSwarmPromise = this.initSwarm()
     }
     async ready() {
