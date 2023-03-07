@@ -86,8 +86,7 @@ describe('Environment', () => {
         const b = bnode.boards.get(T)!
         const c = cnode.boards.get(T)!
 
-        const threadId = await a.newThread()
-        await a.newMessage(threadId, {com: "test", time: getTimestampInSeconds()})
+        const threadId = await a.newThread({com: "test", time: getTimestampInSeconds()})
         await a.newMessage(threadId, {com: "testX2", time: getTimestampInSeconds()})
         await a.newMessage(threadId, {com: "testX3", time: getTimestampInSeconds()})
 
@@ -98,10 +97,9 @@ describe('Environment', () => {
             await c.newMessage(threadId, {com: "test3", time: getTimestampInSeconds()})||""
         ])
 
-        const threadId2 = await b.newThread()
-        await b.newMessage(threadId2, {com: "test4", time: getTimestampInSeconds()})
+        const threadId2 = await b.newThread({com: "test4", time: getTimestampInSeconds()})
 
-        await waitForThreadJoins([c,a, b], [threadId2])
+        await waitForThreadJoins([c, a, b], [threadId2])
 
         await waitForHypercoresReceiveMulti([a, c, b], threadId2, [
             await a.newMessage(threadId2, {com: "test5", time: getTimestampInSeconds()})||"",

@@ -26,38 +26,28 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     this.keystore = new Keystorage(Hypercore.defaultStorage(corestore.storage), 'thread/' + this.tid + '/')
     this.base = autobase
 
+    this.opCore = corestore.get(b4a.from(tid, 'hex'))
+
     this.written = !!written
     this.localInput = this.base.localInput.key.toString('hex')
 
     // Load storage
     this._ready = (async () => {
+        await this.opCore.ready()
         await this.readStorageKeys()
     })()
   }
 
-  public static async create(corestore: any) {
+  public static async create(corestore: any, op: IPost) {
     const opcore = corestore.namespace('op').get({ name: `${getThreadEpoch()}`})
     await opcore.ready()
+    await opcore.append(Thread.serialize(op))
     const tid = opcore.key.toString('hex')
 
-    const outputCore = corestore.namespace('output').get({name: tid})
-    await outputCore.ready()
-
-    const base = new Autobase({
-          inputs: [opcore],
-          localInput: opcore,
-          localOutput: outputCore
-    })
-    
-    // Newly created thread is always "written" because we will write the OP
-    const thread = new Thread(tid, corestore, base, true)
-    await thread.ready()
-    return thread
+    return Thread.load(tid, corestore)
   }
 
   public static async load(tid: string, corestore: any) {
-    const opcore = corestore.get(b4a.from(tid, 'hex'))
-    await opcore.ready()
     const inputCore = corestore.namespace('reply').get({name: tid})
     await inputCore.ready()
 
@@ -65,7 +55,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     await outputCore.ready()
 
     const base = new Autobase({
-      inputs: [opcore, inputCore],
+      inputs: [inputCore],
       localInput: inputCore,
       localOutput: outputCore
     })
@@ -81,6 +71,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   }
 
   public async destroy() {
+    await this.opCore.close()
     for (let core of this.base.inputs) {
       await core.close()
     }
@@ -94,21 +85,30 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     await this.base.start({
         async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
           if (view.length == 0) {
-            const op = self.get(b4a.from(self.tid, 'hex'))
-            await op.ready()
-            const opp: Buffer = await op.get(0)
-            console.log(opp.toString())
+            const op: IPost = Thread.deserialize(await self.opCore.get(0))
+            op.no = self.tid
+            await view.append([Thread.serialize(op)])
           }
+
           const pBatch = batch.map((node) => {
-            const post: IPost = JSON.parse(node.value.toString())
+            const post: IPost = Thread.deserialize(node.value)
             post.no = node.id + '>' + node.seq
-            return Buffer.from(JSON.stringify(post), 'utf-8')
+            return Thread.serialize(post)
           })
           await view.append(pBatch)
         }
     })
     await this.base.view.update()
   }
+
+  private static serialize(obj: any) {
+    return Buffer.from(JSON.stringify(obj), 'utf-8')
+  }
+
+  private static deserialize(buf: Buffer) {
+    return JSON.parse(buf.toString())
+  }
+
 
   public allInputs() {
     // Ensure thread ID is first
@@ -131,7 +131,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   public async newMessage(post: IPost) {
     await this.getUpdatedView()
-    await this.base.append(JSON.stringify(post))
+    await this.base.append(Thread.serialize(post))
 
     if (!this.written) {
       this.written = true

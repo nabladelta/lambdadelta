@@ -43,8 +43,7 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
   const client = node.boards.get(req.params.topic)
   if (!client) return NotFoundError(res)
 
-  const threadId = await client.newThread()
-  await client.newMessage(threadId, req.body)
+  const threadId = await client.newThread(req.body)
   const thread = await client.getThreadContent(threadId)
   res.send({success: true, op: threadId, thread: thread})
 })
