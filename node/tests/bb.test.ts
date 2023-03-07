@@ -8,16 +8,14 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const T = 'a'
 
-
 function formatCatalog(cat: ICatalogPage[]) {
-    return cat[0].threads.map(thread => {
-        const op = [thread.no?.slice(-8), thread.com]
-
-        for (let reply of thread.last_replies!) {
-            op.push(reply.no?.slice(-8), reply.com)
-        }
-        return op
-    })
+    return cat.map(p => p.threads) // Page
+            .map(t => t.map(thread => 
+                [thread.no?.slice(-8), thread.com] // OP
+                    .concat(thread.last_replies!.map(reply => 
+                        [reply.no?.slice(-8), reply.com]) // Replies
+                        .flat(1))
+    )).flat(1)
 }
 
 function formatThread(tr?: IThread) {
@@ -44,6 +42,21 @@ async function validateThread(boards: BulletinBoard[], tid: string, postComs: st
     return true
 }
 
+
+async function validateCatalog(boards: BulletinBoard[], opComs: string[], strict?: boolean) {
+    for (let b of boards) {
+        const ops = formatCatalog(await b.getCatalog()).map(thread => thread[1]) // Extracts each OP's com field
+        if (strict) {
+            return ops == opComs
+        }
+        const opSet = new Set(ops)
+        for (let opCom of opComs) {
+            if (!opSet.has(opCom)) { console.log(ops, opComs); return false }
+        }
+    }
+    return true
+}
+
 // Wait until the board has joined thread
 async function waitForThreadJoin(b: BulletinBoard, tid: string) {
     if (b.threads[tid]) return // Already joined
@@ -60,7 +73,7 @@ async function waitForThreadJoins(bs: BulletinBoard[], tids: string[]) {
 
 async function waitForHypercoresReceive(b: BulletinBoard, tid: string, hids: string[]) {
     const alreadyPresent: string[] = b.threads[tid].base.inputs.map((core: any) => core.key.toString('hex'))
-    console.log(hids.map(i=> i.slice(-8)), alreadyPresent.map(i=> i.slice(-8)))
+    // console.log(hids.map(i=> i.slice(-8)), alreadyPresent.map(i=> i.slice(-8)))
 
     const missing: Set<string> = difference(hids, alreadyPresent)
     if (missing.size == 0) return
@@ -83,9 +96,9 @@ async function waitForHypercoresReceiveMulti(bs: BulletinBoard[], tid: string, h
             throw new Error("Invalid Hid")
         }
     }
-    let i = 0
+    // let i = 0
     for (let b of bs) {
-        console.log("wait ", i++)
+        // console.log("wait ", i++)
         await waitForHypercoresReceive(b, tid, hids)
     }
 }
@@ -115,7 +128,7 @@ describe('Test BulletinBoard', () => {
         const b = bnode.boards.get(T)!
         const c = cnode.boards.get(T)!
 
-        const threadId = await a.newThread({com: "test", time: getTimestampInSeconds()})
+        const threadId = await a.newThread({com: "test", time: getTimestampInSeconds()}) as string
         const replyCore = await a.newMessage(threadId, {com: "test-2", time: getTimestampInSeconds()})
         // Reply core should have a different ID from OPcore
         expect(replyCore != threadId).toBe(true)
@@ -132,7 +145,7 @@ describe('Test BulletinBoard', () => {
             await c.newMessage(threadId, {com: "test3-2", time: getTimestampInSeconds()})||""
         ])
 
-        const threadId2 = await b.newThread({com: "test4", time: getTimestampInSeconds()})
+        const threadId2 = await b.newThread({com: "test4", time: getTimestampInSeconds()}) as string
 
         await waitForThreadJoins([a, b, c], [threadId2])
 
@@ -150,10 +163,12 @@ describe('Test BulletinBoard', () => {
         expect(await validateThread([a, b, c], threadId, ["test", "test-2", "test-3", "test2", "test3", "test3-2"], true)).toBe(true)
         expect(await validateThread([a, b, c], threadId2, ["test4", "test5", "test6", "test6-2", "test5-2", "test6-3"], true)).toBe(true)
 
+        expect(await validateCatalog([a, b, c], ["test4", "test"])).toBe(true)
+
         // console.log("a", formatCatalog(await a.getCatalog()))
         // console.log("b", formatCatalog(await b.getCatalog()))
         // console.log("c", formatCatalog(await c.getCatalog()))
+        // console.log((await a.getThreadContent(threadId))?.posts)
 
-        console.log((await a.getThreadContent(threadId))?.posts)
     })
 })
