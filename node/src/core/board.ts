@@ -108,8 +108,11 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         delete this.threads[removed]
     }
 
-    public async newThread(op: IPost): Promise<string> {
+    public async newThread(op: IPost) {
         const t = await Thread.create(this.corestore, op)
+        // Thread already exists
+        if (!t) return false
+        if (this.threads[t.tid]) return false
         await this._addThread(t)
         this.announceInputsToAll([t.allInputs()])
         this.updateStorageKeys()

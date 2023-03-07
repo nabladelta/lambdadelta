@@ -21,6 +21,12 @@ function NotFoundError(res: express.Response) {
   res.send({error: "Not Found"})
 }
 
+function AlreadyPresentError(res: express.Response) {
+  res.status(409)
+  res.send({error: "Thread Already Exists"})
+}
+
+
 app.get('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
     const client = node.boards.get(req.params.topic)
     if (!client) return NotFoundError(res)
@@ -44,6 +50,8 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
   if (!client) return NotFoundError(res)
 
   const threadId = await client.newThread(req.body)
+  if (!threadId) return AlreadyPresentError(res)
+
   const thread = await client.getThreadContent(threadId)
   res.send({success: true, op: threadId, thread: thread})
 })

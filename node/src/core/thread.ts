@@ -41,6 +41,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   public static async create(corestore: any, op: IPost) {
     const opcore = corestore.namespace('op').get({ name: `${getThreadEpoch()}`})
     await opcore.ready()
+    if (opcore.length != 0) return false
     await opcore.append(Thread.serialize(op))
     const tid = opcore.key.toString('hex')
 
