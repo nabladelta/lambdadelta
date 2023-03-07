@@ -3,6 +3,10 @@ import { BulletinBoard } from '../src/core/board'
 import { difference, getTimestampInSeconds } from '../src/core/utils/utils'
 import createTestnet from '@hyperswarm/testnet'
 import { BBNode } from '../src/core/node'
+import ram from 'random-access-memory'
+import Corestore from 'corestore'
+import { Keystorage } from '../src/core/keystorage'
+import Hypercore from 'hypercore'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -103,22 +107,56 @@ async function waitForHypercoresReceiveMulti(bs: BulletinBoard[], tid: string, h
     }
 }
 
-describe('Test BulletinBoard', () => {
+describe('Keystore', () => {
+    it('Stores and retrieves keys', async () => {
+        const corestore = new Corestore(`./data/test`, {primaryKey: Buffer.from('secret1secret1secret1')})
+        const keystore = new Keystorage(Hypercore.defaultStorage(corestore.storage), 'test/')
+        const keys = new Set<string>()
+        await keystore._readStorageKey('test', keys)
+        expect(keys.size).toBe(0)
+        const storeKeys = new Set<string>(
+            [
+                '4ced5d6b6a87a34b1123c1db3823639759ac762707934199eaa1f2e2009e98b2',
+                'a040e3796509f598ea2e56dcdf8b84aa81f7aa6d66631b25b9806cbc5ed5d44c',
+                '2fdde410f7c5e3b50603d1b0dcfd6e183a9dfc2d353811b47763a3709fcd4473',
+                '7f52d113f0e2e233fa59929fbd229baed4f0d47f817c0efa39e2137af9cb2140'
+            ])
+        await keystore._updateStorageKey('test', storeKeys)
+        await keystore._readStorageKey('test', keys)
+        expect(keys.size).toBe(4)
+        for (let key of storeKeys) {
+            expect(keys.has(key)).toBe(true)
+        }
+        await corestore.close()
+    })
+})
+
+describe('BulletinBoard', () => {
     let anode: BBNode
     let bnode: BBNode
     let cnode: BBNode
 
+    let destroy: () => Promise<void>
+
     beforeEach(async () => {
-        const {bootstrap} = await createTestnet(3)
-        anode = new BBNode('secret1secret1secret1', true, {bootstrap})
-        bnode = new BBNode('secret1secret1secret2', true, {bootstrap})
-        cnode = new BBNode('secret1secret1secret3', true, {bootstrap})
+        const testnet = await createTestnet(3)
+        anode = new BBNode('secret1secret1secret1', true, {bootstrap: testnet.bootstrap})
+        bnode = new BBNode('secret1secret1secret2', true, {bootstrap: testnet.bootstrap})
+        cnode = new BBNode('secret1secret1secret3', true, {bootstrap: testnet.bootstrap})
         await anode.ready()
         await anode.join(T)
         await bnode.ready()
         await bnode.join(T)
         await cnode.ready()
         await cnode.join(T)
+
+        destroy = async() => {
+            await Promise.all([testnet.destroy(), anode.destroy(), bnode.destroy(), cnode.destroy()])
+        }
+    })
+
+    afterEach(async () => {
+        await destroy()
     })
 
     jest.setTimeout(120000)
@@ -168,7 +206,7 @@ describe('Test BulletinBoard', () => {
         // console.log("a", formatCatalog(await a.getCatalog()))
         // console.log("b", formatCatalog(await b.getCatalog()))
         // console.log("c", formatCatalog(await c.getCatalog()))
-        // console.log((await a.getThreadContent(threadId))?.posts)
+        console.log((await a.getThreadContent(threadId))?.posts)
 
     })
 })

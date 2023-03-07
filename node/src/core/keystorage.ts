@@ -23,6 +23,7 @@ export class Keystorage {
                 }
 
                 const len = stat.size
+                // console.log('write data', len)
                 for (let start = 0; start < len; start += 32) {
                     await new Promise<void>((resolve, reject) => {
                         store.read(start, 32, function (err: any, buf: Buffer) {

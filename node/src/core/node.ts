@@ -29,6 +29,10 @@ export class BBNode {
         await this.corestore.ready()
         await this._initSwarmPromise
     }
+    async destroy() {
+        await this.swarm.destroy()
+        await this.corestore.close()
+    }
 
     async initSwarm() {
         this.swarm.on('connection', (socket, info) => {
