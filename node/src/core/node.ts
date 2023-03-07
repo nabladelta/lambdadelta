@@ -1,14 +1,7 @@
 import Corestore from 'corestore'
 import Hyperswarm from 'hyperswarm'
-import Autobase from 'autobase'
 import crypto from 'crypto'
-import b4a from 'b4a'
 import ram from 'random-access-memory'
-import Protomux from 'protomux'
-import c from 'compact-encoding'
-
-import { Thread } from './thread'
-import { getThreadEpoch } from './utils/utils'
 import { BulletinBoard } from './board'
 
 

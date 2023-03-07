@@ -1,5 +1,3 @@
-import Protomux from 'protomux'
-import c from 'compact-encoding'
 import b4a from 'b4a'
 import Hypercore from 'hypercore'
 import { difference, getThreadEpoch } from './utils/utils'

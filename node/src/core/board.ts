@@ -1,11 +1,8 @@
-import Autobase from 'autobase'
-import b4a from 'b4a'
 import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { TypedEmitter } from 'tiny-typed-emitter'
 
 import { Thread } from './thread'
-import { difference, getThreadEpoch } from './utils/utils'
 import { BoardEvents } from './events'
 
 const MAX_THREADS = 256
