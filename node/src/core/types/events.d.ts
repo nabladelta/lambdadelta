@@ -1,4 +1,4 @@
-import { Thread } from "./thread";
+import { Thread } from "../thread";
 
 interface BoardEvents {
     'joinedThread': (threadId: string, thread: Thread) => void;

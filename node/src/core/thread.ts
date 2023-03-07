@@ -2,7 +2,7 @@ import b4a from 'b4a'
 import Hypercore from 'hypercore'
 import { difference, getThreadEpoch } from './utils/utils'
 import { TypedEmitter } from 'tiny-typed-emitter'
-import { ThreadEvents } from './events'
+import { ThreadEvents } from './types/events'
 import Autobase from 'autobase'
 
 export class Thread extends TypedEmitter<ThreadEvents> {

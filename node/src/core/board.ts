@@ -3,7 +3,7 @@ import c from 'compact-encoding'
 import { TypedEmitter } from 'tiny-typed-emitter'
 
 import { Thread } from './thread'
-import { BoardEvents } from './events'
+import { BoardEvents } from './types/events'
 
 const MAX_THREADS = 256
 

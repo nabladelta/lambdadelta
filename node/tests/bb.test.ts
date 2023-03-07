@@ -111,6 +111,7 @@ describe('Environment', () => {
         console.log("b", formatCatalog(await b.getCatalog()))
         console.log("c", formatCatalog(await c.getCatalog()))
 
+        console.log((await a.getThreadContent(threadId)))
 
     })
 })
