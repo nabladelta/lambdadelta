@@ -88,6 +88,8 @@ describe('Environment', () => {
 
         const threadId = await a.newThread()
         await a.newMessage(threadId, {com: "test", time: getTimestampInSeconds()})
+        await a.newMessage(threadId, {com: "testX2", time: getTimestampInSeconds()})
+        await a.newMessage(threadId, {com: "testX3", time: getTimestampInSeconds()})
 
         await waitForThreadJoins([c,b], [threadId])
 

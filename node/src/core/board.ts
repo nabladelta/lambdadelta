@@ -1,9 +1,10 @@
 import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { TypedEmitter } from 'tiny-typed-emitter'
-
 import { Thread } from './thread'
 import { BoardEvents } from './types/events'
+import { Keystorage } from './keystorage'
+import Hypercore from 'hypercore'
 
 const MAX_THREADS = 256
 
@@ -13,6 +14,8 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     public threads: {[tid: string]: Thread}
     private _streams: Set<{stream: any, inputAnnouncer: any}>
     public topic: string
+    private keystore: Keystorage
+    private _ready: Promise<void>
 
     constructor(topic: string, corestore: any) {
         super()
@@ -21,6 +24,12 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         this.threadsList = []
         this._streams = new Set()
         this.threads = {}
+        this.keystore = new Keystorage(Hypercore.defaultStorage(corestore.storage), 'board/' + this.topic + '/')
+        this._ready = this.readStorageKeys()
+    }
+
+    public ready() {
+        return this._ready
     }
 
     public async attachStream(stream: any) {
@@ -65,7 +74,10 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
             const inputs = await thread.recv(threadInputs)
             if (inputs || newThread) updated.push(inputs || thread.allInputs())
         }
-        if (updated.length > 0) this.announceInputsToAll(updated)
+        if (updated.length > 0) {
+            this.announceInputsToAll(updated)
+            this.updateStorageKeys()
+        }
     }
 
     private async announceInputsToAll(inputs: string[][]) {
@@ -100,6 +112,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         const t = await Thread.create(this.corestore)
         await this._addThread(t)
         this.announceInputsToAll([t.allInputs()])
+        this.updateStorageKeys()
         return t.tid
     }
 
@@ -158,5 +171,18 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
             })
         }
         return catalog
+    }
+
+    private async readStorageKeys() {
+        const loadedInputs = new Set<string>()
+        await this.keystore._readStorageKey('inputs', loadedInputs)
+        for (let threadId of loadedInputs) {
+            const t = await Thread.load(threadId, this.corestore)
+            await this._addThread(t)
+        }
+    }
+    
+    private async updateStorageKeys() {
+        await this.keystore._updateStorageKey('inputs', new Set(this.threadsList))
     }
 }

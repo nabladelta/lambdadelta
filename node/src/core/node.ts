@@ -47,6 +47,7 @@ export class BBNode {
 
     async join(topic: string) {
         const board = new BulletinBoard(topic, this.corestore.namespace(topic))
+        await board.ready()
         this._streams.forEach(s => {
             board.attachStream(s)
         })

@@ -4,6 +4,7 @@ import { difference, getThreadEpoch } from './utils/utils'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { ThreadEvents } from './types/events'
 import Autobase from 'autobase'
+import { Keystorage } from './keystorage'
 
 export class Thread extends TypedEmitter<ThreadEvents> {
   public tid: string
@@ -14,6 +15,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   private get: any
   private storage: any
+  private keystore: Keystorage
   private _ready: Promise<void | void[]>
   public localInput: string
 
@@ -21,7 +23,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     super()
     this.tid = tid
     this.get = corestore.get.bind(corestore)
-    this.storage = Hypercore.defaultStorage(corestore.storage)
+    this.keystore = new Keystorage(Hypercore.defaultStorage(corestore.storage), 'thread/' + this.tid + '/')
     this.base = autobase
 
     this.written = !!written
@@ -122,7 +124,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   public async newMessage(post: IPost) {
     await this.getUpdatedView()
-    this.base.append(JSON.stringify(post))
+    await this.base.append(JSON.stringify(post))
 
     if (!this.written) {
       this.written = true
@@ -168,61 +170,11 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   private async readStorageKeys() {
     const loadedInputs = new Set<string>()
-    await this._readStorageKey('inputs', loadedInputs)
+    await this.keystore._readStorageKey('inputs', loadedInputs)
     await this._addKeys(loadedInputs)
   }
 
   private async updateStorageKeys() {
-    await this._updateStorageKey('inputs', new Set(this.allInputs()))
-  }
-
-  private _getStorage (file: string) {
-    return this.storage('thread-rep/' + this.tid + '/' + file)
-  }
-
-  private _readStorageKey (file: string, output: Set<string>) {
-    const store = this._getStorage(file)
-    return new Promise<void>((resolve, reject) => {
-      store.stat(async (err: any, stat: any) => {
-        if (err) {
-          resolve()
-          return
-        }
-
-        const len = stat.size
-        for (let start = 0; start < len; start += 32) {
-          await new Promise<void>((resolve, reject) => {
-            store.read(start, 32, function (err: any, buf: Buffer) {
-              if (err) throw err
-
-              output.add(buf.toString('hex'))
-              resolve()
-            })
-          })
-        }
-
-        store.close()
-        resolve()
-      })
-    }
-    )
-  }
-
-  private async _updateStorageKey (file: string, input: Set<string>) {
-    const store = this._getStorage(file)
-    let i = 0
-    for (const data of input) {
-      const start = i * 32
-      // console.log('write data', data)
-      await new Promise<void>((resolve, reject) => {
-        store.write(start, b4a.from(data, 'hex'), (err: any) => {
-          if (err) return reject(err)
-
-          resolve()
-        })
-      })
-      i++
-    }
-    store.close()
+    await this.keystore._updateStorageKey('inputs', new Set(this.allInputs()))
   }
 }
