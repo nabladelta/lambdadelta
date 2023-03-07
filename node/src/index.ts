@@ -1,8 +1,6 @@
 import express, { Express, Request, Response } from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
-import { BulletinBoard } from './core/board'
-import path from 'path'
 import { BBNode } from './core/node'
 
 dotenv.config()
