@@ -124,6 +124,8 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
             const node = await view.get(i)
             thread.posts.push(JSON.parse(node.value.toString()))
         }
+        // View is in reverse chronological order
+        thread.posts.reverse()
 
         if (!start && thread.posts.length) {
             thread.posts[0].replies = view.length - 1
