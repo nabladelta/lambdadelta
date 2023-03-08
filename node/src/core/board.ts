@@ -136,13 +136,22 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
 
         const thread: IThread = {posts: []}
 
-        for (let i = start || 0; i < (end || view.length); i++) {
+        if (view.length == 0) {
+            thread.posts.push(await this.threads[threadId].getOp())
+        }
+        end = end || (view.length as number)
+
+        if (end > view.length) {
+            end = view.length as number
+        }
+
+        for (let i = start || 0; i < end; i++) {
             const node = await view.get(i)
             thread.posts.push(JSON.parse(node.value.toString()))
         }
 
         if (!start && thread.posts.length) {
-            thread.posts[0].replies = view.length - 1
+            thread.posts[0].replies = (view.length || 1) - 1
         }
         return thread
     }
