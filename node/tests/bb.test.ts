@@ -9,6 +9,7 @@ import Hypercore from 'hypercore'
 import ram from 'random-access-memory'
 import { Filestore } from '../src/core/filestore'
 import crypto from 'crypto'
+import { parseFileID, processAttachment } from '../src/lib'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -141,9 +142,8 @@ describe.only('Filestore', () => {
         const base64 = base64url.split('base64,')[1]
         const buf = Buffer.from(base64, 'base64')
         const initialHash = crypto.createHash('sha256').update(buf).digest()
-        const {cid, blobId} = await filestore.store('test', buf, "image/png")
-        console.log(blobId)
-        const {mime, data} = await filestore.retrieve(cid, blobId) || {}
+        const {cid, blobId} = await filestore.store('test', buf, "image/png") || {}
+        const {mime, data} = await filestore.retrieve(cid!, blobId!) || {}
         expect(mime).toBe("image/png")
 
         const finalHash = crypto.createHash('sha256').update(data || '').digest()
@@ -175,10 +175,74 @@ describe.only('Filestore', () => {
             blockOffset: 0,
             blockLength: 0,
             byteLength: 12
-        }, 500) || {}
+        }, 500)
         expect(r).toBe(false)
     })
 })
+
+
+describe.only('File upload handling', () => {
+    it('Saves attachments correctly', async () => {
+        const corestore = new Corestore(ram, {primaryKey: Buffer.from('secret1secret1secret1')})
+        const filestore = new Filestore(corestore)
+        const base64url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII"
+        const base64 = base64url.split('base64,')[1]
+        const buf = Buffer.from(base64, 'base64')
+        const initialHash = crypto.createHash('sha256').update(buf).digest()
+        const tid = '4ced5d6b6a87a34b1123c1db3823639759ac762707934199eaa1f2e2009e98b2'
+        const post: IPost = {
+            time: getTimestampInSeconds(), // UNIX timestamp the post was created
+            com: "test"
+        }
+        const fileData: IFileData = {
+            filename: 'test.png',
+            type: 'image/png',
+            data: base64
+        }
+        const r = await processAttachment(filestore, fileData, post, tid)
+        expect(r).toBe(true)
+
+        console.log(post.filename, post.ext)
+
+        if (!post.tim) return expect(false).toBe(true)
+        const {cid, blobId} = parseFileID(post.tim)
+        const {mime, data} = await filestore.retrieve(cid, blobId) || {}
+        expect(mime).toBe(fileData.type)
+
+        const finalHash = crypto.createHash('sha256').update(data || '').digest()
+        expect(finalHash.toString('hex')).toBe(initialHash.toString('hex'))
+    })
+
+    it('Saves attachments correctly with missing mime type and filename', async () => {
+        const corestore = new Corestore(ram, {primaryKey: Buffer.from('secret1secret1secret1')})
+        const filestore = new Filestore(corestore)
+        const base64url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII"
+        const base64 = base64url.split('base64,')[1]
+        const buf = Buffer.from(base64, 'base64')
+        const initialHash = crypto.createHash('sha256').update(buf).digest()
+        const tid = '4ced5d6b6a87a34b1123c1db3823639759ac762707934199eaa1f2e2009e98b2'
+        const post: IPost = {
+            time: getTimestampInSeconds(), // UNIX timestamp the post was created
+            com: "test"
+        }
+        const fileData: IFileData = {
+            filename: '',
+            type: '',
+            data: base64
+        }
+        const r = await processAttachment(filestore, fileData, post, tid)
+        expect(r).toBe(true)
+
+        if (!post.tim) return expect(false).toBe(true)
+        const {cid, blobId} = parseFileID(post.tim)
+        const {mime, data} = await filestore.retrieve(cid, blobId) || {}
+        expect(mime).toBe(fileData.type)
+
+        const finalHash = crypto.createHash('sha256').update(data || '').digest()
+        expect(finalHash.toString('hex')).toBe(initialHash.toString('hex'))
+    })
+})
+
 
 describe('BulletinBoard', () => {
     let anode: BBNode
