@@ -51,17 +51,19 @@ app.get('/api/:topic/catalog.json', async (req: Request, res: Response) => {
 })
 
 app.get('/api/file/:id', async (req: Request, res: Response) => {
-  const splitid = req.params.id.split('.')
-
-  if (splitid.length > 1) {
-    const ext = splitid[1]
-    console.log(ext)
-    res.contentType(ext)
-  }
-
-  const id = await parseFileID(req.params.id)
+  const id = parseFileID(req.params.id)
   const content = await node.filestore.retrieve(id.cid, id.blobId)
-  res.send(content)
+
+  if (!content) return NotFoundError(res)
+
+  if (content.mime && content.mime.length > 0) {
+    res.contentType(content.mime)
+  } else { // Fall back to extension in url if mime type is not set
+    const [_, ext] = req.params.id.split('.', 2)
+
+    if (ext) res.contentType(ext)
+  }
+  res.send(content.data)
 })
 
 app.post('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {

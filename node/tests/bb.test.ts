@@ -202,8 +202,6 @@ describe.only('File upload handling', () => {
         const r = await processAttachment(filestore, fileData, post, tid)
         expect(r).toBe(true)
 
-        console.log(post.filename, post.ext)
-
         if (!post.tim) return expect(false).toBe(true)
         const {cid, blobId} = parseFileID(post.tim)
         const {mime, data} = await filestore.retrieve(cid, blobId) || {}
