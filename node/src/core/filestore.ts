@@ -12,10 +12,10 @@ export class Filestore {
         const core = this.corestore.namespace('op').get({ name: tid})
         await core.ready()
         const blobs = new Hyperblobs(core)
-        return { cid: core.key.toString('hex'), blobId: await blobs.put(data) }
+        return { cid: core.key.toString('hex'), blobId: await blobs.put(data) as BlobID }
     }
 
-    public async retrieve(cid: string, id: BlobID) {
+    public async retrieve(cid: string, id: BlobID): Promise<Buffer> {
         const core = this.corestore.get(b4a.from(cid, 'hex'))
         await core.ready()
         const blobs = new Hyperblobs(core)
