@@ -19,7 +19,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   private _ready: Promise<void | void[]>
   public localInput: string
 
-  constructor(tid: string, corestore: any, autobase: any, written?: boolean) {
+  private constructor(tid: string, corestore: any, autobase: any, written?: boolean) {
     super()
     this.tid = tid
     this.get = corestore.get.bind(corestore)
