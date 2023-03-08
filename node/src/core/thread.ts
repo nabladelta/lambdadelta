@@ -81,14 +81,18 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     }
   }
 
+  public async getOp() {
+    const op: IPost = Thread.deserialize(await this.opCore.get(0))
+    op.no = this.tid
+    return op
+  }
+
   public async start() {
     const self = this
     await this.base.start({
         async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
           if (view.length == 0) {
-            const op: IPost = Thread.deserialize(await self.opCore.get(0))
-            op.no = self.tid
-            await view.append([Thread.serialize(op)])
+            await view.append([Thread.serialize(self.getOp())])
           }
 
           const pBatch = batch.map((node) => {
