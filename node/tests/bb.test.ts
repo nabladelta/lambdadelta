@@ -6,6 +6,9 @@ import { BBNode } from '../src/core/node'
 import Corestore from 'corestore'
 import { Keystorage } from '../src/core/keystorage'
 import Hypercore from 'hypercore'
+import ram from 'random-access-memory'
+import { Filestore } from '../src/core/filestore'
+import crypto from 'crypto'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -127,6 +130,53 @@ describe('Keystore', () => {
             expect(keys.has(key)).toBe(true)
         }
         await corestore.close()
+    })
+})
+
+describe.only('Filestore', () => {
+    it('Stores and retrieves buffers', async () => {
+        const corestore = new Corestore(ram, {primaryKey: Buffer.from('secret1secret1secret1')})
+        const filestore = new Filestore(corestore)
+        const base64url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII"
+        const base64 = base64url.split('base64,')[1]
+        const buf = Buffer.from(base64, 'base64')
+        const initialHash = crypto.createHash('sha256').update(buf).digest()
+        const {cid, blobId} = await filestore.store('test', buf, "image/png")
+        console.log(blobId)
+        const {mime, data} = await filestore.retrieve(cid, blobId) || {}
+        expect(mime).toBe("image/png")
+
+        const finalHash = crypto.createHash('sha256').update(data || '').digest()
+        expect(finalHash.toString('hex')).toBe(initialHash.toString('hex'))
+    })
+
+    it('Handles missing files', async () => {
+        const corestore = new Corestore(ram, {primaryKey: Buffer.from('secret1secret1secret1')})
+        const filestore = new Filestore(corestore)
+        const r = await filestore.retrieve('4ced5d6b6a87a34b1123c1db3823639759ac762707934199eaa1f2e2009e98b2', {
+            byteOffset: 10,
+            blockOffset: 5,
+            blockLength: 6,
+            byteLength: 7
+        }, 500)
+        expect(r).toBe(false)
+    })
+
+    it('Handles malformed files', async () => {
+        const corestore = new Corestore(ram, {primaryKey: Buffer.from('secret1secret1secret1')})
+        const core = corestore.get({ name: 'test' })
+        await core.ready()
+        core.append('000ata:image/png;base64,AAAIAQMAAAD+wSzIAAAABlBMVEX///+')
+        const cid = core.key.toString('hex')
+
+        const filestore = new Filestore(corestore)
+        const r = await filestore.retrieve(cid, {
+            byteOffset: 0,
+            blockOffset: 0,
+            blockLength: 0,
+            byteLength: 12
+        }, 500) || {}
+        expect(r).toBe(false)
     })
 })
 
