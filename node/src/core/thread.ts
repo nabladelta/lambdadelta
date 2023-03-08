@@ -92,7 +92,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     await this.base.start({
         async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
           if (view.length == 0) {
-            await view.append([Thread.serialize(self.getOp())])
+            await view.append([Thread.serialize(await self.getOp())])
           }
 
           const pBatch = batch.map((node) => {
