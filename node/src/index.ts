@@ -1,4 +1,5 @@
 import express, { Express, Request, Response } from 'express'
+import crypto from 'crypto'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { BBNode } from './core/node'
@@ -13,7 +14,7 @@ node.ready().then(()=> node.join(topic))
 
 const app: Express = express()
 
-app.use(express.json({limit: '50mb'}))
+app.use(express.json({limit: '10mb'}))
 app.use(cors())
 
 function NotFoundError(res: express.Response) {
@@ -32,9 +33,16 @@ function FailedPost(res: express.Response) {
 }
 
 async function processAttachment(fileData: IFileData, post: IPost, tid: string) {
-  const buf = Buffer.from(fileData.data.split('base64,')[1], 'base64')
+  const buf = Buffer.from(fileData.data, 'base64')
   const id = await node.filestore.store(tid, buf)
-  console.log(id)
+  const sha256 = crypto.createHash('sha256')
+  sha256.update(buf)
+  post.sha256 = sha256.digest('hex')
+
+  const md5 = crypto.createHash('sha256')
+  md5.update(buf)
+  post.md5 = md5.digest('base64')
+  console.log('length', post.md5.length)
   const [filename, ext] = fileData.filename.split('.')
   post.filename = filename
   post.ext = '.' + ext

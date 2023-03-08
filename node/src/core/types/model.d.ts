@@ -11,6 +11,7 @@ interface IPost {
     ext?: string, // Filetype
     tim?: string, // File ID
     sha256?: string, // File hash
+    md5?: string // File hash
     fsize?: number, // File size
     mime?: string
     last_replies?: IPost[]
