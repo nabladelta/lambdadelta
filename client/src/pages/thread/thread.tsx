@@ -42,7 +42,7 @@ function ThreadPage() {
     updateData()
   }, [board, id])
 
-  async function post({post, attachments}: {post: IPost, attachments: File[]}) {
+  async function post({post, attachments}: {post: IPost, attachments: IFileData[]}) {
     post.resto = id
     const r = await fetch(`http://localhost:8089/api/a/thread/${id}.json` , {
       method: 'POST',
@@ -50,7 +50,7 @@ function ThreadPage() {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(post)
+      body: JSON.stringify({attachments, post})
     })
     const content = await r.json()
     if (!r.ok) {

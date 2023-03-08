@@ -47,14 +47,14 @@ function Catalog() {
     updateData()
   }, [board])
 
-  async function post({post, attachments}: {post: IPost, attachments: File[]}) {
+  async function post({post, attachments}: {post: IPost, attachments: IFileData[]}) {
     const r = await fetch('http://localhost:8089/api/a', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(post)
+      body: JSON.stringify({post, attachments})
     })
     const content = await r.json()
     console.log(content)

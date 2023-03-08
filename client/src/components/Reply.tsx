@@ -31,6 +31,7 @@ import FileUpload from './FileUpload'
 import { FiFile } from 'react-icons/fi'
 import { ArrowBackIcon, DeleteIcon } from '@chakra-ui/icons'
 import { buttonStyle } from '../pages/board/catalog'
+import { getFileData } from '../utils/utils'
 
 
 type ModelElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -53,29 +54,29 @@ function useModel<E extends ModelElement>(
     return { model, setModel: setValue }
 }
 
-function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, onClose: () => void, onPost: (data: {post: IPost, attachments: File[]}) => void}) {
-    const { register, formState: {errors}, getValues, reset, resetField, setValue} = useForm<FormValues>()
+function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, onClose: () => void, onPost: (data: {post: IPost, attachments: IFileData[]}) => void}) {
+    const { register, formState: {errors}, getValues } = useForm<FormValues>()
     const [filename, setFilename] = useState<string|undefined>()
 
     const name = useModel()
     const sub = useModel()
     const com = useModel()
 
-    function submit() {
+    async function submit() {
         const file = getValues().file_.item(0)
         const attachments = []
         if (file) {
-            attachments.push(file)
+            attachments.push(await getFileData(file))
         }
         onPost({
-        post: {
-            no: "",
-            time: Math.floor(Date.now()/1000),
-            com: com.model.value || "",
-            sub: sub.model.value || undefined,
-            name: name.model.value || undefined,
-        },
-        attachments})
+            attachments,
+            post: {
+                no: "",
+                time: Math.floor(Date.now()/1000),
+                com: com.model.value || "",
+                sub: sub.model.value || undefined,
+                name: name.model.value || undefined,
+        }})
     }
 
     const onFileChange = (_: any) => {

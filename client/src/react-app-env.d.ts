@@ -28,3 +28,9 @@ interface ICatalogPage {
     page: number,
     threads: IPost[]
 }
+
+interface IFileData {
+    filename: string;
+    type: string;
+    data: string;
+}
