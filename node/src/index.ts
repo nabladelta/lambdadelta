@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { BBNode } from './core/node'
+import { parseFileID, processAttachment } from './lib'
 
 dotenv.config()
 
@@ -30,36 +31,6 @@ function AlreadyPresentError(res: express.Response) {
 function FailedPost(res: express.Response) {
   res.status(409)
   res.send({error: "Failed to post"})
-}
-
-async function processAttachment(fileData: IFileData, post: IPost, tid: string) {
-  const buf = Buffer.from(fileData.data, 'base64')
-  const id = await node.filestore.store(tid, buf)
-  const sha256 = crypto.createHash('sha256')
-  sha256.update(buf)
-  post.sha256 = sha256.digest('hex')
-
-  const md5 = crypto.createHash('sha256')
-  md5.update(buf)
-  post.md5 = md5.digest('base64')
-  console.log('length', post.md5.length)
-  const [filename, ext] = fileData.filename.split('.')
-  post.filename = filename
-  post.ext = '.' + ext
-  post.fsize = buf.length
-  post.tim = id.cid + '-' + id.blobId.byteOffset.toString(16) + '-' + id.blobId.blockOffset.toString(16) + '-' + id.blobId.blockLength.toString(16) + '-' + id.blobId.byteLength.toString(16)
-  post.mime = fileData.type
-}
-
-async function parseFileID(fileID: string) {
-  const id = fileID.split('.')[0]
-  const [cid, byteOffset, blockOffset, blockLength, byteLength] = id.split('-')
-  return {cid, blobId: {
-    byteOffset: parseInt(byteOffset, 16), 
-    blockOffset: parseInt(blockOffset, 16),
-    blockLength: parseInt(blockLength, 16), 
-    byteLength: parseInt(byteLength, 16)
-  }}
 }
 
 app.get('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
@@ -99,7 +70,7 @@ app.post('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
     const post: IPost = req.body.post
 
     if (req.body.attachments && req.body.attachments[0]) {
-      await processAttachment(req.body.attachments[0], post, req.params.id)
+      await processAttachment(node.filestore, req.body.attachments[0], post, req.params.id)
     }
     const core = await client.newMessage(req.params.id, post)
 
@@ -115,7 +86,7 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
   const post: IPost = req.body.post
 
   if (req.body.attachments && req.body.attachments[0]) {
-    await processAttachment(req.body.attachments[0], post, req.params.id)
+    await processAttachment(node.filestore, req.body.attachments[0], post, req.params.id)
   }
 
   const threadId = await client.newThread(post)
