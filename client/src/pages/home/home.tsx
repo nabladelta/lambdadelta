@@ -6,11 +6,10 @@ function Home() {
       <header className="App-header">
         <a
           className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
+          href="/a/catalog"
           rel="noopener noreferrer"
         >
-          Learn React
+          BBS
         </a>
       </header>
     </div>

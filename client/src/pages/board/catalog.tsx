@@ -47,7 +47,7 @@ function Catalog() {
     updateData()
   }, [board])
 
-  async function post(post: IPost) {
+  async function post({post, attachments}: {post: IPost, attachments: File[]}) {
     const r = await fetch('http://localhost:8089/api/a', {
       method: 'POST',
       headers: {

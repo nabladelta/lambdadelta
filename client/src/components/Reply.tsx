@@ -9,7 +9,11 @@ import {
   Tooltip,
   FormLabel,
   Input,
-  Textarea
+  Textarea,
+  Icon,
+  FormControl,
+  FormErrorMessage,
+  IconButton
 } from "@chakra-ui/react"
 
 import {
@@ -21,8 +25,19 @@ import {
     DrawerContent,
     DrawerCloseButton,
   } from '@chakra-ui/react'
+import { useForm, UseFormRegisterReturn } from 'react-hook-form'
 
-  type ModelElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+import FileUpload from './FileUpload'
+import { FiFile } from 'react-icons/fi'
+import { ArrowBackIcon, DeleteIcon } from '@chakra-ui/icons'
+import { buttonStyle } from '../pages/board/catalog'
+
+
+type ModelElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+
+type FormValues = {
+    file_: FileList
+}
 
 function useModel<E extends ModelElement>(
     initial?: string,
@@ -38,20 +53,53 @@ function useModel<E extends ModelElement>(
     return { model, setModel: setValue }
 }
 
-function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, onClose: () => void, onPost: (post: IPost) => void}) {
+function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, onClose: () => void, onPost: (data: {post: IPost, attachments: File[]}) => void}) {
+    const { register, formState: {errors}, getValues, reset, resetField, setValue} = useForm<FormValues>()
+    const [filename, setFilename] = useState<string|undefined>()
 
     const name = useModel()
     const sub = useModel()
     const com = useModel()
 
     function submit() {
+        const file = getValues().file_.item(0)
+        const attachments = []
+        if (file) {
+            attachments.push(file)
+        }
         onPost({
+        post: {
             no: "",
             time: Math.floor(Date.now()/1000),
             com: com.model.value || "",
             sub: sub.model.value || undefined,
             name: name.model.value || undefined,
-        })
+        },
+        attachments})
+    }
+
+    const onFileChange = (_: any) => {
+        const file = getValues().file_.item(0)
+        if (file) {
+            setFilename(file.name)
+        } else {
+            setFilename("")
+        }
+        console.log(file)
+    }
+
+    const validateFiles = (value: FileList) => {
+        if (value.length < 1) {
+            return 'Files is required'
+        }
+        for (const file of Array.from(value)) {
+            const fsMb = file.size / (1024 * 1024)
+            const MAX_FILE_SIZE = 5
+            if (fsMb > MAX_FILE_SIZE) {
+                return 'Max file size 5mb'
+            }
+        }
+        return true
     }
 
     const firstField: any = React.useRef()
@@ -69,20 +117,34 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
                 <DrawerHeader borderBottomWidth='1px'>New post</DrawerHeader>
                 <DrawerBody>
                     <Stack spacing='24px'>
-                    <Box>
-                        <FormLabel htmlFor='name'>Name</FormLabel>
-                        <Input id='name' placeholder='Anonymous' {...name.model} />
-                    </Box>
+                        <Box>
+                            <FormLabel htmlFor='name'>Name</FormLabel>
+                            <Input id='name' placeholder='Anonymous' {...name.model} />
+                        </Box>
 
-                    {op && <Box>
-                        <FormLabel htmlFor='sub'>Subject</FormLabel>
-                        <Input id='sub' {...sub.model} />
-                    </Box>}
+                        {op && <Box>
+                            <FormLabel htmlFor='sub'>Subject</FormLabel>
+                            <Input id='sub' {...sub.model} />
+                        </Box>}
 
-                    <Box>
-                        <FormLabel htmlFor='desc'>Comment</FormLabel>
-                        <Textarea ref={firstField} size={'lg'} id='desc' {...com.model} />
-                    </Box>
+                        <Box>
+                            <FormLabel htmlFor='desc'>Comment</FormLabel>
+                            <Textarea ref={firstField} size={'lg'} id='desc' {...com.model} />
+                        </Box>
+
+                        <FormControl isInvalid={!!errors.file_} >
+                            <FileUpload
+                                accept={'image/*'}
+                                multiple
+                                register={register('file_', { validate: validateFiles, onChange: onFileChange, })}
+                            >
+                            <HStack>
+                                <Button leftIcon={<Icon as={FiFile} />}>{filename ? 'Change File' : 'Upload'}</Button>
+                                {filename && <FormLabel>{filename}</FormLabel>}
+                            </HStack>
+                            </FileUpload>
+                            <FormErrorMessage>{errors.file_ && errors?.file_.message}</FormErrorMessage>
+                        </FormControl>
                     </Stack>
                 </DrawerBody>
                 <DrawerFooter borderTopWidth='1px'>
