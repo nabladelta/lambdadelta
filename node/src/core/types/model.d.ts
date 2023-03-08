@@ -13,7 +13,7 @@ interface IPost {
     sha256?: string, // File hash
     md5?: string // File hash
     fsize?: number, // File size
-    mime?: string
+    mime?: string // File mime type
     last_replies?: IPost[]
 }
 

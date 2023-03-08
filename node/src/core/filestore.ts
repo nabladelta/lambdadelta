@@ -21,8 +21,13 @@ export class Filestore {
         state.buffer = Buffer.allocUnsafe(state.end)
         c.string.encode(state, mime)
         c.buffer.encode(state, data)
-        
-        return { cid: core.key.toString('hex'), blobId: await blobs.put(state.buffer) as BlobID }
+        try {
+            const blobId: BlobID = await blobs.put(state.buffer)
+            return { cid: core.key.toString('hex') as string, blobId }
+        } catch (e) {
+            console.log(e)
+        }
+        return false
     }
 
     public async retrieve(cid: string, id: BlobID, timeout?: number): Promise<{mime: string, data: Buffer} | false> {
