@@ -196,10 +196,10 @@ describe('BulletinBoard', () => {
 
         await sleep(2000)
 
-        console.log("a", formatCatalog(await a.getCatalog()))
-        console.log("b", formatCatalog(await b.getCatalog()))
-        console.log("c", formatCatalog(await c.getCatalog()))
-        console.log((await a.getThreadContent(threadId))?.posts)
+        // console.log("a", formatCatalog(await a.getCatalog()))
+        // console.log("b", formatCatalog(await b.getCatalog()))
+        // console.log("c", formatCatalog(await c.getCatalog()))
+        // console.log((await a.getThreadContent(threadId))?.posts)
 
         // Ensure all threads replicated fully on all nodes
         expect(await validateThread([a, b, c], threadId, ["test", "test-2", "test-3", "test2", "test3", "test3-2"], true)).toBe(true)
