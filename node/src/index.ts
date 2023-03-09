@@ -31,8 +31,15 @@ function AlreadyPresentError(res: express.Response) {
 }
 
 function FailedPost(res: express.Response) {
+  console.log("Failed post")
   res.status(409)
   res.send({error: "Failed to post"})
+}
+
+function FailedException(res: express.Response, message: string) {
+  console.log(message)
+  res.status(409)
+  res.send({error: message})
 }
 
 app.get('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
@@ -69,8 +76,6 @@ app.get('/api/file/:id', async (req: Request, res: Response) => {
 })
 
 app.get('/api/thumb/:id.jpg', async (req: Request, res: Response) => {
-  
-
   const dir = path.join(process.cwd(), 'data', 'thumbs')
   if (!await fileExists(dir)) {
     fs.mkdirSync(dir)
@@ -101,33 +106,43 @@ app.post('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
     const client = node.boards.get(req.params.topic)
     if (!client) return NotFoundError(res)
     const post: IPost = req.body.post
+    try {
+      if (req.body.attachments && req.body.attachments[0]) {
+        await processAttachment(node.filestore, req.body.attachments[0], post, req.params.id)
+      }
+      const core = await client.newMessage(req.params.id, post)
+  
+      if (!core) return FailedPost(res)
+  
+      const thread = await client.getThreadContent(req.params.id)
+      res.send({success: true, posts: thread!.posts})
 
-    if (req.body.attachments && req.body.attachments[0]) {
-      await processAttachment(node.filestore, req.body.attachments[0], post, req.params.id)
+    } catch (e) {
+      FailedException(res, (e as Error).message)
+      return false
     }
-    const core = await client.newMessage(req.params.id, post)
-
-    if (!core) return FailedPost(res)
-
-    const thread = await client.getThreadContent(req.params.id)
-    res.send({success: true, posts: thread!.posts})
 })
 
 app.post('/api/:topic', async (req: Request, res: Response) => {
   const client = node.boards.get(req.params.topic)
   if (!client) return NotFoundError(res)
   const post: IPost = req.body.post
+  try {
+    const threadId = await client.newThread(
+      async (tid) => {
+      if (req.body.attachments && req.body.attachments[0]) {
+          return await processAttachment(node.filestore, req.body.attachments[0], post, tid)
+      }
+      return post
+    })
+    if (!threadId) return FailedPost(res)
+    const thread = await client.getThreadContent(threadId)
+    res.send({success: true, op: threadId, thread: thread})
 
-  const threadId = await client.newThread(async (tid) => {
-    if (req.body.attachments && req.body.attachments[0]) {
-      return await processAttachment(node.filestore, req.body.attachments[0], post, tid)
-    }
-    return post
-  })
-  if (!threadId) return AlreadyPresentError(res)
-
-  const thread = await client.getThreadContent(threadId)
-  res.send({success: true, op: threadId, thread: thread})
+  } catch (e) {
+    FailedException(res, (e as Error).message)
+    return false
+  }
 })
 
 // app.get('/*', function (req, res) {

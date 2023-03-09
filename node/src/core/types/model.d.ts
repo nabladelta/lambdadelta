@@ -10,6 +10,8 @@ interface IPost {
     filename?: string, // Filename as it appeared on the poster's device
     ext?: string, // Filetype
     tim?: string, // File ID
+    w?: number, // Image width dimension
+    h?: number, // Image height dimension
     sha256?: string, // File hash
     md5?: string // File hash
     fsize?: number, // File size
