@@ -10,6 +10,7 @@ interface IPost {
     resto?: string, // For replies: this is the ID of the thread being replied to. For OP: this value is zero
     replies?: number,
     filename?: string, // Filename as it appeared on the poster's device
+    mime?: string,
     ext?: string, // Filetype
     tim?: string, // File ID
     sha256?: string, // File hash

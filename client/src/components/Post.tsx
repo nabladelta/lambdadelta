@@ -40,22 +40,42 @@ function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
         return `${date.getDate()}/${date.getMonth()}/${date.getFullYear().toString().slice(2)}(${weekday[date.getDay()]})${date.toLocaleTimeString()}`
     }, [post.time])
 
-    const [imageLarge, setImageLarge] = useState()
+    const [imageWide, setImageWide] = useState(false)
+    const isVideo = post.mime == 'video/webm' || post.mime == 'video/mp4' ? true : false
+
     function imageClick(e: any) {
         e.preventDefault()
-
+        setImageWide((s)=> !s)
     }
     return (
         <Card
             direction={vertical ? undefined : { base: 'column', sm: 'row' }}
             overflow='hidden'
             variant='outline'>
-                {post.tim && <a href={`http://localhost:8089/api/file/${post.tim}${post.ext}`} target='_blank' onClick={imageClick}><Image
+                {post.tim && !isVideo &&
+
+                <a href={`http://localhost:8089/api/file/${post.tim}${post.ext}`} target='_blank' onClick={imageClick}>
+                    <Image
                     objectFit='contain'
-                    maxW={vertical ? undefined : { base: '100%', sm: `512px` }}
-                    src={`http://localhost:8089/api/thumb/${post.tim}.jpg`}
-                    alt={`${post.filename}${post.ext}`}
-                /></a>}
+                    boxSize={imageWide ? post.h : undefined}
+                    maxW={vertical ? undefined : imageWide ? { base: '100%', sm: `512px` } : { base: '150%', sm: `1024px` }}
+                    src={imageWide ? `http://localhost:8089/api/file/${post.tim}${post.ext}` : `http://localhost:8089/api/thumb/${post.tim}.jpg`}
+                    alt={`${post.filename}${post.ext}`} />
+
+                </a>}
+                {post.tim && isVideo &&
+                    <Box
+                        as='video'
+                        controls
+                        loop={true}
+                        src={`http://localhost:8089/api/file/${post.tim}${post.ext}`}
+                        // poster='https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217'
+                        title={`${post.filename}${post.ext}`}
+                        objectFit='contain'
+                        sx={{
+                            aspectRatio: `${post.h}/${post.w}`
+                        }}
+                    />}
             <Stack>
                 <CardHeader>
                 {vertical && 
