@@ -9,7 +9,8 @@ import Hypercore from 'hypercore'
 import ram from 'random-access-memory'
 import { Filestore } from '../src/core/filestore'
 import crypto from 'crypto'
-import { parseFileID, processAttachment } from '../src/lib'
+import { makeThumbnail, parseFileID, processAttachment } from '../src/lib'
+import sharp from 'sharp'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -134,7 +135,7 @@ describe('Keystore', () => {
     })
 })
 
-describe.only('Filestore', () => {
+describe('Filestore', () => {
     it('Stores and retrieves buffers', async () => {
         const corestore = new Corestore(ram, {primaryKey: Buffer.from('secret1secret1secret1')})
         const filestore = new Filestore(corestore)
@@ -181,7 +182,7 @@ describe.only('Filestore', () => {
 })
 
 
-describe.only('File upload handling', () => {
+describe('File upload handling', () => {
     it('Saves attachments correctly and retrieves them', async () => {
         const corestore = new Corestore(ram, {primaryKey: Buffer.from('secret1secret1secret1')})
         const filestore = new Filestore(corestore)
@@ -209,6 +210,37 @@ describe.only('File upload handling', () => {
 
         const finalHash = crypto.createHash('sha256').update(data || '').digest()
         expect(finalHash.toString('hex')).toBe(initialHash.toString('hex'))
+    })
+})
+
+describe('Thumbnails', () => {
+    it('Creates Thumbnails', async () => {
+        const corestore = new Corestore(ram, {primaryKey: Buffer.from('secret1secret1secret1')})
+        const filestore = new Filestore(corestore)
+        const base64url = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAIAQMAAAD+wSzIAAAABlBMVEX///+/v7+jQ3Y5AAAADklEQVQI12P4AIX8EAgALgAD/aNpbtEAAAAASUVORK5CYII"
+        const base64 = base64url.split('base64,')[1]
+        const buf = Buffer.from(base64, 'base64')
+        const tid = '4ced5d6b6a87a34b1123c1db3823639759ac762707934199eaa1f2e2009e98b2'
+        const post: IPost = {
+            time: getTimestampInSeconds(), // UNIX timestamp the post was created
+            com: "test"
+        }
+        const fileData: IFileData = {
+            filename: 'test.png',
+            type: 'image/png',
+            data: base64
+        }
+        const r = await processAttachment(filestore, fileData, post, tid)
+        expect(r).toBe(true)
+        if (!post.tim) return expect(false).toBe(true)
+
+        const thumbBuffer = await makeThumbnail(filestore, post.tim)
+        if (!thumbBuffer) return expect(false).toBe(true)
+        if (!Buffer.isBuffer(thumbBuffer)) {
+            return expect(false).toBe(true)
+        }
+        const data = await sharp(thumbBuffer).metadata()
+        expect(data.format).toBe('jpeg')
     })
 })
 

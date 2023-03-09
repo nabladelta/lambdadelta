@@ -39,20 +39,23 @@ export function parseFileID(fileID: string): { cid: string, blobId: BlobID } {
 
 }
 
-export async function makeThumbnail(filestore: Filestore, fid: string, filename: string) {
-    const id = parseFileID(fid)
-    const content = await filestore.retrieve(id.cid, id.blobId)
+export async function makeThumbnail(filestore: Filestore, fid: string, filename?: string) {
+    const {cid, blobId} = parseFileID(fid)
+    const content = await filestore.retrieve(cid, blobId)
     if (!content) return false
     try {
-        const r = await sharp(content.data).resize(
-            512, 512, 
+        const i = sharp(content.data).resize(
+            512, 512,
             {
                 fit: 'inside',
                 withoutEnlargement: true
             })
         .toFormat('jpeg')
-        .toFile(filename)
-        return r
+
+        if (filename) {
+            return await i.toFile(filename)
+        }
+        return await i.toBuffer()
     } catch (e) {
         console.log(e)
         return false
