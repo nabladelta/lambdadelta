@@ -118,11 +118,12 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
   if (!client) return NotFoundError(res)
   const post: IPost = req.body.post
 
-  if (req.body.attachments && req.body.attachments[0]) {
-    await processAttachment(node.filestore, req.body.attachments[0], post, req.params.id)
-  }
-
-  const threadId = await client.newThread(post)
+  const threadId = await client.newThread(async (tid) => {
+    if (req.body.attachments && req.body.attachments[0]) {
+      return await processAttachment(node.filestore, req.body.attachments[0], post, tid)
+    }
+    return post
+  })
   if (!threadId) return AlreadyPresentError(res)
 
   const thread = await client.getThreadContent(threadId)

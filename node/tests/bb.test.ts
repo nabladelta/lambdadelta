@@ -201,7 +201,7 @@ describe('File upload handling', () => {
             data: base64
         }
         const r = await processAttachment(filestore, fileData, post, tid)
-        expect(r).toBe(true)
+        expect(!!r).toBe(true)
 
         if (!post.tim) return expect(false).toBe(true)
         const {cid, blobId} = parseFileID(post.tim)
@@ -231,7 +231,7 @@ describe('Thumbnails', () => {
             data: base64
         }
         const r = await processAttachment(filestore, fileData, post, tid)
-        expect(r).toBe(true)
+        expect(!!r).toBe(true)
         if (!post.tim) return expect(false).toBe(true)
 
         const thumbBuffer = await makeThumbnail(filestore, post.tim)
@@ -281,6 +281,11 @@ describe('BulletinBoard', () => {
         const c = cnode.boards.get(T)!
 
         const threadId = await a.newThread({com: "test", time: getTimestampInSeconds()}) as string
+
+        // Can't create two threads in one epoch
+        const result = await a.newThread({com: "testtest", time: getTimestampInSeconds()})
+        expect(result).toBe(false)
+
         const replyCore = await a.newMessage(threadId, {com: "test-2", time: getTimestampInSeconds()})
         // Reply core should have a different ID from OPcore
         expect(replyCore != threadId).toBe(true)

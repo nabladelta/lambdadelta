@@ -23,7 +23,7 @@ export async function processAttachment(filestore: Filestore, fileData: IFileDat
         + '-' + blobId.blockOffset.toString(16) 
         + '-' + blobId.blockLength.toString(16) 
         + '-' + blobId.byteLength.toString(16)
-    return true
+    return post
 }
 
 export function parseFileID(fileID: string): { cid: string, blobId: BlobID } {
