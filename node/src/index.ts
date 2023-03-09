@@ -3,7 +3,9 @@ import crypto from 'crypto'
 import cors from 'cors'
 import dotenv from 'dotenv'
 import { BBNode } from './core/node'
-import { parseFileID, processAttachment } from './lib'
+import { fileExists, makeThumbnail, parseFileID, processAttachment } from './lib'
+import path from 'path'
+import fs from 'fs'
 
 dotenv.config()
 
@@ -15,7 +17,7 @@ node.ready().then(()=> node.join(topic))
 
 const app: Express = express()
 
-app.use(express.json({limit: '10mb'}))
+app.use(express.json({limit: '6mb'}))
 app.use(cors())
 
 function NotFoundError(res: express.Response) {
@@ -64,6 +66,35 @@ app.get('/api/file/:id', async (req: Request, res: Response) => {
     if (ext) res.contentType(ext)
   }
   res.send(content.data)
+})
+
+app.get('/api/thumb/:id.jpg', async (req: Request, res: Response) => {
+  
+
+  const dir = path.join(process.cwd(), 'data', 'thumbs')
+  if (!await fileExists(dir)) {
+    fs.mkdirSync(dir)
+  }
+
+  const filename = path.join(dir, `${req.params.id}.jpg`)
+
+  const options = {
+    root: dir,
+    dotfiles: 'deny',
+    headers: {}
+  }
+
+  if (!await fileExists(filename)) {
+    const result = await makeThumbnail(node.filestore, req.params.id, filename)
+
+    if (!result) return NotFoundError(res)
+    console.log("Generated thumbnail for ", req.params.id)
+  }
+  
+  res.sendFile(`${req.params.id}.jpg`, options, (e) => {
+    if (e) console.log(e)
+  })
+  
 })
 
 app.post('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {

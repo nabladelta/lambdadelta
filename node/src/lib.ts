@@ -1,5 +1,7 @@
 import crypto from 'crypto'
 import { Filestore } from './core/filestore'
+import sharp from 'sharp'
+import fs from 'fs'
 
 export async function processAttachment(filestore: Filestore, fileData: IFileData, post: IPost, tid: string) {
     const buf = Buffer.from(fileData.data, 'base64')
@@ -34,4 +36,27 @@ export function parseFileID(fileID: string): { cid: string, blobId: BlobID } {
       blockLength: parseInt(blockLength, 16), 
       byteLength: parseInt(byteLength, 16)
     }}
-  }
+
+}
+
+export async function makeThumbnail(filestore: Filestore, fid: string, filename: string) {
+    const id = parseFileID(fid)
+    const content = await filestore.retrieve(id.cid, id.blobId)
+    if (!content) return false
+    try {
+        const r = await sharp(content.data).resize(
+            512, 512, 
+            {
+                fit: 'inside',
+                withoutEnlargement: true
+            })
+        .toFormat('jpeg')
+        .toFile(filename)
+        return r
+    } catch (e) {
+        console.log(e)
+        return false
+    }
+}
+
+export const fileExists = async (path: string) => !!(await fs.promises.stat(path).catch(e => false));

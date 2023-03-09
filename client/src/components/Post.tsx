@@ -48,7 +48,7 @@ function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
                 {post.tim && <Image
                     objectFit='cover'
                     maxW={vertical ? undefined : { base: '100%', sm: `${post.tn_w}px` }}
-                    src={`http://localhost:8089/api/file/${post.tim}${post.ext}`}
+                    src={`http://localhost:8089/api/thumb/${post.tim}.jpg`}
                     alt={`${post.filename}${post.ext}`}
                 />}
             <Stack>
