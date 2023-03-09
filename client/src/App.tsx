@@ -17,16 +17,14 @@ import theme from "./theme"
 
 export const App = () => (
   <ChakraProvider theme={theme}>
-    <Box textAlign="center" fontSize="xl">
-      <Grid minH="100vh" p={3}>
+    <Box fontSize="xl">
+      <Grid minH="50vh" p={3}>
         <ColorModeSwitcher justifySelf="flex-end" />
-        <VStack spacing={8}>
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/:board/catalog" element={<Catalog />} />
-            <Route path="/:board/thread/:id" element={<ThreadPage />} />
-          </Routes>
-        </VStack> 
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/:board/catalog" element={<Catalog />} />
+          <Route path="/:board/thread/:id" element={<ThreadPage />} />
+        </Routes>
       </Grid>
     </Box>
   </ChakraProvider>
