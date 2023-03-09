@@ -93,7 +93,7 @@ app.get('/api/thumb/:id.jpg', async (req: Request, res: Response) => {
     const result = await makeThumbnail(node.filestore, req.params.id, filename)
 
     if (!result) return NotFoundError(res)
-    console.log("Generated thumbnail for ", req.params.id)
+    console.log("Generated thumbnail for", req.params.id)
   }
   
   res.sendFile(`${req.params.id}.jpg`, options, (e) => {
@@ -119,7 +119,6 @@ app.post('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
 
     } catch (e) {
       FailedException(res, (e as Error).message)
-      return false
     }
 })
 
@@ -141,7 +140,6 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
 
   } catch (e) {
     FailedException(res, (e as Error).message)
-    return false
   }
 })
 

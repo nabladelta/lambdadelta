@@ -24,7 +24,7 @@ export async function processAttachment(filestore: Filestore, fileData: IFileDat
             post.mime = mime.getType(meta.format || "") || fileData.type
         } catch (e) {
             console.log(e)
-            throw new Error("Failed to process video")
+            throw new Error("Failed to process image")
         }
     }
 
