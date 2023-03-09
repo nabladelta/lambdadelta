@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   ChakraProvider,
   Box,
@@ -39,18 +39,23 @@ function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
         const weekday = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
         return `${date.getDate()}/${date.getMonth()}/${date.getFullYear().toString().slice(2)}(${weekday[date.getDay()]})${date.toLocaleTimeString()}`
     }, [post.time])
-    
+
+    const [imageLarge, setImageLarge] = useState()
+    function imageClick(e: any) {
+        e.preventDefault()
+
+    }
     return (
         <Card
             direction={vertical ? undefined : { base: 'column', sm: 'row' }}
             overflow='hidden'
             variant='outline'>
-                {post.tim && <Image
-                    objectFit='cover'
-                    maxW={vertical ? undefined : { base: '100%', sm: `${post.tn_w}px` }}
+                {post.tim && <a href={`http://localhost:8089/api/file/${post.tim}${post.ext}`} target='_blank' onClick={imageClick}><Image
+                    objectFit='contain'
+                    maxW={vertical ? undefined : { base: '100%', sm: `512px` }}
                     src={`http://localhost:8089/api/thumb/${post.tim}.jpg`}
                     alt={`${post.filename}${post.ext}`}
-                />}
+                /></a>}
             <Stack>
                 <CardHeader>
                 {vertical && 
@@ -70,7 +75,7 @@ function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
                 </CardBody>
 
                 <CardFooter>
-                {!vertical && <HStack spacing={7}>{post.filename && <Tooltip label={`${post.filename}${post.ext}`}><Text as='i'>{`File: ${truncate(post.filename, 24)}${post.ext}`}</Text></Tooltip>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}</HStack>}
+                {!vertical && <HStack spacing={7}>{post.filename && <Tooltip label={`${post.filename}${post.ext}`}><Text as='i'>File: <a href={`http://localhost:8089/api/file/${post.tim}${post.ext}`} target='_blank'>{`${truncate(post.filename, 24)}${post.ext}`}</a></Text></Tooltip>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}</HStack>}
                 </CardFooter>
             </Stack>
         </Card>
