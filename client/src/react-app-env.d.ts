@@ -9,6 +9,7 @@ interface IPost {
     trip?: string, // The user's tripcode, in format: !tripcode or !!securetripcode
     resto?: string, // For replies: this is the ID of the thread being replied to. For OP: this value is zero
     replies?: number,
+    images?: number,
     filename?: string, // Filename as it appeared on the poster's device
     mime?: string,
     ext?: string, // Filetype

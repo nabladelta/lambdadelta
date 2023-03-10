@@ -26,6 +26,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
 import { API_URL } from '../../constants'
+import CatalogPost from '../../components/CatalogPost'
 
 export const buttonStyle = { variant:'outline', colorScheme:'gray', fontSize:'20px' }
 
@@ -90,7 +91,7 @@ function Catalog() {
     <SimpleGrid minChildWidth='lg' spacing='40px' >
       {data.map(page => 
           page.threads.map(p => 
-          <Link key={p.no} to={`/${board}/thread/${p.no.split('>')[0]}`}><Post post={p} vertical={true} /></Link> 
+          <CatalogPost key={p.no} post={p} />
       ))}
     </SimpleGrid>
     <HStack id={'bottom'} spacing={6}>
