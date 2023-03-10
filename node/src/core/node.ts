@@ -4,6 +4,8 @@ import crypto from 'crypto'
 import ram from 'random-access-memory'
 import { BulletinBoard } from './board'
 import { Filestore } from './filestore'
+import path from 'path'
+import { DATA_FOLDER } from '../constants'
 
 
 export class BBNode {
@@ -18,9 +20,9 @@ export class BBNode {
 
     constructor(secret: string, memstore?: boolean, swarmOpts?: any) {
         this.secret = secret
-        this.secretDigest = crypto.createHash('sha256').update(secret).digest('hex')
+        this.secretDigest = crypto.createHash('sha256').update('USR>' + secret).digest('hex')
         this.corestore = new Corestore(
-            memstore ? ram : `./data/${this.secretDigest}`, 
+            memstore ? ram : path.join(DATA_FOLDER, 'users', this.secretDigest), 
             {primaryKey: Buffer.from(this.secret)})
         this.boards = new Map()
         this._streams = new Set()

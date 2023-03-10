@@ -4,9 +4,12 @@ import sharp from 'sharp'
 import fs from 'fs'
 import mime from 'mime'
 import MediaInfo from 'mediainfo.js'
+import { FILE_SIZE_LIMIT_UPLOAD, THUMB_FORMAT, THUMB_SIZE } from './constants'
 
 export async function processAttachment(filestore: Filestore, fileData: IFileData, post: IPost, tid: string) {
     const buf = Buffer.from(fileData.data, 'base64')
+
+    if (buf.length > FILE_SIZE_LIMIT_UPLOAD) throw new Error(`File too large (FILE_SIZE_LIMIT_UPLOAD: ${buf.length} Bytes`)
 
     post.sha256 = crypto.createHash('sha256').update(buf).digest('hex')
     post.md5 = crypto.createHash('md5').update(buf).digest('base64')
@@ -54,7 +57,6 @@ export function parseFileID(fileID: string): { cid: string, blobId: BlobID } {
       blockLength: parseInt(blockLength, 16), 
       byteLength: parseInt(byteLength, 16)
     }}
-
 }
 
 async function processVideo(buf: Buffer) {
@@ -95,12 +97,12 @@ export async function makeThumbnail(filestore: Filestore, fid: string, filename?
     if (!content) return false
     try {
         const i = sharp(content.data).resize(
-            512, 512,
+            THUMB_SIZE, THUMB_SIZE,
             {
                 fit: 'inside',
                 withoutEnlargement: true
             })
-        .toFormat('jpeg')
+        .toFormat(THUMB_FORMAT)
 
         if (filename) {
             return await i.toFile(filename)

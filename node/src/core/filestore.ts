@@ -1,6 +1,7 @@
 import Hyperblobs from 'hyperblobs'
 import b4a from 'b4a'
 import c from 'compact-encoding'
+import { FILE_FETCH_TIMEOUT_MS, FILE_SIZE_LIMIT_DOWNLOAD } from '../constants'
 
 export class Filestore {
     private corestore: any
@@ -30,7 +31,10 @@ export class Filestore {
         return false
     }
 
-    public async retrieve(cid: string, id: BlobID, timeout?: number): Promise<{mime: string, data: Buffer} | false> {
+    public async retrieve(cid: string, id: BlobID, timeout?: number, maxLength?: number): Promise<{mime: string, data: Buffer} | false> {
+        timeout = timeout || FILE_FETCH_TIMEOUT_MS
+        maxLength = maxLength || FILE_SIZE_LIMIT_DOWNLOAD
+        if (id.byteLength > maxLength) return false
         try {
             const core = this.corestore.get(b4a.from(cid, 'hex'))
             await core.ready()

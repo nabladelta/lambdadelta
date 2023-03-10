@@ -1,23 +1,17 @@
 import express, { Express, Request, Response } from 'express'
-import crypto from 'crypto'
 import cors from 'cors'
-import dotenv from 'dotenv'
 import { BBNode } from './core/node'
 import { fileExists, makeThumbnail, parseFileID, processAttachment } from './lib'
 import path from 'path'
 import fs from 'fs'
-
-dotenv.config()
-
-const port = process.env.PORT
-const topic = process.env.TOPIC!
+import { DATA_FOLDER, PORT, REQ_SIZE_LIMIT, THUMB_FORMAT, TOPICS } from './constants'
 
 const node = new BBNode(process.env.SECRET!, process.env.MEMSTORE == 'true')
-node.ready().then(()=> node.join(topic))
+node.ready().then(() => TOPICS.split(',').map(topic => node.join(topic)))
 
 const app: Express = express()
 
-app.use(express.json({limit: '6mb'}))
+app.use(express.json({limit: REQ_SIZE_LIMIT}))
 app.use(cors())
 
 function NotFoundError(res: express.Response) {
@@ -42,7 +36,7 @@ function FailedException(res: express.Response, message: string) {
   res.send({error: message})
 }
 
-app.get('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
+app.get('/api/:topic/thread/:id(.json)?', async (req: Request, res: Response) => {
     const client = node.boards.get(req.params.topic)
     if (!client) return NotFoundError(res)
 
@@ -51,7 +45,7 @@ app.get('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
     res.send(thread)
 })
 
-app.get('/api/:topic/catalog.json', async (req: Request, res: Response) => {
+app.get('/api/:topic/catalog(.json)?', async (req: Request, res: Response) => {
   const client = node.boards.get(req.params.topic)
   if (!client) return NotFoundError(res)
 
@@ -75,34 +69,36 @@ app.get('/api/file/:id', async (req: Request, res: Response) => {
   res.send(content.data)
 })
 
-app.get('/api/thumb/:id.jpg', async (req: Request, res: Response) => {
-  const dir = path.join(process.cwd(), 'data', 'thumbs')
+app.get(`/api/thumb/:id.?*`, async (req: Request, res: Response) => {
+  const dir = path.join(DATA_FOLDER, 'thumbs')
+
   if (!await fileExists(dir)) {
     fs.mkdirSync(dir)
   }
 
-  const filename = path.join(dir, `${req.params.id}.jpg`)
+  const filename = path.join(dir, `${req.params.id}.${THUMB_FORMAT}`)
+
+  if (!await fileExists(filename)) {
+    const result = await makeThumbnail(node.filestore, req.params.id, filename)
+    if (!result) return NotFoundError(res)
+
+    console.log(`Generated ${THUMB_FORMAT} thumbnail for ${req.params.id}`)
+  }
+  
+  res.contentType(THUMB_FORMAT)
 
   const options = {
     root: dir,
     dotfiles: 'deny',
     headers: {}
   }
-
-  if (!await fileExists(filename)) {
-    const result = await makeThumbnail(node.filestore, req.params.id, filename)
-
-    if (!result) return NotFoundError(res)
-    console.log("Generated thumbnail for", req.params.id)
-  }
   
-  res.sendFile(`${req.params.id}.jpg`, options, (e) => {
+  res.sendFile(`${req.params.id}.${THUMB_FORMAT}`, options, (e) => {
     if (e) console.log(e)
   })
-  
 })
 
-app.post('/api/:topic/thread/:id.json', async (req: Request, res: Response) => {
+app.post('/api/:topic/thread/:id(.json)?', async (req: Request, res: Response) => {
     const client = node.boards.get(req.params.topic)
     if (!client) return NotFoundError(res)
     const post: IPost = req.body.post
@@ -147,6 +143,6 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
 //    res.sendFile(path.join('../client', 'build', 'index.html'));
 //  })
 
-app.listen(port, () => {
-  console.log(`⚡️[server]: Server is running at http://localhost:${port}`)
+app.listen(PORT, () => {
+  console.log(`⚡️[BBS]: API is running at http://localhost:${PORT}`)
 })
