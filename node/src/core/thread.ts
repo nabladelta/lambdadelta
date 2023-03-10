@@ -46,6 +46,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
         // Timestamp is not in the future, 60 second tolerance
         if (this.op?.time && this.op.time < getTimestampInSeconds() + 60) {
           this.creationTime = this.op.time
+          return
         }
         throw new Error(`Malformed thread ${tid} (time)`)
     })()
@@ -79,12 +80,8 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
     // If inputcore is already written to, set thread to already written
     const thread = new Thread(tid, corestore, base, inputCore.length > 0)
-    try {
-      await thread.ready()
-    } catch (e) {
 
-      
-    }
+    await thread.ready()
     return thread
   }
 
