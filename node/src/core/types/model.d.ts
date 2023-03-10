@@ -17,6 +17,7 @@ interface IPost {
     fsize?: number, // File size
     mime?: string // File mime type
     last_replies?: IPost[]
+    last_modified?: number // Last modified time in ms 
 }
 
 interface IThread {

@@ -5,23 +5,26 @@ import { Thread } from './thread'
 import { BoardEvents } from './types/events'
 import { Keystorage } from './keystorage'
 import Hypercore from 'hypercore'
+import BTree from 'sorted-btree'
 
 const MAX_THREADS = 256
 
 export class BulletinBoard extends TypedEmitter<BoardEvents> {
     private corestore: any
-    public threadsList: string[]
     public threads: {[tid: string]: Thread}
     private _streams: Set<{stream: any, inputAnnouncer: any}>
     public topic: string
     private keystore: Keystorage
     private _ready: Promise<void>
+    private lastModified: BTree<number, string> // Timestamp (ms!), ThreadId
+    private tidLastModified: Map<string, number> // ThreadId, Timestamp (ms)
 
     constructor(topic: string, corestore: any) {
         super()
         this.corestore = corestore
         this.topic = topic
-        this.threadsList = []
+        this.lastModified = new BTree()
+        this.tidLastModified = new Map()
         this._streams = new Set()
         this.threads = {}
         this.keystore = new Keystorage(Hypercore.defaultStorage(corestore.storage), 'board/' + this.topic + '/')
@@ -61,18 +64,21 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         const updated: string[][] = []
         for (let threadInputs of cids) {
             const threadId = threadInputs[0]
-
             let newThread = false
-            if (!this.threads[threadId]) {
-                const t = await Thread.load(threadId, this.corestore)
-                await this._addThread(t)
-                this.emit("joinedThread", t.tid, t)
-                newThread = true
+            try {
+                if (!this.threads[threadId]) {
+                    const t = await Thread.load(threadId, this.corestore)
+                    await this._addThread(t)
+                    this.emit("joinedThread", t.tid, t)
+                    newThread = true
+                }
+    
+                const thread = this.threads[threadId]
+                const inputs = await thread.recv(threadInputs)
+                if (inputs || newThread) updated.push(inputs || thread.allInputs())
+            } catch (e) {
+                console.log(`Thread rejected: ${(e as Error).message}`)
             }
-
-            const thread = this.threads[threadId]
-            const inputs = await thread.recv(threadInputs)
-            if (inputs || newThread) updated.push(inputs || thread.allInputs())
         }
         if (updated.length > 0) {
             this.announceInputsToAll(updated)
@@ -88,24 +94,40 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     }
 
     private async announceAllInputs(streamData: {stream: any, inputAnnouncer: any}) {
-        const inputs = this.threadsList.map(tid => this.threads[tid].allInputs())
+        const inputs = this.lastModified.mapValues(tid => this.threads[tid].allInputs())
         await streamData.inputAnnouncer.send(inputs)
     }
 
     private async _addThread(t: Thread) {
-        this.threadsList.push(t.tid)
+        if (!t.creationTime) throw Error("Missing thread creation time")
+        // Avoid issue of storing two threads under the same creation time
+        // Convert CT to ms
+        let creationTime = t.creationTime * 1000
+
+        while(!this.lastModified.setIfNotPresent(creationTime, t.tid)) {
+            creationTime++ // Keep trying with a newer time until we find an empty spot
+        }
+        this.tidLastModified.set(t.tid, creationTime) // Set reverse
+
         this.threads[t.tid] = t
         this.bumpOff()
         await t.start()
     }
-    
+
     private async bumpOff() {
-        if (this.threadsList.length < MAX_THREADS) {
+        if (this.lastModified.length < MAX_THREADS) {
             return
         }
-        const removed = this.threadsList.shift()!
-        await this.threads[removed].destroy()
-        delete this.threads[removed]
+        // Get the oldest last modified time
+        const oldestTime = this.lastModified.minKey()
+        if (!oldestTime) return // No threads?
+
+        const toRemove = this.lastModified.get(oldestTime)!
+        this.lastModified.delete(oldestTime)
+        this.tidLastModified.delete(toRemove)
+
+        await this.threads[toRemove].destroy()
+        delete this.threads[toRemove]
     }
 
     public async newThread(op: IPost | ((tid: string) => Promise<IPost | false>)) {
@@ -169,27 +191,30 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     public async getCatalog() {
         const catalog: {page: number, threads: IPost[]}[] = []
         const threads = []
-        for (let threadId of this.threadsList.slice().reverse()) {
+        // Iterate from newest to oldest
+        for (let [lastModified, threadId] of this.lastModified.entriesReversed()) {
             const thread = (await this.getThreadContent(threadId))!
             const op = thread.posts[0]
             op.last_replies = thread.posts.slice(1).slice(-3)
+            op.last_modified = lastModified
             threads.push(op)
         }
         for (let i = 0; i <= 16; i++)  {
-            if (threads.slice(i*16).length == 0) {
-                break
-            }
-            catalog.push({
+            const page = {
                 page: i+1,
                 threads: threads.slice(i*16, (i*16)+16)
-            })
+            }
+            if (page.threads.length == 0) {
+                break
+            }
+            catalog.push(page)
         }
         return catalog
     }
 
     private async readStorageKeys() {
         const loadedInputs = new Set<string>()
-        await this.keystore._readStorageKey('inputs', loadedInputs)
+        await this.keystore._readStorageKey('tids', loadedInputs)
         for (let threadId of loadedInputs) {
             const t = await Thread.load(threadId, this.corestore)
             await this._addThread(t)
@@ -197,6 +222,6 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     }
     
     private async updateStorageKeys() {
-        await this.keystore._updateStorageKey('inputs', new Set(this.threadsList))
+        await this.keystore._updateStorageKey('tids', new Set(this.lastModified.valuesArray()))
     }
 }

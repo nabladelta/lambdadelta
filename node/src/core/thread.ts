@@ -1,6 +1,6 @@
 import b4a from 'b4a'
 import Hypercore from 'hypercore'
-import { difference, getThreadEpoch } from './utils/utils'
+import { difference, getThreadEpoch, getTimestampInSeconds } from './utils/utils'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { ThreadEvents } from './types/events'
 import Autobase from 'autobase'
@@ -19,6 +19,9 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   private _ready: Promise<void | void[]>
   public localInput: string
 
+  public creationTime: number | undefined // Epoch in seconds
+  public op: IPost | undefined
+
   private constructor(tid: string, corestore: any, autobase: any, written?: boolean) {
     super()
     this.tid = tid
@@ -35,6 +38,16 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     this._ready = (async () => {
         await this.opCore.ready()
         await this.readStorageKeys()
+        try {
+          this.op = await this.getOp(1000)
+        } catch(e) {
+          throw new Error(`Failed to fetch OP in 1000ms for ${tid}`)
+        }
+        // Timestamp is not in the future, 60 second tolerance
+        if (this.op?.time && this.op.time < getTimestampInSeconds() + 60) {
+          this.creationTime = this.op.time
+        }
+        throw new Error(`Malformed thread ${tid} (time)`)
     })()
   }
 
@@ -66,7 +79,12 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
     // If inputcore is already written to, set thread to already written
     const thread = new Thread(tid, corestore, base, inputCore.length > 0)
-    await thread.ready()
+    try {
+      await thread.ready()
+    } catch (e) {
+
+      
+    }
     return thread
   }
 
@@ -84,8 +102,8 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     }
   }
 
-  public async getOp() {
-    const op: IPost = Thread.deserialize(await this.opCore.get(0))
+  public async getOp(timeout?: number) {
+    const op: IPost = Thread.deserialize(await this.opCore.get(0, {timeout}))
     op.no = this.tid
     return op
   }
