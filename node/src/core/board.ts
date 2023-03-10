@@ -168,14 +168,18 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         if (end > view.length) {
             end = view.length as number
         }
-
+        let images = 0
         for (let i = start || 0; i < end; i++) {
             const node = await view.get(i)
-            thread.posts.push(JSON.parse(node.value.toString()))
+            const post: IPost = JSON.parse(node.value.toString())
+            if (post.tim) images++
+
+            thread.posts.push(post)
         }
 
         if (!start && thread.posts.length) {
             thread.posts[0].replies = (view.length || 1) - 1
+            thread.posts[0].images = images
         }
         return thread
     }
