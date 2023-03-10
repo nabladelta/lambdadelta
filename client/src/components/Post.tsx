@@ -19,7 +19,7 @@ import { CardHeader, CardBody, CardFooter } from '@chakra-ui/react'
 import { API_URL } from '../constants'
 import { formatBytes, getPostDateString, isVideo, truncateText } from '../utils/utils'
 
-function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
+function Post({post}: {post: IPost}) {
     const dateString = useMemo(()=> {
         return getPostDateString(post.time)
     }, [post.time])
@@ -41,7 +41,7 @@ function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
                     <Image
                     objectFit='contain'
                     boxSize={imageWide ? post.h : undefined}
-                    maxW={vertical ? undefined : imageWide ? { base: '100%', sm: `512px` } : { base: '150%', sm: `1024px` }}
+                    maxW={imageWide ? { base: '100%', sm: `512px` } : { base: '150%', sm: `1024px` }}
                     src={imageWide ? `${API_URL}/file/${post.tim}${post.ext}` : `${API_URL}/thumb/${post.tim}.jpg`}
                     alt={`${post.filename}${post.ext}`} />
 
