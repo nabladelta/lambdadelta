@@ -13,7 +13,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
 import { buttonStyle } from '../board/catalog'
-import { API_URL } from '../../constants'
+import { fetchThread, postReply } from '../../app/posts'
 
 function ThreadPage() {
   const toast = useToast()
@@ -21,55 +21,44 @@ function ThreadPage() {
   const { board, id } = useParams()
 
   async function updateData() {
-    const r = await fetch(`${API_URL}/${board}/thread/${id}`)
-    if (!r.ok) {
-      const emsg: {error: string} = await r.json()
+    try {
+      const response = await fetchThread(board!, id!)
+      setData(response)
       toast({
-        title: emsg.error,
+        title: 'Posts Updated',
+        status: 'success',
+        duration: 1500,
+      })
+    } catch (e) {
+      toast({
+        title: (e as Error).message,
         status: 'error',
         duration: 2000,
       })
-      return
     }
-    setData(await r.json())
-    toast({
-      title: 'Posts Updated',
-      status: 'success',
-      duration: 1500,
-    })
   }
 
   useEffect(() => {
     updateData()
   }, [board, id])
 
-  async function post({post, attachments}: {post: IPost, attachments: IFileData[]}) {
-    post.resto = id
-    const r = await fetch(`${API_URL}/${board}/thread/${id}` , {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({attachments, post})
-    })
-    const content = await r.json()
-    if (!r.ok) {
+  async function post(postData: {post: IPost, attachments: IFileData[]}) {
+    try {
+      const response = await postReply(board!, id!, postData)
       toast({
-        title: "Error Posting",
+        title: 'Post Successful',
+        status: 'success',
+        duration: 1500,
+      })
+      setData(response)
+      onClose()
+    } catch (e) {
+      toast({
+        title: (e as Error).message,
         status: 'error',
         duration: 2000,
       })
-      return
     }
-    console.log(content)
-    setData(content)
-    toast({
-      title: "Post Successful",
-      status: 'success',
-      duration: 1500,
-    })
-    onClose()
   }
 
   const { isOpen, onOpen, onClose } = useDisclosure()

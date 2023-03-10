@@ -1,18 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import {
-  ChakraProvider,
-  Box,
-  Text,
   VStack,
-  Code,
-  Grid,
-  Card,
-  Image,
-  Stack,
-  Heading,
-  Button,
-  Flex,
-  LinkBox,
   Link as CLink,
   SimpleGrid,
   HStack,
@@ -21,12 +9,11 @@ import {
   useDisclosure
 } from "@chakra-ui/react"
 import { ArrowBackIcon, ArrowDownIcon, ArrowUpIcon, RepeatClockIcon, ChatIcon } from '@chakra-ui/icons'
-import Post from '../../components/Post'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
-import { API_URL } from '../../constants'
 import CatalogPost from '../../components/CatalogPost'
+import { fetchCatalog, postThread } from '../../app/posts'
 
 export const buttonStyle = { variant:'outline', colorScheme:'gray', fontSize:'20px' }
 
@@ -37,36 +24,44 @@ function Catalog() {
   const navigate = useNavigate()
 
   async function updateData() {
-    const r = await fetch(`${API_URL}/${board}/catalog`)
-    setData(await r.json())
-    toast({
-      title: 'Threads Updated',
-      status: 'success',
-      duration: 1500,
-    })
+    try {
+      const response = await fetchCatalog(board!)
+      setData(response)
+      toast({
+        title: 'Catalog Updated',
+        status: 'success',
+        duration: 1500,
+      })
+    } catch (e) {
+      toast({
+        title: (e as Error).message,
+        status: 'error',
+        duration: 2000,
+      })
+    }
   }
+
   useEffect(() => {
     updateData()
   }, [board])
 
-  async function post({post, attachments}: {post: IPost, attachments: IFileData[]}) {
-    const r = await fetch(`${API_URL}/${board}`, {
-      method: 'POST',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({post, attachments})
-    })
-    const content = await r.json()
-    console.log(content)
-    navigate(`/${board}/thread/${content.op}`)
-    toast({
-      title: 'New Thread Created',
-      status: 'success',
-      duration: 1500,
-    })
-    onClose()
+  async function post(postData: {post: IPost, attachments: IFileData[]}) {
+    try {
+      const response = await postThread(board!, postData)
+      navigate(`/${board}/thread/${response.op}`)
+      toast({
+        title: 'New Thread Created',
+        status: 'success',
+        duration: 1500,
+      })
+      onClose()
+    } catch (e) {
+      toast({
+        title: (e as Error).message,
+        status: 'error',
+        duration: 2000,
+      })
+    }
   }
 
   const { isOpen, onOpen, onClose } = useDisclosure()
