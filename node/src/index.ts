@@ -48,6 +48,14 @@ app.get('/api/:topic/catalog\.:ext?', async (req: Request, res: Response) => {
   res.send(catalog)
 })
 
+app.get('/api/boards\.:ext?', async (req: Request, res: Response) => {
+  const r: IBoardList = {boards: []}
+  for (let topic of node.boards.keys()) {
+    r.boards.push({board: topic, pages: 16, per_page: 16})
+  }
+  res.send(r)
+})
+
 app.get('/api/file/:id\.:ext?', async (req: Request, res: Response) => {
   const id = parseFileID(req.params.id)
   const content = await node.filestore.retrieve(id.cid, id.blobId)

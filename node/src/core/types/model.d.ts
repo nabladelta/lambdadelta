@@ -23,10 +23,6 @@ interface IThread {
     posts: IPost[]
 }
 
-interface IBoard {
-    threads: string[]
-}
-
 interface ICatalogPage {
     page: number
     threads: IPost[]
@@ -42,4 +38,13 @@ interface IAttachment {
     filename: string
     type: string
     address: { cid: string, blobId: BlobID} 
+}
+
+interface IBoard {
+    board: string // Topic
+    pages: number
+    per_page: number
+}
+interface IBoardList {
+    boards: IBoard[]
 }

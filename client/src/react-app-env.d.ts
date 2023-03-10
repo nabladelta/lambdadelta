@@ -35,3 +35,12 @@ interface IFileData {
     type: string;
     data: string;
 }
+
+interface IBoard {
+    board: string // Topic
+    pages: number
+    per_page: number
+}
+interface IBoardList {
+    boards: IBoard[]
+}
