@@ -31,7 +31,7 @@ function FailedException(res: express.Response, message: string) {
   res.send({error: message})
 }
 
-app.get('/api/:topic/thread/:id(.json)?', async (req: Request, res: Response) => {
+app.get('/api/:topic/thread/:id\.:ext?', async (req: Request, res: Response) => {
     const client = node.boards.get(req.params.topic)
     if (!client) return NotFoundError(res)
 
@@ -40,7 +40,7 @@ app.get('/api/:topic/thread/:id(.json)?', async (req: Request, res: Response) =>
     res.send(thread)
 })
 
-app.get('/api/:topic/catalog(.json)?', async (req: Request, res: Response) => {
+app.get('/api/:topic/catalog\.:ext?', async (req: Request, res: Response) => {
   const client = node.boards.get(req.params.topic)
   if (!client) return NotFoundError(res)
 
@@ -48,7 +48,7 @@ app.get('/api/:topic/catalog(.json)?', async (req: Request, res: Response) => {
   res.send(catalog)
 })
 
-app.get('/api/file/:id', async (req: Request, res: Response) => {
+app.get('/api/file/:id\.:ext?', async (req: Request, res: Response) => {
   const id = parseFileID(req.params.id)
   const content = await node.filestore.retrieve(id.cid, id.blobId)
 
@@ -57,14 +57,13 @@ app.get('/api/file/:id', async (req: Request, res: Response) => {
   if (content.mime && content.mime.length > 0) {
     res.contentType(content.mime)
   } else { // Fall back to extension in url if mime type is not set
-    const [_, ext] = req.params.id.split('.', 2)
-
-    if (ext) res.contentType(ext)
+    if (req.params.ext) res.contentType(req.params.ext)
+    else res.contentType("application/octet-stream")
   }
   res.send(content.data)
 })
 
-app.get(`/api/thumb/:id.?*`, async (req: Request, res: Response) => {
+app.get(`/api/thumb/:id\.:ext?`, async (req: Request, res: Response) => {
   const dir = path.join(DATA_FOLDER, 'thumbs')
 
   if (!await fileExists(dir)) {
@@ -93,7 +92,7 @@ app.get(`/api/thumb/:id.?*`, async (req: Request, res: Response) => {
   })
 })
 
-app.post('/api/:topic/thread/:id(.json)?', async (req: Request, res: Response) => {
+app.post('/api/:topic/thread/:id\.:ext?', async (req: Request, res: Response) => {
     const client = node.boards.get(req.params.topic)
     if (!client) return NotFoundError(res)
     const post: IPost = req.body.post
