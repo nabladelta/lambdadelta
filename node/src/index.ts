@@ -19,20 +19,15 @@ function NotFoundError(res: express.Response) {
   res.send({error: "Not Found"})
 }
 
-function AlreadyPresentError(res: express.Response) {
-  res.status(409)
-  res.send({error: "Thread Already Exists"})
-}
-
 function FailedPost(res: express.Response) {
   console.log("Failed post")
-  res.status(409)
+  res.status(400)
   res.send({error: "Failed to post"})
 }
 
 function FailedException(res: express.Response, message: string) {
   console.log(message)
-  res.status(409)
+  res.status(400)
   res.send({error: message})
 }
 
