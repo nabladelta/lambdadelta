@@ -25,6 +25,7 @@ import Post from '../../components/Post'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
+import { API_URL } from '../../constants'
 
 export const buttonStyle = { variant:'outline', colorScheme:'gray', fontSize:'20px' }
 
@@ -35,7 +36,7 @@ function Catalog() {
   const navigate = useNavigate()
 
   async function updateData() {
-    const r = await fetch('http://localhost:8089/api/a/catalog.json')
+    const r = await fetch(`${API_URL}/${board}/catalog`)
     setData(await r.json())
     toast({
       title: 'Threads Updated',
@@ -48,7 +49,7 @@ function Catalog() {
   }, [board])
 
   async function post({post, attachments}: {post: IPost, attachments: IFileData[]}) {
-    const r = await fetch('http://localhost:8089/api/a', {
+    const r = await fetch(`${API_URL}/${board}`, {
       method: 'POST',
       headers: {
         'Accept': 'application/json',

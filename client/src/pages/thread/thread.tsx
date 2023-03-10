@@ -13,6 +13,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
 import { buttonStyle } from '../board/catalog'
+import { API_URL } from '../../constants'
 
 function ThreadPage() {
   const toast = useToast()
@@ -20,7 +21,7 @@ function ThreadPage() {
   const { board, id } = useParams()
 
   async function updateData() {
-    const r = await fetch(`http://localhost:8089/api/a/thread/${id}.json`)
+    const r = await fetch(`${API_URL}/${board}/thread/${id}`)
     if (!r.ok) {
       const emsg: {error: string} = await r.json()
       toast({
@@ -44,7 +45,7 @@ function ThreadPage() {
 
   async function post({post, attachments}: {post: IPost, attachments: IFileData[]}) {
     post.resto = id
-    const r = await fetch(`http://localhost:8089/api/a/thread/${id}.json` , {
+    const r = await fetch(`${API_URL}/${board}/thread/${id}` , {
       method: 'POST',
       headers: {
         'Accept': 'application/json',

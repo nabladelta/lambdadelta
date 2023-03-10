@@ -16,6 +16,7 @@ import {
   Tooltip
 } from "@chakra-ui/react"
 import { CardHeader, CardBody, CardFooter } from '@chakra-ui/react'
+import { API_URL } from '../constants'
 
 function formatBytes(bytes: number, decimals = 0) {
     if (!+bytes) return '0 Bytes'
@@ -54,12 +55,12 @@ function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
             variant='outline'>
                 {post.tim && !isVideo &&
 
-                <a href={`http://localhost:8089/api/file/${post.tim}${post.ext}`} target='_blank' onClick={imageClick}>
+                <a href={`${API_URL}/file/${post.tim}${post.ext}`} target='_blank' onClick={imageClick}>
                     <Image
                     objectFit='contain'
                     boxSize={imageWide ? post.h : undefined}
                     maxW={vertical ? undefined : imageWide ? { base: '100%', sm: `512px` } : { base: '150%', sm: `1024px` }}
-                    src={imageWide ? `http://localhost:8089/api/file/${post.tim}${post.ext}` : `http://localhost:8089/api/thumb/${post.tim}.jpg`}
+                    src={imageWide ? `${API_URL}/file/${post.tim}${post.ext}` : `${API_URL}/thumb/${post.tim}.jpg`}
                     alt={`${post.filename}${post.ext}`} />
 
                 </a>}
@@ -68,7 +69,7 @@ function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
                         as='video'
                         controls
                         loop={true}
-                        src={`http://localhost:8089/api/file/${post.tim}${post.ext}`}
+                        src={`${API_URL}/file/${post.tim}${post.ext}`}
                         // poster='https://peach.blender.org/wp-content/uploads/title_anouncement.jpg?x11217'
                         title={`${post.filename}${post.ext}`}
                         objectFit='contain'
@@ -95,7 +96,7 @@ function Post({post, vertical}:{post: IPost, vertical?: boolean}) {
                 </CardBody>
 
                 <CardFooter>
-                {!vertical && <HStack spacing={7}>{post.filename && <Tooltip label={`${post.filename}${post.ext}`}><Text as='i'>File: <a href={`http://localhost:8089/api/file/${post.tim}${post.ext}`} target='_blank'>{`${truncate(post.filename, 24)}${post.ext}`}</a></Text></Tooltip>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}</HStack>}
+                {!vertical && <HStack spacing={7}>{post.filename && <Tooltip label={`${post.filename}${post.ext}`}><Text as='i'>File: <a href={`${API_URL}/file/${post.tim}${post.ext}`} target='_blank'>{`${truncate(post.filename, 24)}${post.ext}`}</a></Text></Tooltip>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}</HStack>}
                 </CardFooter>
             </Stack>
         </Card>
