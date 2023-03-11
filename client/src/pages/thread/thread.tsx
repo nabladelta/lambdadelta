@@ -62,8 +62,10 @@ function ThreadPage() {
   }
 
   const { isOpen, onOpen, onClose } = useDisclosure()
+
+  const [highlight, setHighlight] = useState<string | undefined>()
   return (
-    <VStack align="flex-start" spacing={8}>
+    <VStack align="flex-start" spacing={8} marginBottom={isOpen ? 400 : 0}>
     <HStack id={'top'} spacing={6}>
       <Tooltip label='Return'>
         <Link to={`/${board}/catalog`} ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
@@ -81,7 +83,7 @@ function ThreadPage() {
       </Tooltip>
     </HStack>
     <VStack align="flex-start" spacing={8}>
-      {data.posts.map(p => <Post key={p.no} post={p as any}/>)} 
+      {data.posts.map(p => <Post key={p.no} post={p as any} highlight={highlight} setHighlight={setHighlight}/>)}
     </VStack>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>
