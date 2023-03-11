@@ -135,7 +135,7 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
 
                         <FormControl isInvalid={!!errors.file_} >
                             <FileUpload
-                                accept={'image/jpeg, image/png, image/gif, image/webp, image/avif, image/tiff, image/svg, video/mp4, video/webm, application/pdf'}
+                                accept={'image/jpeg, image/png, image/gif, image/webp, image/avif, image/tiff, image/svg, video/mp4, video/webm'}
                                 multiple
                                 register={register('file_', { validate: validateFiles, onChange: onFileChange, })}
                             >
