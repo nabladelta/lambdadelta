@@ -28,7 +28,7 @@ import { API_URL } from '../constants'
 import { formatBytes, getPostDateString, isElementInViewport, isVideo, truncateText } from '../utils/utils'
 import { useLocation } from 'react-router-dom'
 
-function Post({post, highlight, setHighlight}: {post: IPost, highlight: string | undefined, setHighlight?: React.Dispatch<React.SetStateAction<string | undefined>>}) {
+function Post({post, replies, highlight, setHighlight}: {post: IPost, replies?: Set<IPost>, highlight: string | undefined, setHighlight?: React.Dispatch<React.SetStateAction<string | undefined>>}) {
     const dateString = useMemo(()=> {
         return getPostDateString(post.time)
     }, [post.time])
@@ -79,13 +79,11 @@ function Post({post, highlight, setHighlight}: {post: IPost, highlight: string |
                         <Text as='b' noOfLines={1}>{post.name || "Anonymous"}</Text>
                         <Text>{dateString}</Text>
                         <Text><Link _hover={{color: 'red'}} href={`#p${shortCode}`}>No.</Link> {shortCode}</Text>
-                        <ReplyLink post={post} setHighlight={setHighlight}></ReplyLink>{/*<Text fontSize='sm' as='u'>&gt;&gt;Z55ASQDFBS7FFQ</Text>*/}
+                        {replies && <HStack spacing={2}>{Array.from(replies).map((p) => <ReplyLink post={p} setHighlight={setHighlight}></ReplyLink>)}</HStack>}{/*<Text fontSize='sm' as='u'>&gt;&gt;Z55ASQDFBS7FFQ</Text>*/}
                     </HStack>
                 </CardHeader>
                 <CardBody>
-                    <Text align={'left'} py='2'>
-                        {post.com}
-                    </Text>
+                    {post.parsedCom}
                 </CardBody>
 
                 <CardFooter>
@@ -100,7 +98,7 @@ function Post({post, highlight, setHighlight}: {post: IPost, highlight: string |
 
 export default Post
 
-function ReplyLink({post, setHighlight}: {post: IPost, setHighlight?: React.Dispatch<React.SetStateAction<string | undefined>>}) {
+export function ReplyLink({post, setHighlight, isInCom}: {post: IPost, isInCom?: boolean, setHighlight?: React.Dispatch<React.SetStateAction<string | undefined>>}) {
     const shortCode = post.no.slice(-16)
     function mouseEnter() {
         const postElement = document.getElementById(`p${shortCode}`)
@@ -119,7 +117,8 @@ function ReplyLink({post, setHighlight}: {post: IPost, setHighlight?: React.Disp
     return (
         <Popover isOpen={isOpen} onClose={() => setIsOpen(false)} trigger='hover' openDelay={0} closeDelay={0} isLazy>
         <PopoverTrigger>
-            <Link textDecoration={'underline'} onMouseEnter={mouseEnter} onMouseLeave={mouseLeave} fontSize='sm' _hover={{color: 'red'}} href={`#p${shortCode}`}>&gt;&gt;{shortCode}</Link>
+            
+            <Link {...(isInCom ? {color: 'red.500'} : {fontSize: 'sm'})} textDecoration={'underline'}  onMouseEnter={mouseEnter} onMouseLeave={mouseLeave}  _hover={{color: 'red'}} href={`#p${shortCode}`}>&gt;&gt;{shortCode}</Link>
         </PopoverTrigger>
         <Portal>
         <PopoverContent boxSize={'100%'}>

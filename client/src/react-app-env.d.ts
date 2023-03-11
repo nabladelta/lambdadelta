@@ -4,6 +4,7 @@ interface IPost {
     no: string, // The post ID
     time: integer, // UNIX timestamp the post was created
     com: string, // Comment
+    parsedCom?: JSX.Element // Injected afterwards
     sub?: string, // OP Subject text
     name?: string, // Name user posted with. Defaults to Anonymous
     trip?: string, // The user's tripcode, in format: !tripcode or !!securetripcode
@@ -44,4 +45,14 @@ interface IBoard {
 }
 interface IBoardList {
     boards: IBoard[]
+}
+
+interface IProcessedThread {
+    replies: {
+        [no: string]: Set<IPost>
+    }
+    posts: IPost[]
+    postsByRef: {
+        [no: string]: IPost
+    }
 }
