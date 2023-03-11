@@ -25,12 +25,10 @@ import {
     DrawerContent,
     DrawerCloseButton,
   } from '@chakra-ui/react'
-import { useForm, UseFormRegisterReturn } from 'react-hook-form'
+import { useForm } from 'react-hook-form'
 
 import FileUpload from './FileUpload'
 import { FiFile } from 'react-icons/fi'
-import { ArrowBackIcon, DeleteIcon } from '@chakra-ui/icons'
-import { buttonStyle } from '../pages/board/catalog'
 import { getFileData } from '../utils/utils'
 
 
@@ -110,10 +108,14 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
             placement='bottom'
             initialFocusRef={firstField}
             onClose={onClose}
-            size={'lg'}
+            size={'md'}
+            variant={'alwaysOpen'}
+            trapFocus={false}
+            closeOnOverlayClick={false}
+            blockScrollOnMount={false}
         >
             {/* <DrawerOverlay /> */}
-            <DrawerContent>
+            <DrawerContent maxWidth={'500px'}>
                 <DrawerCloseButton />
                 <DrawerHeader borderBottomWidth='1px'>New post</DrawerHeader>
                 <DrawerBody>
