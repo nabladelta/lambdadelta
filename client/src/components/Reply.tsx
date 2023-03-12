@@ -13,7 +13,8 @@ import {
   Icon,
   FormControl,
   FormErrorMessage,
-  IconButton
+  IconButton,
+  FormHelperText
 } from "@chakra-ui/react"
 
 import {
@@ -36,6 +37,9 @@ type ModelElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
 
 type FormValues = {
     file_: FileList
+    name: string,
+    com: string,
+    sub: string
 }
 
 function useModel<E extends ModelElement>(
@@ -56,25 +60,23 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
     const { register, formState: {errors}, getValues } = useForm<FormValues>()
     const [filename, setFilename] = useState<string|undefined>()
 
-    const name = useModel()
-    const sub = useModel()
-    const com = useModel()
-
     async function submit() {
-        const file = getValues().file_.item(0)
+        const formData = getValues()
+        const file = formData.file_.item(0)
         const attachments = []
         if (file) {
             attachments.push(await getFileData(file))
         }
+        console.log(formData.name, formData.sub, formData.com)
         onPost({
             attachments,
             post: {
                 no: "",
                 id: "",
                 time: Math.floor(Date.now()/1000),
-                com: com.model.value || "",
-                sub: sub.model.value || undefined,
-                name: name.model.value || undefined,
+                com: formData.com || "",
+                sub: op ? formData.sub || undefined : undefined,
+                name: formData.name || undefined,
         }})
     }
 
@@ -102,12 +104,10 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
         return true
     }
 
-    const firstField: any = React.useRef()
     return (
         <Drawer
             isOpen={isOpen}
             placement='bottom'
-            initialFocusRef={firstField}
             onClose={onClose}
             size={'md'}
             variant={'alwaysOpen'}
@@ -116,37 +116,44 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
             blockScrollOnMount={false}
         >
             {/* <DrawerOverlay /> */}
-            <DrawerContent maxWidth={'500px'}>
+            <DrawerContent >
                 <DrawerCloseButton />
                 <DrawerHeader borderBottomWidth='1px'>New post</DrawerHeader>
                 <DrawerBody>
                     <Stack spacing='24px'>
-                        <Box>
+                        <FormControl maxW={'35rem'} isInvalid={!!errors.name}>
                             <FormLabel htmlFor='name'>Name</FormLabel>
-                            <Input id='name' placeholder='Anonymous' {...name.model} />
-                        </Box>
+                            <Input id='name' placeholder='Anonymous' 
+                                {...register("name", {maxLength: 128})}
+                            />
+                            <FormErrorMessage>{errors.name && errors?.name.message}</FormErrorMessage>
+                        </FormControl>
 
-                        {op && <Box>
+                        {op &&
+                        <FormControl maxW={'35rem'} isInvalid={!!errors.sub} >
                             <FormLabel htmlFor='sub'>Subject</FormLabel>
-                            <Input id='sub' {...sub.model} />
-                        </Box>}
+                            <Input id='sub'
+                                {...register("sub", {maxLength: 128})}
+                            />
+                            <FormErrorMessage>{errors.sub && errors?.sub.message}</FormErrorMessage>
+                        </FormControl>}
 
-                        <Box>
+                        <FormControl isInvalid={!!errors.com} >
                             <FormLabel htmlFor='desc'>Comment</FormLabel>
-                            <Textarea ref={firstField} size={'lg'} id='desc' {...com.model} />
-                        </Box>
+                            <Textarea 
+                            {...register("com", {maxLength: 4096})}
+                            />
+                            <FormErrorMessage>{errors.com && errors?.com.message}</FormErrorMessage>
+                        </FormControl>
 
                         <FormControl isInvalid={!!errors.file_} >
                             <FileUpload
+                                buttonText={filename ? 'Change File' : 'Upload'}
                                 accept={'image/jpeg, image/png, image/gif, image/webp, image/avif, image/tiff, image/svg, video/mp4, video/webm'}
                                 multiple
                                 register={register('file_', { validate: validateFiles, onChange: onFileChange, })}
-                            >
-                            <HStack>
-                                <Button leftIcon={<Icon as={FiFile} />}>{filename ? 'Change File' : 'Upload'}</Button>
-                                {filename && <FormLabel>{filename}</FormLabel>}
-                            </HStack>
-                            </FileUpload>
+                            />
+                            <FormHelperText>{filename ? filename : 'Video or image. Up to 5MiB accepted.' }</FormHelperText>
                             <FormErrorMessage>{errors.file_ && errors?.file_.message}</FormErrorMessage>
                         </FormControl>
                     </Stack>

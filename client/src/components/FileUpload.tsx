@@ -4,6 +4,7 @@ import { useForm, UseFormRegisterReturn } from 'react-hook-form'
 import { FiFile } from 'react-icons/fi'
 
 type FileUploadProps = {
+  buttonText: string,
   register: UseFormRegisterReturn
   accept?: string
   multiple?: boolean
@@ -18,7 +19,7 @@ const FileUpload = (props: FileUploadProps) => {
   const handleClick = () => inputRef.current?.click()
 
   return (
-      <InputGroup onClick={handleClick}>
+      <InputGroup>
         <input
           type={'file'}
           multiple={multiple || false}
@@ -31,6 +32,7 @@ const FileUpload = (props: FileUploadProps) => {
           }}
         />
         <>
+          <Button leftIcon={<Icon as={FiFile} />} onClick={handleClick}>{props.buttonText}</Button>
           {children}
         </>
       </InputGroup>

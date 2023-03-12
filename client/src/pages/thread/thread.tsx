@@ -71,7 +71,7 @@ function ThreadPage() {
 
   const [highlight, setHighlight] = useState<string | undefined>()
   return (
-    <VStack align="flex-start" spacing={8} marginBottom={isOpen ? 400 : 0}>
+    <VStack align="flex-start" spacing={8} marginBottom={isOpen ? 450 : 0}>
     <HStack id={'top'} spacing={6}>
       <Tooltip label='Return'>
         <Link to={`/${board}/catalog`} ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
