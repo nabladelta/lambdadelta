@@ -74,6 +74,14 @@ function isGreentext(line: string) {
     }
     return <React.Fragment key={i}>{handleQuoteLinks(line, quoteCallback)}<br/></React.Fragment>
   }
+
+  export function processCom(com: string, quoteCallback: (quoteRef: string) => IPost | false) {
+    return (
+    <Text align={'left'} py='2'>
+      {com.split('\n').map((line, i) => 
+        handleLine(line, i, quoteCallback))}
+    </Text>)
+  }
   
   export function processComs(thread: IThread) {
     const processed: IProcessedThread = {replies: {}, posts: [], postsByRef: {}}
@@ -89,12 +97,7 @@ function isGreentext(line: string) {
       return processed.postsByRef[quoteRef]
     }
     for (let post of thread.posts) {
-        post.parsedCom = (
-        <Text align={'left'} py='2'>
-          {post.com.split('\n').map((line, i) => {
-            return handleLine(line, i, (quoteRef: string) => quoteCallback(post, quoteRef))
-          })}
-        </Text>)
+        post.parsedCom = processCom(post.com, (quoteRef: string) => quoteCallback(post, quoteRef))
         processed.posts.push(post)
     }
     return processed
