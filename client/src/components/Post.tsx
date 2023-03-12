@@ -38,7 +38,8 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
     const [imageWide, setImageWide] = useState(false)
     const {hash} = useLocation()
     const shortCode = post.no.slice(-16)
-    const isHighlighted = highlight == shortCode || decodeURI(hash) == `#p${shortCode}`
+    const isHighlighted = highlight == shortCode 
+    const isInURI = decodeURI(hash) == `#p${shortCode}`
 
     function imageClick(e: any) {
         e.preventDefault()
@@ -47,7 +48,7 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
     return (
         <Card
             id={`p${shortCode}`}
-            bg={ isHighlighted ? "whiteAlpha.50": undefined}
+            bg={ isHighlighted || isInURI ? (isHighlighted && isInURI ? "whiteAlpha.100" : "whiteAlpha.50") : undefined}
             direction={{ base: 'column', sm: 'row' }}
             overflow='hidden'
             variant='outline'>
