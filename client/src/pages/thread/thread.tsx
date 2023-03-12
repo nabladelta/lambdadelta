@@ -16,6 +16,7 @@ import Reply from '../../components/Reply'
 import { buttonStyle } from '../board/catalog'
 import { fetchThread, postReply } from '../../app/posts'
 import { processComs } from '../../components/comParser'
+import { truncateText } from '../../utils/utils'
 
 
 export const HighlightContext = React.createContext<React.Dispatch<React.SetStateAction<string | undefined>> | undefined>(undefined);
@@ -29,6 +30,7 @@ function ThreadPage() {
     try {
       const response = await fetchThread(board!, id!)
       setData(processComs(response))
+      document.title = `/${board}/ - ` + (truncateText(response.posts[0].sub, 30) || truncateText(response.posts[0].com, 30)) + ' - BBS'
       toast({
         title: 'Posts Updated',
         status: 'success',
@@ -42,7 +44,6 @@ function ThreadPage() {
       })
     }
   }
-
   useEffect(() => {
     updateData()
   }, [board, id])
