@@ -54,7 +54,7 @@ function CatalogPost({post}:{post: IPost}) {
                     <VStack spacing={3}>
                         {post.sub && <Text noOfLines={2} as='b'>{post.sub}</Text>}
                         
-                        <LinkOverlay as={Link} to={`/${board}/thread/${post.no}`}>
+                        <LinkOverlay as={Link} to={`/${board}/thread/${post.id}`}>
                             <HStack spacing={3}>
                                 <Text>R: </Text><Text as='b'>{post.replies}</Text>
                                 <Text>|</Text>

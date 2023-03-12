@@ -70,6 +70,7 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
             attachments,
             post: {
                 no: "",
+                id: "",
                 time: Math.floor(Date.now()/1000),
                 com: com.model.value || "",
                 sub: sub.model.value || undefined,

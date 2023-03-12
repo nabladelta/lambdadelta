@@ -1,7 +1,8 @@
 /// <reference types="react-scripts" />
 
 interface IPost {
-    no: string, // The post ID
+    no: string, // The post shortcode ID
+    id: string, // The post's location
     time: integer, // UNIX timestamp the post was created
     com: string, // Comment
     parsedCom?: JSX.Element // Injected afterwards

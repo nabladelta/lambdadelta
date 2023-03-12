@@ -33,7 +33,7 @@ function isGreentext(line: string) {
       if (quoteRef.length == 64) {
         // Valid quotelink, create the corresponding element
         return <React.Fragment key={i}>
-                <ReplyLink post={{no: quoteRef, com: "", time: 0}} isRemote={true} isInCom={true}></ReplyLink>{text && <Text as='span'>{' '+text}</Text>}
+                <ReplyLink post={{id: quoteRef, no: "", com: "", time: 0}} isRemote={true} isInCom={true} />{text && <Text as='span'>{' '+text}</Text>}
               </React.Fragment>
       } else {
         // We restore whatever this was
@@ -78,7 +78,7 @@ function isGreentext(line: string) {
   export function processComs(thread: IThread) {
     const processed: IProcessedThread = {replies: {}, posts: [], postsByRef: {}}
     for (let post of thread.posts) {
-      processed.postsByRef[post.no.slice(-16)] = post
+      processed.postsByRef[post.no] = post
     }
     const quoteCallback = (post: IPost, quoteRef: string) => {
       // Doesn't look like a quoteref (will need to do more verification here eventually)

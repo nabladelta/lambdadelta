@@ -37,9 +37,8 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
 
     const [imageWide, setImageWide] = useState(false)
     const {hash} = useLocation()
-    const shortCode = post.no.slice(-16)
-    const isHighlighted = highlight == shortCode 
-    const isInURI = decodeURI(hash) == `#p${shortCode}`
+    const isHighlighted = highlight == post.no
+    const isInURI = hash == `#p${post.no}`
 
     function imageClick(e: any) {
         e.preventDefault()
@@ -47,7 +46,7 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
     }
     return (
         <Card
-            id={`p${shortCode}`}
+            id={`p${post.no}`}
             bg={ isHighlighted || isInURI ? (isHighlighted && isInURI ? "whiteAlpha.100" : "whiteAlpha.50") : undefined}
             direction={{ base: 'column', sm: 'row' }}
             overflow='hidden'
@@ -81,7 +80,7 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
                         {post.sub && <Text noOfLines={2} as='b'>{post.sub}</Text>}
                         <Text as='b' noOfLines={1}>{post.name || "Anonymous"}</Text>
                         <Text>{dateString}</Text>
-                        <Text><Link _hover={{color: 'red'}} href={`#p${shortCode}`}>No.</Link> {shortCode}</Text>
+                        <Text><Link _hover={{color: 'red'}} href={`#p${post.no}`}>No.</Link> {post.no}</Text>
                         {replies && <HStack spacing={2}>{Array.from(replies).map((p, i) => <ReplyLink key={i} post={p}></ReplyLink>)}</HStack>}
                     </HStack>
                 </CardHeader>
@@ -107,11 +106,10 @@ export default Post
 
 export function ReplyLink({post, isInCom, isRemote}: {post: IPost, isInCom?: boolean, isRemote?: boolean}) {
     const setHighlight = useContext(HighlightContext)
-    const shortCode = post.no.slice(-16)
     async function mouseEnter() {
-        const postElement = document.getElementById(`p${shortCode}`)
+        const postElement = document.getElementById(`p${post.no}`)
         if (postElement && isElementInViewport(postElement)) {
-            if (setHighlight) setHighlight(shortCode)
+            if (setHighlight) setHighlight(post.no)
         } else {
             // Fetch if remote and not yet fetched
             if (isRemote && !remotePost && board) {
@@ -150,8 +148,8 @@ export function ReplyLink({post, isInCom, isRemote}: {post: IPost, isInCom?: boo
                 onMouseEnter={mouseEnter} onMouseLeave={mouseLeave} 
                 _hover={{color: 'red'}}
                 target={isRemote ? "_blank" : undefined} 
-                href={isRemote ? `/${board}/thread/${post.no}` : `#p${shortCode}`}
-                >&gt;&gt;{isRemote ? `>${post.no}` : shortCode}</Link>
+                href={isRemote ? `/${board}/thread/${post.id}` : `#p${post.no}`}
+                >&gt;&gt;{isRemote ? `>${post.id}` : post.no}</Link>
             </PopoverTrigger>
             <Portal>
                 <PopoverContent boxSize={'100%'}>

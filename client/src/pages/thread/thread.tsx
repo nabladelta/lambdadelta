@@ -89,7 +89,7 @@ function ThreadPage() {
     </HStack>
     <HighlightContext.Provider value={setHighlight}>
     <VStack align="flex-start" spacing={8}>
-      {data.posts.map(p => <Post key={p.no} post={p as any} replies={data.replies[p.no.slice(-16)]} highlight={highlight} />)}
+      {data.posts.map(p => <Post key={p.no} post={p as any} replies={data.replies[p.no]} highlight={highlight} />)}
     </VStack>
     </HighlightContext.Provider>
     <HStack id={'bottom'} spacing={6}>
