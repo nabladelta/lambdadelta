@@ -5,6 +5,7 @@ import { TypedEmitter } from 'tiny-typed-emitter'
 import { ThreadEvents } from './types/events'
 import Autobase from 'autobase'
 import { Keystorage } from './keystorage'
+import crypto from 'crypto'
 
 export class Thread extends TypedEmitter<ThreadEvents> {
   public tid: string
@@ -101,7 +102,8 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   public async getOp(timeout?: number) {
     const op: IPost = Thread.deserialize(await this.opCore.get(0, {timeout}))
-    op.no = this.tid
+    op.id = this.tid
+    op.no = op.id.slice(16)
     return op
   }
 
@@ -115,7 +117,8 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
           const pBatch = batch.map((node) => {
             const post: IPost = Thread.deserialize(node.value)
-            post.no = node.id + '>' + node.seq
+            post.id = node.id + '-' + node.seq.toString(16)
+            post.no = crypto.createHash('sha256').update(post.id).digest('hex').slice(16)
             return Thread.serialize(post)
           })
           await view.append(pBatch)
