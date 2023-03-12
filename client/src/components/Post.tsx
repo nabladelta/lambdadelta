@@ -118,10 +118,8 @@ export function ReplyLink({post, isInCom, isRemote}: {post: IPost, isInCom?: boo
                     console.log('Fetched remote post')
                     const thread = await fetchThread(board, post.id)
                     const op = thread.posts[0]
-                    op.parsedCom = processCom(op.com, (quoteRef: string) => {
-                        if (quoteRef.length != 16) return false
-                        return op
-                    })
+                    // We presume quotelinks are impossible on an OP
+                    op.parsedCom = processCom(op.com, (quoteRef: string) => false)
                     setRemotePost(op)
                 } catch (e) {
                     return
