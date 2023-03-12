@@ -9,7 +9,7 @@ import { Routes, Route } from 'react-router-dom'
 import ThreadPage from "./pages/thread/thread"
 import Catalog from "./pages/board/catalog"
 import theme from "./theme"
-import BoardList from "./components/BoardList"
+import BoardList from "./components/ListBoards"
 import Home from "./pages/home/home"
 
 export const App = () => (
