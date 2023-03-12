@@ -31,7 +31,7 @@ import { HighlightContext } from '../pages/thread/thread'
 import { fetchThread } from '../app/posts'
 import { processCom } from './comParser'
 
-function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, highlight?: string}) {
+function Post({post, replies, highlight, quote}: {post: IPost, replies?: Set<IPost>, highlight?: string, quote?: (no: string)=> void}) {
     const dateString = useMemo(()=> {
         return getPostDateString(post.time)
     }, [post.time])
@@ -44,6 +44,10 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
     function imageClick(e: any) {
         e.preventDefault()
         setImageWide((s)=> !s)
+    }
+    function quoteClick(e: any) {
+        e.preventDefault()
+        if (quote) quote(post.no)
     }
     return (
         <Card
@@ -81,7 +85,7 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
                         {post.sub && <Text noOfLines={2} as='b'>{post.sub}</Text>}
                         <Text as='b' noOfLines={1}>{post.name || "Anonymous"}</Text>
                         <Text>{dateString}</Text>
-                        <Text><Link _hover={{color: 'red'}} href={`#p${post.no}`}>No.</Link> {post.no}</Text>
+                        <Text><Link _hover={{color: 'red'}} href={`#p${post.no}`}>No.</Link> <Link href='#' onClick={quoteClick} _hover={{color: 'red'}}>{post.no}</Link></Text>
                         {replies && <HStack spacing={2}>{Array.from(replies).map((p, i) => <ReplyLink key={i} post={p}></ReplyLink>)}</HStack>}
                     </HStack>
                 </CardHeader>

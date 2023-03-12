@@ -21,6 +21,7 @@ import { truncateText } from '../../utils/utils'
 
 export const HighlightContext = React.createContext<React.Dispatch<React.SetStateAction<string | undefined>> | undefined>(undefined);
 
+
 function ThreadPage() {
   const toast = useToast()
   const [data, setData] = useState<IProcessedThread>({posts: [], replies: {}, postsByRef: {}})
@@ -58,18 +59,21 @@ function ThreadPage() {
       })
       setData(processComs(response))
       onClose()
+      return true
     } catch (e) {
       toast({
         title: (e as Error).message,
         status: 'error',
         duration: 2000,
       })
+      return false
     }
   }
 
   const { isOpen, onOpen, onClose } = useDisclosure()
 
   const [highlight, setHighlight] = useState<string | undefined>()
+  const [quote, setQuote] = useState<(no: string) => void>()
   return (
     <VStack align="flex-start" spacing={8} marginBottom={isOpen ? 450 : 0}>
     <HStack id={'top'} spacing={6}>
@@ -90,7 +94,7 @@ function ThreadPage() {
     </HStack>
     <HighlightContext.Provider value={setHighlight}>
     <VStack align="flex-start" spacing={8}>
-      {data.posts.map(p => <Post key={p.no} post={p as any} replies={data.replies[p.no]} highlight={highlight} />)}
+      {data.posts.map(p => <Post key={p.no} post={p as any} replies={data.replies[p.no]} highlight={highlight} quote={quote} />)}
     </VStack>
     </HighlightContext.Provider>
     <HStack id={'bottom'} spacing={6}>
@@ -109,7 +113,7 @@ function ThreadPage() {
           <IconButton aria-label='Reply' icon={<ChatIcon />} {...buttonStyle} onClick={onOpen} />
         </Tooltip>
     </HStack>
-    <Reply isOpen={isOpen} onClose={onClose} onPost={post} />
+    <Reply isOpen={isOpen} onClose={onClose} onOpen={onOpen} onPost={post} setQuote={setQuote} />
     </VStack>
   )
 }

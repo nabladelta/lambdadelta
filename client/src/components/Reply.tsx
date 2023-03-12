@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import {
   ChakraProvider,
   Box,
@@ -16,23 +16,17 @@ import {
   IconButton,
   FormHelperText,
   Flex,
-  Spacer
+  Spacer,
+  Slide,
+  VStack
 } from "@chakra-ui/react"
 
-import {
-    Drawer,
-    DrawerBody,
-    DrawerFooter,
-    DrawerHeader,
-    DrawerOverlay,
-    DrawerContent,
-    DrawerCloseButton,
-  } from '@chakra-ui/react'
 import { useForm } from 'react-hook-form'
 
 import FileUpload from './FileUpload'
-import { FiFile } from 'react-icons/fi'
 import { getFileData } from '../utils/utils'
+import { CloseIcon } from '@chakra-ui/icons'
+import { buttonStyle } from '../pages/board/catalog'
 
 
 type ModelElement = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -58,8 +52,11 @@ function useModel<E extends ModelElement>(
     return { model, setModel: setValue }
 }
 
-function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, onClose: () => void, onPost: (data: {post: IPost, attachments: IFileData[]}) => void}) {
-    const { register, formState: {errors}, getValues } = useForm<FormValues>()
+function Reply({isOpen, onOpen, onClose, onPost, op, setQuote}: { onOpen?: () => void, setQuote?: React.Dispatch<React.SetStateAction<((no: string) => void) | undefined>>, op?: boolean, isOpen: boolean, onClose: () => void, onPost: (data: {post: IPost, attachments: IFileData[]}) => Promise<boolean | void>}) {
+    const { register, formState: {errors}, getValues, setValue, reset } = useForm<FormValues>({
+            mode:'onBlur',
+            defaultValues: { name: '', com: '', sub: '' }
+            })
     const [filename, setFilename] = useState<string|undefined>()
 
     async function submit() {
@@ -69,8 +66,7 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
         if (file) {
             attachments.push(await getFileData(file))
         }
-        console.log(formData.name, formData.sub, formData.com)
-        onPost({
+        const res = await onPost({
             attachments,
             post: {
                 no: "",
@@ -80,6 +76,12 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
                 sub: op ? formData.sub || undefined : undefined,
                 name: formData.name || undefined,
         }})
+        if (res) {
+            console.log('reset')
+            reset()
+            if (inputRef.current) inputRef.current.value = ''
+            setFilename('')
+        }
     }
 
     const onFileChange = (_: any) => {
@@ -106,69 +108,98 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
         return true
     }
 
+    function addText(text: string) {
+        const currentCom = getValues().com
+        setValue("com", currentCom+text)
+    }
+
+    function cleanQuote(line: string) {
+        // Avoid turning greentext into quotelinks
+        if (line.startsWith('>')) return '> '+line
+        else return '>'+line
+    }
+
+    function buildQuote(no: string, quotedText: string) {
+        return (['\n>>'+no].concat(quotedText.split('\n').map(l => l.length > 0 ? cleanQuote(l) : ''))).join('\n')
+    }
+
+    function quote(no: string) {
+        console.log('Quoting ', no)
+        const selectedText = document.getSelection()?.toString() || ''
+        const quote = buildQuote(no, selectedText)
+        addText(quote)
+        if (onOpen) onOpen()
+    }
+
+    useEffect(()=> {
+        if (setQuote) setQuote(() => quote)
+    }, [])
+
+    const inputRef = useRef<HTMLInputElement | null>(null)
+
     return (
-        <Drawer
-            isOpen={isOpen}
-            placement='bottom'
-            onClose={onClose}
-            size={'md'}
-            variant={'alwaysOpen'}
-            trapFocus={false}
-            closeOnOverlayClick={false}
-            blockScrollOnMount={false}
+        <Slide
+            in={isOpen}
+            direction='bottom'
+            style={{ zIndex: 10 }}
         >
-            {/* <DrawerOverlay /> */}
-            <DrawerContent >
-                <DrawerCloseButton />
-                <DrawerHeader borderBottomWidth='1px'>New post</DrawerHeader>
-                <DrawerBody>
-                    <Stack spacing='24px'>
-                        <FormControl maxW={'35rem'} isInvalid={!!errors.name}>
-                            <FormLabel htmlFor='name'>Name</FormLabel>
-                            <Input id='name' placeholder='Anonymous' 
-                                {...register("name", {maxLength: 128})}
-                            />
-                            <FormErrorMessage>{errors.name && errors?.name.message}</FormErrorMessage>
-                        </FormControl>
-
-                        {op &&
-                        <FormControl maxW={'35rem'} isInvalid={!!errors.sub} >
-                            <FormLabel htmlFor='sub'>Subject</FormLabel>
-                            <Input id='sub'
-                                {...register("sub", {maxLength: 128})}
-                            />
-                            <FormErrorMessage>{errors.sub && errors?.sub.message}</FormErrorMessage>
-                        </FormControl>}
-
-                        <FormControl isInvalid={!!errors.com} >
-                            <FormLabel htmlFor='desc'>Comment</FormLabel>
-                            <Textarea 
-                                {...register("com", {maxLength: 4096})}
-                            />
-                            <FormErrorMessage>{errors.com && errors?.com.message}</FormErrorMessage>
-                        </FormControl>
-
-                        <FormControl isInvalid={!!errors.file_} >
-                            <FileUpload
-                                buttonText={filename ? 'Change File' : 'Upload'}
-                                accept={'image/jpeg, image/png, image/gif, image/webp, image/avif, image/tiff, image/svg, video/mp4, video/webm'}
-                                multiple
-                                register={register('file_', { validate: validateFiles, onChange: onFileChange, })}
-                            />
-                            <FormHelperText>{filename ? filename : 'Video or image. Up to 5MiB accepted.' }</FormHelperText>
-                            <FormErrorMessage>{errors.file_ && errors?.file_.message}</FormErrorMessage>
-                        </FormControl>
-                    </Stack>
-                </DrawerBody>
-                <DrawerFooter borderTopWidth='1px'>
+            <Box
+                p='20px'
+                color='white'
+                mt='4'
+                bg='gray.700'
+                rounded='md'
+                shadow='md'
+            >
+                <Stack spacing='24px'>
                     <Flex>
+                        <Heading>{op ? "New Thread" : "New post"}</Heading>
+                        <Spacer/>
+                        <IconButton aria-label='Close' onClick={onClose} {...buttonStyle} icon={<CloseIcon />} />
+                    </Flex>
+                    <FormControl maxW={'35rem'} isInvalid={!!errors.name}>
+                        <FormLabel htmlFor='name'>Name</FormLabel>
+                        <Input id='name' placeholder='Anonymous' 
+                            {...register("name", {maxLength: 128})}
+                        />
+                        <FormErrorMessage>{errors.name && errors?.name.message}</FormErrorMessage>
+                    </FormControl>
+
+                    {op &&
+                    <FormControl maxW={'35rem'} isInvalid={!!errors.sub} >
+                        <FormLabel htmlFor='sub'>Subject</FormLabel>
+                        <Input id='sub'
+                            {...register("sub", {maxLength: 128})}
+                        />
+                        <FormErrorMessage>{errors.sub && errors?.sub.message}</FormErrorMessage>
+                    </FormControl>}
+
+                    <FormControl isInvalid={!!errors.com} >
+                        <FormLabel htmlFor='desc'>Comment</FormLabel>
+                        <Textarea 
+                            {...register("com", {maxLength: 4096})}
+                        />
+                        <FormErrorMessage>{errors.com && errors?.com.message}</FormErrorMessage>
+                    </FormControl>
+
+                    <FormControl isInvalid={!!errors.file_} >
+                        <FileUpload
+                            inputRef={inputRef}
+                            buttonText={filename ? 'Change File' : 'Upload'}
+                            accept={'image/jpeg, image/png, image/gif, image/webp, image/avif, image/tiff, image/svg, video/mp4, video/webm'}
+                            multiple
+                            register={register('file_', { validate: validateFiles, onChange: onFileChange, })}
+                        />
+                        <FormHelperText>{filename ? filename : 'Video or image. Up to 5MiB accepted.' }</FormHelperText>
+                        <FormErrorMessage>{errors.file_ && errors?.file_.message}</FormErrorMessage>
+                    </FormControl>
+                    <Flex maxW={'35rem'}>
                         <Button variant='outline' mr={3} onClick={onClose}>Close</Button>
                         <Button colorScheme={'gray'} onClick={submit}>Post</Button>
                     </Flex>
-                    <Spacer/>
-                </DrawerFooter>
-            </DrawerContent>
-        </Drawer>
+                </Stack>
+            </Box>
+        </Slide>
     )
 }
 

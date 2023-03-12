@@ -9,11 +9,11 @@ type FileUploadProps = {
   accept?: string
   multiple?: boolean
   children?: ReactNode
+  inputRef: React.MutableRefObject<HTMLInputElement | null>
 }
 
 const FileUpload = (props: FileUploadProps) => {
-  const { register, accept, multiple, children } = props
-  const inputRef = useRef<HTMLInputElement | null>(null)
+  const { register, accept, multiple, children, inputRef } = props
   const { ref, ...rest } = register as {ref: (instance: HTMLInputElement | null) => void}
 
   const handleClick = () => inputRef.current?.click()
