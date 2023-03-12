@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useContext, useEffect, useMemo, useState } from 'react'
 import {
   ChakraProvider,
   Box,
@@ -27,8 +27,9 @@ import { CardHeader, CardBody, CardFooter } from '@chakra-ui/react'
 import { API_URL } from '../constants'
 import { formatBytes, getPostDateString, isElementInViewport, isVideo, truncateText } from '../utils/utils'
 import { useLocation } from 'react-router-dom'
+import { HighlightContext } from '../pages/thread/thread'
 
-function Post({post, replies, highlight, setHighlight}: {post: IPost, replies?: Set<IPost>, highlight: string | undefined, setHighlight?: React.Dispatch<React.SetStateAction<string | undefined>>}) {
+function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, highlight?: string}) {
     const dateString = useMemo(()=> {
         return getPostDateString(post.time)
     }, [post.time])
@@ -36,7 +37,7 @@ function Post({post, replies, highlight, setHighlight}: {post: IPost, replies?: 
     const [imageWide, setImageWide] = useState(false)
     const {hash} = useLocation()
     const shortCode = post.no.slice(-16)
-    const isHighlighted = setHighlight && ( highlight == shortCode || decodeURI(hash) == `#p${shortCode}` )
+    const isHighlighted = highlight == shortCode || decodeURI(hash) == `#p${shortCode}`
 
     function imageClick(e: any) {
         e.preventDefault()
@@ -79,7 +80,7 @@ function Post({post, replies, highlight, setHighlight}: {post: IPost, replies?: 
                         <Text as='b' noOfLines={1}>{post.name || "Anonymous"}</Text>
                         <Text>{dateString}</Text>
                         <Text><Link _hover={{color: 'red'}} href={`#p${shortCode}`}>No.</Link> {shortCode}</Text>
-                        {replies && <HStack spacing={2}>{Array.from(replies).map((p) => <ReplyLink post={p} setHighlight={setHighlight}></ReplyLink>)}</HStack>}{/*<Text fontSize='sm' as='u'>&gt;&gt;Z55ASQDFBS7FFQ</Text>*/}
+                        {replies && <HStack spacing={2}>{Array.from(replies).map((p, i) => <ReplyLink key={i} post={p}></ReplyLink>)}</HStack>}
                     </HStack>
                 </CardHeader>
                 <CardBody>
@@ -88,7 +89,11 @@ function Post({post, replies, highlight, setHighlight}: {post: IPost, replies?: 
 
                 <CardFooter>
                     <HStack spacing={7}>
-                        {post.filename && <Tooltip label={`${post.filename}${post.ext}`}><Text as='i'>File: <a href={`${API_URL}/file/${post.tim}${post.ext}`} target='_blank'>{`${truncateText(post.filename, 24)}${post.ext}`}</a></Text></Tooltip>}{post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}
+                        {post.filename && 
+                        <Tooltip label={`${post.filename}${post.ext}`}>
+                            <Text as='i'>File: <a href={`${API_URL}/file/${post.tim}${post.ext}`} target='_blank'>{`${truncateText(post.filename, 24)}${post.ext}`}</a></Text>
+                        </Tooltip>}
+                        {post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}
                     </HStack>
                 </CardFooter>
             </Stack>
@@ -98,7 +103,8 @@ function Post({post, replies, highlight, setHighlight}: {post: IPost, replies?: 
 
 export default Post
 
-export function ReplyLink({post, setHighlight, isInCom}: {post: IPost, isInCom?: boolean, setHighlight?: React.Dispatch<React.SetStateAction<string | undefined>>}) {
+export function ReplyLink({post, isInCom, hrefOverride}: {post: IPost, isInCom?: boolean, hrefOverride?: string}) {
+    const setHighlight = useContext(HighlightContext)
     const shortCode = post.no.slice(-16)
     function mouseEnter() {
         const postElement = document.getElementById(`p${shortCode}`)
@@ -117,13 +123,12 @@ export function ReplyLink({post, setHighlight, isInCom}: {post: IPost, isInCom?:
     return (
         <Popover isOpen={isOpen} onClose={() => setIsOpen(false)} trigger='hover' openDelay={0} closeDelay={0} isLazy>
         <PopoverTrigger>
-            
-            <Link {...(isInCom ? {color: 'red.500'} : {fontSize: 'sm'})} textDecoration={'underline'}  onMouseEnter={mouseEnter} onMouseLeave={mouseLeave}  _hover={{color: 'red'}} href={`#p${shortCode}`}>&gt;&gt;{shortCode}</Link>
+            <Link {...(isInCom ? {color: 'red.500'} : {fontSize: 'sm'})} textDecoration={'underline'}  onMouseEnter={mouseEnter} onMouseLeave={mouseLeave}  _hover={{color: 'red'}} target={hrefOverride ? "_blank" : undefined} href={hrefOverride ? hrefOverride : `#p${shortCode}`}>&gt;&gt;{shortCode}</Link>
         </PopoverTrigger>
         <Portal>
         <PopoverContent boxSize={'100%'}>
         <Box fontSize="xl">
-            <Post post={post} highlight={undefined}></Post>
+            <Post post={post}></Post>
         </Box>
         </PopoverContent>
         </Portal>

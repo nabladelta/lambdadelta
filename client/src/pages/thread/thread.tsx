@@ -9,7 +9,7 @@ import {
   useDisclosure
 } from "@chakra-ui/react"
 import { ArrowBackIcon, ArrowDownIcon, ArrowUpIcon, RepeatClockIcon, ChatIcon } from '@chakra-ui/icons'
-import Post from '../../components/Post'
+import Post, { ReplyLink } from '../../components/Post'
 import { Link, useParams } from 'react-router-dom'
 import { useToast } from '@chakra-ui/react'
 import Reply from '../../components/Reply'
@@ -21,6 +21,27 @@ function isGreentext(line: string) {
   if (line[0] == '>' && line[1] != '>') return true
 
   return false
+}
+
+function handleThreadLinks(text: string) {
+  const firstLink = text.indexOf('>>>')
+  if (firstLink == -1) return text
+  return <>{text.split('>>>').map((quoteText, i) => {
+    // Handle special case of first text section, which might not have a quotelink
+    if (firstLink != 0 && i == 0) return <React.Fragment key={i}>{quoteText}</React.Fragment>
+    if (!quoteText || !quoteText.length) return
+    const firstSpace = quoteText.indexOf(' ')
+    // No space means there is no text
+    const quoteRef = firstSpace != -1 ? quoteText.slice(0, firstSpace) : quoteText
+    const text = firstSpace != -1 ? quoteText.slice(firstSpace) : undefined
+    if (quoteRef.length == 64) {
+      // Valid quotelink, create the corresponding element
+      return <React.Fragment key={i}><ReplyLink post={{no: quoteRef, com: "test", time: 0}} isInCom={true}></ReplyLink>{text && <Text as='span'>{' '+text}</Text>}</React.Fragment>
+    } else {
+      // We restore whatever this was
+      return <React.Fragment key={i}>{'>>'+quoteText}</React.Fragment>
+    }
+  })}</>
 }
 
 function handleQuoteLinks(line: string, quoteCallback: (quoteRef: string) => IPost | false) {
@@ -37,7 +58,7 @@ function handleQuoteLinks(line: string, quoteCallback: (quoteRef: string) => IPo
     const res = quoteCallback(quoteRef)
     if (res) {
       // Valid quotelink, create the corresponding element
-      return <React.Fragment key={i}><CLink textDecoration={'underline'} color={'red.500'} href={`#p${quoteRef}`}>&gt;&gt;{quoteRef}</CLink>{text && <Text as='span'>{' '+text}</Text>}</React.Fragment>
+      return <React.Fragment key={i}><ReplyLink post={res} isInCom={true}></ReplyLink>{text && <Text as='span'>{' '+text}</Text>}</React.Fragment>
     } else {
       // We restore whatever this was
       return <React.Fragment key={i}>{'>>'+quoteText}</React.Fragment>
@@ -60,9 +81,10 @@ export function processComs(thread: IThread) {
     processed.postsByRef[post.no.slice(-16)] = post
   }
   const quoteCallback = (post: IPost, quoteRef: string) => {
-    if (!processed.replies[quoteRef]) processed.replies[quoteRef] = new Set<IPost>
     // Doesn't look like a quoteref (will need to do more verification here eventually)
     if (quoteRef.length != 16) return false
+
+    if (!processed.replies[quoteRef]) processed.replies[quoteRef] = new Set<IPost>
     processed.replies[quoteRef].add(post)
     return processed.postsByRef[quoteRef]
   }
@@ -77,6 +99,8 @@ export function processComs(thread: IThread) {
   }
   return processed
 }
+
+export const HighlightContext = React.createContext<React.Dispatch<React.SetStateAction<string | undefined>> | undefined>(undefined);
 
 function ThreadPage() {
   const toast = useToast()
@@ -145,9 +169,11 @@ function ThreadPage() {
         <IconButton aria-label='Reply' icon={<ChatIcon />} {...buttonStyle} onClick={onOpen} />
       </Tooltip>
     </HStack>
+    <HighlightContext.Provider value={setHighlight}>
     <VStack align="flex-start" spacing={8}>
-      {data.posts.map(p => <Post key={p.no} post={p as any} replies={data.replies[p.no.slice(-16)]} highlight={highlight} setHighlight={setHighlight}/>)}
+      {data.posts.map(p => <Post key={p.no} post={p as any} replies={data.replies[p.no.slice(-16)]} highlight={highlight} />)}
     </VStack>
+    </HighlightContext.Provider>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>
           <Link to={`/${board}/catalog`} ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
