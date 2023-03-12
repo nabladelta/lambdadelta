@@ -57,12 +57,14 @@ function Catalog() {
         duration: 1500,
       })
       onClose()
+      return true
     } catch (e) {
       toast({
         title: (e as Error).message,
         status: 'error',
         duration: 2000,
       })
+      return false
     }
   }
 
