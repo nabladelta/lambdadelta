@@ -49,25 +49,25 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
         <Card
             id={`p${post.no}`}
             bg={ isHighlighted || isInURI ? (isHighlighted && isInURI ? "whiteAlpha.100" : "whiteAlpha.50") : undefined}
-            direction={{ base: 'column', sm: 'row' }}
+            direction={{ base: 'row', sm: "column", md: "column", lg: "column", xl: "row"  }}
             overflow='hidden'
             variant='outline'>
                 {post.tim && !isVideo(post) &&
-
                 <a href={`${API_URL}/file/${post.tim}${post.ext}`} target='_blank' onClick={imageClick}>
                     <Image
-                    objectFit='contain'
-                    boxSize={imageWide ? post.h : undefined}
-                    maxW={imageWide ? { base: '100%', sm: `512px` } : { base: '150%', sm: `1024px` }}
-                    src={imageWide ? `${API_URL}/file/${post.tim}${post.ext}` : `${API_URL}/thumb/${post.tim}.jpg`}
-                    alt={`${post.filename}${post.ext}`} />
-
+                        objectFit='contain'
+                        // boxSize={imageWide ? post.h : undefined}
+                        // maxW={imageWide ? '512px' : '100%'}
+                        src={imageWide ? `${API_URL}/file/${post.tim}${post.ext}` : `${API_URL}/thumb/${post.tim}.jpg`}
+                        alt={`${post.filename}${post.ext}`}
+                    />
                 </a>}
                 {post.tim && isVideo(post) &&
                     <Box
                         as='video'
                         controls
                         loop={true}
+                        maxW={'512px'}
                         src={`${API_URL}/file/${post.tim}${post.ext}`}
                         title={`${post.filename}${post.ext}`}
                         objectFit='contain'
@@ -75,7 +75,7 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
                             aspectRatio: `${post.h}/${post.w}`
                         }}
                     />}
-            <Stack>
+            <Stack flex={1}>
                 <CardHeader>
                     <HStack spacing={7}>
                         {post.sub && <Text noOfLines={2} as='b'>{post.sub}</Text>}
