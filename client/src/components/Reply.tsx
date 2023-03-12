@@ -110,6 +110,9 @@ function Reply({isOpen, onOpen, onClose, onPost, op, setQuote}: { onOpen?: () =>
 
     function addText(text: string) {
         const currentCom = getValues().com
+        if (currentCom.length > 0 && !currentCom.endsWith('\n')) {
+            text = '\n'+text
+        }
         setValue("com", currentCom+text)
     }
 
@@ -120,7 +123,7 @@ function Reply({isOpen, onOpen, onClose, onPost, op, setQuote}: { onOpen?: () =>
     }
 
     function buildQuote(no: string, quotedText: string) {
-        return (['\n>>'+no].concat(quotedText.split('\n').map(l => l.length > 0 ? cleanQuote(l) : ''))).join('\n')
+        return (['>>'+no].concat(quotedText.split('\n').map(l => l.length > 0 ? cleanQuote(l) : ''))).join('\n')
     }
 
     function quote(no: string) {
