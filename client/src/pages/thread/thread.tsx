@@ -36,10 +36,12 @@ function handleThreadLinks(text: string) {
     const text = firstSpace != -1 ? quoteText.slice(firstSpace) : undefined
     if (quoteRef.length == 64) {
       // Valid quotelink, create the corresponding element
-      return <React.Fragment key={i}><ReplyLink post={{no: quoteRef, com: "test", time: 0}} isInCom={true}></ReplyLink>{text && <Text as='span'>{' '+text}</Text>}</React.Fragment>
+      return <React.Fragment key={i}>
+              <ReplyLink post={{no: quoteRef, com: "", time: 0}} isRemote={true} isInCom={true}></ReplyLink>{text && <Text as='span'>{' '+text}</Text>}
+            </React.Fragment>
     } else {
       // We restore whatever this was
-      return <React.Fragment key={i}>{'>>'+quoteText}</React.Fragment>
+      return <React.Fragment key={i}>{'>>>'+quoteText}</React.Fragment>
     }
   })}</>
 }
@@ -58,10 +60,12 @@ function handleQuoteLinks(line: string, quoteCallback: (quoteRef: string) => IPo
     const res = quoteCallback(quoteRef)
     if (res) {
       // Valid quotelink, create the corresponding element
-      return <React.Fragment key={i}><ReplyLink post={res} isInCom={true}></ReplyLink>{text && <Text as='span'>{' '+text}</Text>}</React.Fragment>
+      return <React.Fragment key={i}>
+              <ReplyLink post={res} isInCom={true}></ReplyLink>{text && <Text as='span'>{' '+text}</Text>}
+            </React.Fragment>
     } else {
       // We restore whatever this was
-      return <React.Fragment key={i}>{'>>'+quoteText}</React.Fragment>
+      return <React.Fragment key={i}>{handleThreadLinks('>>'+quoteText)}</React.Fragment>
     }
   })}</>
 }

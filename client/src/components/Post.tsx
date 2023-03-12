@@ -26,8 +26,9 @@ import {
 import { CardHeader, CardBody, CardFooter } from '@chakra-ui/react'
 import { API_URL } from '../constants'
 import { formatBytes, getPostDateString, isElementInViewport, isVideo, truncateText } from '../utils/utils'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useParams } from 'react-router-dom'
 import { HighlightContext } from '../pages/thread/thread'
+import { fetchThread } from '../app/posts'
 
 function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, highlight?: string}) {
     const dateString = useMemo(()=> {
@@ -103,14 +104,24 @@ function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, hi
 
 export default Post
 
-export function ReplyLink({post, isInCom, hrefOverride}: {post: IPost, isInCom?: boolean, hrefOverride?: string}) {
+export function ReplyLink({post, isInCom, isRemote}: {post: IPost, isInCom?: boolean, isRemote?: boolean}) {
     const setHighlight = useContext(HighlightContext)
     const shortCode = post.no.slice(-16)
-    function mouseEnter() {
+    async function mouseEnter() {
         const postElement = document.getElementById(`p${shortCode}`)
         if (postElement && isElementInViewport(postElement)) {
             if (setHighlight) setHighlight(shortCode)
         } else {
+            // Fetch if remote and not yet fetched
+            if (isRemote && !remotePost && board) {
+                try {
+                    console.log('Fetched remote post')
+                    const thread = await fetchThread(board, post.no)
+                    setRemotePost(thread.posts[0])
+                } catch (e) {
+                    return
+                }
+            }
             setIsOpen(true)
         }
     }
@@ -120,18 +131,34 @@ export function ReplyLink({post, isInCom, hrefOverride}: {post: IPost, isInCom?:
     }
     const [isOpen, setIsOpen] = useState(false)
 
+    const { board } = useParams()
+    const [remotePost, setRemotePost] = useState<IPost | undefined>()
+
     return (
-        <Popover isOpen={isOpen} onClose={() => setIsOpen(false)} trigger='hover' openDelay={0} closeDelay={0} isLazy>
-        <PopoverTrigger>
-            <Link {...(isInCom ? {color: 'red.500'} : {fontSize: 'sm'})} textDecoration={'underline'}  onMouseEnter={mouseEnter} onMouseLeave={mouseLeave}  _hover={{color: 'red'}} target={hrefOverride ? "_blank" : undefined} href={hrefOverride ? hrefOverride : `#p${shortCode}`}>&gt;&gt;{shortCode}</Link>
-        </PopoverTrigger>
-        <Portal>
-        <PopoverContent boxSize={'100%'}>
-        <Box fontSize="xl">
-            <Post post={post}></Post>
-        </Box>
-        </PopoverContent>
-        </Portal>
+        <Popover
+            isOpen={isOpen} 
+            onClose={() => setIsOpen(false)}
+            trigger='hover'
+            openDelay={0} closeDelay={0}
+            isLazy
+            placement={isInCom ? 'top' : 'bottom'}
+            >
+            <PopoverTrigger>
+                <Link {...(isInCom ? {color: 'red.500'} : {fontSize: 'sm'})}
+                textDecoration={'underline'} 
+                onMouseEnter={mouseEnter} onMouseLeave={mouseLeave} 
+                _hover={{color: 'red'}}
+                target={isRemote ? "_blank" : undefined} 
+                href={isRemote ? `/${board}/thread/${post.no}` : `#p${shortCode}`}
+                >&gt;&gt;{isRemote ? `>${post.no}` : shortCode}</Link>
+            </PopoverTrigger>
+            <Portal>
+                <PopoverContent boxSize={'100%'}>
+                    <Box fontSize="xl">
+                        <Post post={isRemote && remotePost ? remotePost : post}></Post>
+                    </Box>
+                </PopoverContent>
+            </Portal>
         </Popover>
     )
 }
