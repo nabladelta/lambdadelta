@@ -29,6 +29,7 @@ import { formatBytes, getPostDateString, isElementInViewport, isVideo, truncateT
 import { useLocation, useParams } from 'react-router-dom'
 import { HighlightContext } from '../pages/thread/thread'
 import { fetchThread } from '../app/posts'
+import { processCom } from './comParser'
 
 function Post({post, replies, highlight}: {post: IPost, replies?: Set<IPost>, highlight?: string}) {
     const dateString = useMemo(()=> {
@@ -115,8 +116,13 @@ export function ReplyLink({post, isInCom, isRemote}: {post: IPost, isInCom?: boo
             if (isRemote && !remotePost && board) {
                 try {
                     console.log('Fetched remote post')
-                    const thread = await fetchThread(board, post.no)
-                    setRemotePost(thread.posts[0])
+                    const thread = await fetchThread(board, post.id)
+                    const op = thread.posts[0]
+                    op.parsedCom = processCom(op.com, (quoteRef: string) => {
+                        if (quoteRef.length != 16) return false
+                        return op
+                    })
+                    setRemotePost(op)
                 } catch (e) {
                     return
                 }
