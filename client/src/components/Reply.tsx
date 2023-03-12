@@ -14,7 +14,9 @@ import {
   FormControl,
   FormErrorMessage,
   IconButton,
-  FormHelperText
+  FormHelperText,
+  Flex,
+  Spacer
 } from "@chakra-ui/react"
 
 import {
@@ -141,7 +143,7 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
                         <FormControl isInvalid={!!errors.com} >
                             <FormLabel htmlFor='desc'>Comment</FormLabel>
                             <Textarea 
-                            {...register("com", {maxLength: 4096})}
+                                {...register("com", {maxLength: 4096})}
                             />
                             <FormErrorMessage>{errors.com && errors?.com.message}</FormErrorMessage>
                         </FormControl>
@@ -159,8 +161,11 @@ function Reply({isOpen, onClose, onPost, op}: {op?: boolean, isOpen: boolean, on
                     </Stack>
                 </DrawerBody>
                 <DrawerFooter borderTopWidth='1px'>
-                    <Button variant='outline' mr={3} onClick={onClose}>Close</Button>
-                    <Button colorScheme={'gray'} onClick={submit}>Post</Button>
+                    <Flex>
+                        <Button variant='outline' mr={3} onClick={onClose}>Close</Button>
+                        <Button colorScheme={'gray'} onClick={submit}>Post</Button>
+                    </Flex>
+                    <Spacer/>
                 </DrawerFooter>
             </DrawerContent>
         </Drawer>
