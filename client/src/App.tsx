@@ -18,11 +18,11 @@ export const App = () => (
       <Grid p={3}>
         <Grid templateColumns='repeat(2, 1fr)'><BoardList /><ColorModeSwitcher justifySelf="flex-end" /></Grid>
         <Box marginTop={5} marginBottom={5}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/:board/catalog" element={<Catalog />} />
-          <Route path="/:board/thread/:id" element={<ThreadPage />} />
-        </Routes>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/:board/catalog" element={<Catalog />} />
+            <Route path="/:board/thread/:id" element={<ThreadPage />} />
+          </Routes>
         </Box>
       </Grid>
     </Box>
