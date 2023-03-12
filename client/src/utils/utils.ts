@@ -42,7 +42,10 @@ export function isVideo(post: IPost) {
 export function getPostDateString(time: number) {
     const date = new Date(time * 1000)
     const weekday = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    return `${date.getDate()}/${date.getMonth()}/${date.getFullYear().toString().slice(2)}(${weekday[date.getDay()]})${date.toLocaleTimeString()}`
+    const loc = date.toLocaleDateString()
+    const yearPos = loc.lastIndexOf('/')
+    const formattedDate = loc.slice(0, yearPos+1) + date.getFullYear().toString().slice(2)
+    return `${formattedDate}(${weekday[date.getDay()]})${date.toLocaleTimeString()}`
 }
 
 export function isElementInViewport (el: HTMLElement) {
