@@ -31,6 +31,7 @@ function CatalogPost({post}:{post: IPost}) {
 
     return (
         <LinkBox as={Card}
+        maxW={'lg'}
         overflow='hidden'
         variant='outline'>
         {post.tim && !isVideo(post) &&
