@@ -4,12 +4,12 @@ WORKDIR /node
 
 COPY node/package.json node/package-lock.json ./
 
-RUN rm -rf node_modules && npm install --frozen-lockfile && npm cache clean
+RUN rm -rf node_modules && npm install --frozen-lockfile
 
 WORKDIR /client
 
 COPY client/package.json client/package-lock.json ./
-RUN rm -rf node_modules && npm install --frozen-lockfile && npm cache clean
+RUN rm -rf node_modules && npm install --frozen-lockfile
 COPY client/tsconfig.json client/src client/public /client/
 
 ENV REACT_APP_API_URL="/api"
