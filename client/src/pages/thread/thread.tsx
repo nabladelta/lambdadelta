@@ -18,9 +18,7 @@ import { fetchThread, postReply } from '../../app/posts'
 import { processComs } from '../../components/comParser'
 import { truncateText } from '../../utils/utils'
 
-
 export const HighlightContext = React.createContext<React.Dispatch<React.SetStateAction<string | undefined>> | undefined>(undefined);
-
 
 function ThreadPage() {
   const toast = useToast()
