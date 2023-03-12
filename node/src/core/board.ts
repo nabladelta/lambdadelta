@@ -94,7 +94,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     }
 
     private async announceAllInputs(streamData: {stream: any, inputAnnouncer: any}) {
-        const inputs = this.lastModified.mapValues(tid => this.threads[tid].allInputs())
+        const inputs = this.lastModified.valuesArray().map(tid => this.threads[tid].allInputs())
         await streamData.inputAnnouncer.send(inputs)
     }
 
