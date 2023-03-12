@@ -103,7 +103,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   public async getOp(timeout?: number) {
     const op: IPost = Thread.deserialize(await this.opCore.get(0, {timeout}))
     op.id = this.tid
-    op.no = op.id.slice(16)
+    op.no = op.id.slice(0, 16)
     return op
   }
 
@@ -118,7 +118,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
           const pBatch = batch.map((node) => {
             const post: IPost = Thread.deserialize(node.value)
             post.id = node.id + '-' + node.seq.toString(16)
-            post.no = crypto.createHash('sha256').update(post.id).digest('hex').slice(16)
+            post.no = crypto.createHash('sha256').update(post.id).digest('hex').slice(0, 16)
             return Thread.serialize(post)
           })
           await view.append(pBatch)
