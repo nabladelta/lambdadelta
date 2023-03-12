@@ -31,7 +31,7 @@ import { HighlightContext } from '../pages/thread/thread'
 import { fetchThread } from '../app/posts'
 import { processCom } from './comParser'
 
-function Post({post, replies, highlight, quote}: {post: IPost, replies?: Set<IPost>, highlight?: string, quote?: (no: string)=> void}) {
+function Post({post, replies, highlight, quote, isPreview}: {post: IPost, replies?: Set<IPost>, highlight?: string, isPreview?: boolean, quote?: (no: string)=> void}) {
     const dateString = useMemo(()=> {
         return getPostDateString(post.time)
     }, [post.time])
@@ -51,6 +51,8 @@ function Post({post, replies, highlight, quote}: {post: IPost, replies?: Set<IPo
     }
     return (
         <Card
+            maxW={isPreview ? '90vw': undefined}
+            maxH={isPreview ? '60vh': undefined}
             id={`p${post.no}`}
             bg={ isHighlighted || isInURI ? (isHighlighted && isInURI ? "whiteAlpha.100" : "whiteAlpha.50") : undefined}
             direction={{ base: 'row', sm: "column", md: "column", lg: "column", xl: "row"  }}
@@ -162,7 +164,7 @@ export function ReplyLink({post, isInCom, isRemote}: {post: IPost, isInCom?: boo
             <Portal>
                 <PopoverContent boxSize={'100%'}>
                     <Box fontSize="xl">
-                        <Post post={isRemote && remotePost ? remotePost : post}></Post>
+                        <Post post={isRemote && remotePost ? remotePost : post} isPreview={true} />
                     </Box>
                 </PopoverContent>
             </Portal>
