@@ -30,7 +30,7 @@ function ThreadPage() {
     try {
       const response = await fetchThread(board!, id!)
       setData(processComs(response))
-      document.title = `/${board}/ - ` + (truncateText(response.posts[0].sub, 30) || truncateText(response.posts[0].com, 30)) + ' - BBS'
+      document.title = `/${board}/ - ${(truncateText(response.posts[0].sub, 30) || truncateText(response.posts[0].com, 30))} - BBS`
       toast({
         title: 'Posts Updated',
         status: 'success',

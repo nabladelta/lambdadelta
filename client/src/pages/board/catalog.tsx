@@ -42,6 +42,7 @@ function Catalog() {
   }
 
   useEffect(() => {
+    document.title = `/${board}/ - BBS`
     updateData()
   }, [board])
 
