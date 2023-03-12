@@ -6,7 +6,8 @@ import {
   HStack,
   IconButton,
   Tooltip,
-  useDisclosure
+  useDisclosure,
+  Wrap
 } from "@chakra-ui/react"
 import { ArrowBackIcon, ArrowDownIcon, ArrowUpIcon, RepeatClockIcon, ChatIcon } from '@chakra-ui/icons'
 import { Link, useParams, useNavigate } from 'react-router-dom'
@@ -84,12 +85,12 @@ function Catalog() {
         <IconButton aria-label='New Thread' icon={<ChatIcon />} {...buttonStyle} onClick={onOpen} />
       </Tooltip>
     </HStack>
-    <SimpleGrid minChildWidth='lg' spacing='40px' >
+    <Wrap  spacing='40px' >
       {data.map(page => 
           page.threads.map(p => 
           <CatalogPost key={p.no} post={p} />
       ))}
-    </SimpleGrid>
+    </Wrap>
     <HStack id={'bottom'} spacing={6}>
       <Tooltip label='Return'>
         <Link to="/" ><IconButton aria-label='Return' icon={<ArrowBackIcon />} {...buttonStyle}/></Link>
