@@ -6,6 +6,7 @@ import { ThreadEvents } from './types/events'
 import Autobase from 'autobase'
 import { Keystorage } from './keystorage'
 import crypto from 'crypto'
+import { FILE_FETCH_TIMEOUT_MS } from '../constants'
 
 export class Thread extends TypedEmitter<ThreadEvents> {
   public tid: string
@@ -101,6 +102,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   }
 
   public async getOp(timeout?: number) {
+    timeout = timeout || FILE_FETCH_TIMEOUT_MS
     const op: IPost = Thread.deserialize(await this.opCore.get(0, {timeout}))
     op.id = this.tid
     op.no = op.id.slice(0, 16)
@@ -150,8 +152,10 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   public async getUpdatedView() {
     const view = this.base.view
+    console.log(`Begin view update for ${this.tid}`)
     await view.ready()
     await view.update()
+    console.log(`Finish view update for ${this.tid}`)
     return view
   }
 
