@@ -18,8 +18,8 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     public topic: string
     private keystore: Keystorage
     private _ready: Promise<void>
-    private lastModified: BTree<number, string> // Timestamp (ms!), ThreadId
-    private tidLastModified: Map<string, number> // ThreadId, Timestamp (ms)
+    private lastModified: BTree<number, string> // Timestamp (ms) => ThreadId
+    private tidLastModified: Map<string, number> // ThreadId => Timestamp (ms)
 
     constructor(topic: string, corestore: any) {
         super()
@@ -120,18 +120,20 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     }
 
     private async bumpThread(threadId: string, post: IPost) {
-        const currentTime = getTimestampInSeconds()
-        if (post.time > (currentTime + FUTURE_TOLERANCE_SECONDS)) {
+        const localPresentTime = getTimestampInSeconds()
+        if (post.time > (localPresentTime + FUTURE_TOLERANCE_SECONDS)) {
             return // Not bumping, post is from the future
         }
-        if (post.time < (currentTime - UPDATE_STALE_SECONDS)) {
+        if (post.time < (localPresentTime - UPDATE_STALE_SECONDS)) {
             return // Update is stale, ie, we received it too late. Ignore.
         }
 
         const lastModified = this.tidLastModified.get(threadId)
         if (!lastModified) return // Thread not on board?
 
-        let newLastModified = post.time * 1000 // Convert to ms
+        let newLastModified = ( // Even if within tolerance, we do not set lastModified to a future time.
+                post.time <= localPresentTime ? post.time : localPresentTime
+            ) * 1000 // Convert to ms
         if (lastModified > newLastModified) return // Post is from before last bump, Ignore
 
         // Bump the thread
