@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@hyperswarm/dht": "^6.5.0",
-    "autobase": "^1.0.0-alpha.8",
+    "autobase": "github:holepunchto/autobase",
     "chalk": "^5.2.0",
     "corestore": "^6.5.1",
     "cors": "^2.8.5",

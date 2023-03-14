@@ -46,7 +46,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
           throw new Error(`Failed to fetch OP in 1000ms for ${tid}`)
         }
         // Timestamp is not in the future, 60 second tolerance
-        if (this.op?.time && this.op.time < getTimestampInSeconds() + 60) {
+        if (this.op?.time && this.op.time < (getTimestampInSeconds() + 60)) {
           this.creationTime = this.op.time
           return
         }
@@ -112,11 +112,11 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   public async start() {
     const self = this
     await this.base.start({
-        async apply(batch: OutputNode[], clocks: any, change: any, view: any) {
+        async apply(view: any, batch: OutputNode[], clock: any, change: any) {
           if (view.length == 0) {
             await view.append([Thread.serialize(await self.getOp())])
           }
-
+          console.log(`New batch for ${self.tid.slice(8)} of length ${batch.length}`)
           const pBatch = batch.map((node) => {
             const post: IPost = Thread.deserialize(node.value)
             post.id = node.id + '-' + node.seq.toString(16)
@@ -152,10 +152,10 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   public async getUpdatedView() {
     const view = this.base.view
-    console.log(`Begin view update for ${this.tid}`)
+    console.log(`Begin view update for ${this.tid.slice(8)}`)
     await view.ready()
     await view.update()
-    console.log(`Finish view update for ${this.tid}`)
+    console.log(`Finish view update for ${this.tid.slice(8)}`)
     return view
   }
 
