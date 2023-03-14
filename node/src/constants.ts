@@ -16,3 +16,5 @@ export const FILE_SIZE_LIMIT_UPLOAD = parseInt(process.env.FILE_SIZE_LIMIT_UPLOA
 export const FILE_SIZE_LIMIT_DOWNLOAD = parseInt(process.env.FILE_SIZE_LIMIT_DOWNLOAD || "5400000")
 export const FILE_FETCH_TIMEOUT_MS = parseInt(process.env.FILE_FETCH_TIMEOUT_MS || "1500")
 export const DATA_FOLDER = process.env.DATA_FOLDER || path.join(process.cwd(), 'data')
+export const FUTURE_TOLERANCE_SECONDS = parseInt(process.env.FUTURE_TOLERANCE_SECONDS || "60")
+export const UPDATE_STALE_SECONDS = parseInt(process.env.UPDATE_STALE_SECONDS || "120")

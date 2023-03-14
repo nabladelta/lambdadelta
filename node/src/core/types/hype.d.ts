@@ -12,7 +12,17 @@ interface OutputNode {
     change: Buffer,
     clock: Map<string, number>, // Hypercore => number
     value: Buffer,
-    batch: number[]
+    batch: number[],
+    operations: number
+}
+interface InputNode {
+    header: { protocol: '@autobase/input/v1' },
+    _id: string, // Hypercore ID
+    seq: number, // Block ID?
+    change: Buffer,
+    clock: Map<string, number>, // Hypercore => number
+    key: Buffer,
+    value: Buffer,
 }
 
 interface BlobID {

@@ -6,7 +6,8 @@ import { ThreadEvents } from './types/events'
 import Autobase from 'autobase'
 import { Keystorage } from './keystorage'
 import crypto from 'crypto'
-import { FILE_FETCH_TIMEOUT_MS } from '../constants'
+import { FILE_FETCH_TIMEOUT_MS, FUTURE_TOLERANCE_SECONDS } from '../constants'
+import { Readable } from 'streamx'
 
 export class Thread extends TypedEmitter<ThreadEvents> {
   public tid: string
@@ -19,6 +20,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
   private get: any
   private keystore: Keystorage
   private _ready: Promise<void | void[]>
+  private stream: Readable | undefined
   public localInput: string
 
   public creationTime: number | undefined // Epoch in seconds
@@ -46,7 +48,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
           throw new Error(`Failed to fetch OP in 1000ms for ${tid}`)
         }
         // Timestamp is not in the future, 60 second tolerance
-        if (this.op?.time && this.op.time < (getTimestampInSeconds() + 60)) {
+        if (this.op?.time && this.op.time < (getTimestampInSeconds() + FUTURE_TOLERANCE_SECONDS)) {
           this.creationTime = this.op.time
           return
         }
@@ -109,6 +111,13 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     return op
   }
 
+  public static processNode(node: OutputNode) {
+    const post: IPost = Thread.deserialize(node.value)
+    post.id = node.id + '-' + node.seq.toString(16)
+    post.no = crypto.createHash('sha256').update(post.id).digest('hex').slice(0, 16)
+    return post
+  }
+
   public async start() {
     const self = this
     await this.base.start({
@@ -116,17 +125,29 @@ export class Thread extends TypedEmitter<ThreadEvents> {
           if (view.length == 0) {
             await view.append([Thread.serialize(await self.getOp())])
           }
-          console.log(`New batch for ${self.tid.slice(8)} of length ${batch.length}`)
+          console.log(`New batch for ${self.tid.slice(0, 8)} of length ${batch.length}`)
           const pBatch = batch.map((node) => {
-            const post: IPost = Thread.deserialize(node.value)
-            post.id = node.id + '-' + node.seq.toString(16)
-            post.no = crypto.createHash('sha256').update(post.id).digest('hex').slice(0, 16)
-            return Thread.serialize(post)
+            return Thread.serialize(Thread.processNode(node))
           })
           await view.append(pBatch)
         }
     })
     await this.base.view.update()
+
+    this.stream = this.base.createReadStream({
+      live: true,
+      tail: true,
+      map: (node: any) => node,
+      wait: true,
+      onresolve: async (node: any) => {
+        console.log(`${self.tid.slice(0,8)} found new core`)
+      },
+      onwait: async (node: any) => undefined
+    })
+
+    this.stream?.on('data', (node: InputNode) => {
+      this.emit('receivedPost', self.tid, Thread.processNode({id: node._id, batch:[], operations: 0, ...node}))
+    })
   }
 
   private static serialize(obj: any) {
@@ -152,10 +173,10 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   public async getUpdatedView() {
     const view = this.base.view
-    console.log(`Begin view update for ${this.tid.slice(8)}`)
+    console.log(`Begin view update for ${this.tid.slice(0,8)}`)
     await view.ready()
     await view.update()
-    console.log(`Finish view update for ${this.tid.slice(8)}`)
+    console.log(`Finish view update for ${this.tid.slice(0,8)}`)
     return view
   }
 

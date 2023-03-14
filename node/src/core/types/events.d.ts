@@ -7,4 +7,5 @@ interface BoardEvents {
 interface ThreadEvents {
     'addedCores': (coreIds: string[]) => void
     'receivedCores': (coreIds: string[]) => void
+    'receivedPost': (threadId: string, post: IPost) => void
 }

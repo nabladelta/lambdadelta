@@ -6,6 +6,8 @@ import { BoardEvents } from './types/events'
 import { Keystorage } from './keystorage'
 import Hypercore from 'hypercore'
 import BTree from 'sorted-btree'
+import { getTimestampInSeconds } from './utils/utils'
+import { FUTURE_TOLERANCE_SECONDS, UPDATE_STALE_SECONDS } from '../constants'
 
 const MAX_THREADS = 256
 
@@ -111,7 +113,36 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
 
         this.threads[t.tid] = t
         this.bumpOff()
+        t.on('receivedPost', (tid: string, post: IPost) => {
+            this.bumpThread(tid, post)
+        })
         await t.start()
+    }
+
+    private async bumpThread(threadId: string, post: IPost) {
+        const currentTime = getTimestampInSeconds()
+        if (post.time > (currentTime + FUTURE_TOLERANCE_SECONDS)) {
+            return // Not bumping, post is from the future
+        }
+        if (post.time < (currentTime - UPDATE_STALE_SECONDS)) {
+            return // Update is stale, ie, we received it too late. Ignore.
+        }
+
+        const lastModified = this.tidLastModified.get(threadId)
+        if (!lastModified) return // Thread not on board?
+
+        let newLastModified = post.time * 1000 // Convert to ms
+        if (lastModified > newLastModified) return // Post is from before last bump, Ignore
+
+        // Bump the thread
+        if (!this.lastModified.delete(lastModified)){
+            console.error("LastModified storage discrepancy")
+        }
+        while(!this.lastModified.setIfNotPresent(newLastModified, threadId)) {
+            newLastModified++ // Keep trying with a newer time until we find an empty spot
+        }
+        this.tidLastModified.set(threadId, newLastModified)
+        console.log(`Bumped ${threadId.slice(0,8)} to ${newLastModified}`)
     }
 
     private async bumpOff() {
@@ -125,7 +156,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         const toRemove = this.lastModified.get(oldestTime)!
         this.lastModified.delete(oldestTime)
         this.tidLastModified.delete(toRemove)
-
+        
         await this.threads[toRemove].destroy()
         delete this.threads[toRemove]
     }
