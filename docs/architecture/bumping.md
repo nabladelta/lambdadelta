@@ -263,3 +263,5 @@ Note that we don't wipe the current board state at step `7`. For each thread, we
 If a thread was deleted while syncing, we re-add it if it would still fit in the board with the new value.
 
 By using the rate limiting nullifier, we can also prevent a single node from making too many submissions to us in order to skew the numbers.
+
+A useful change we can make if we introduce the syncing system, is that we can reject new threads that are *too* `Stale`. For example, if a thread is four hours out of date, and we are **not** syncing, we can assume it was probably created maliciously. The chances of it simply being delayed by network issues are considerably lower. This reduces our attack surface in regards to eclipsing the board with backdated threads.
