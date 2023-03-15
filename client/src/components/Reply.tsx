@@ -77,7 +77,9 @@ function Reply({isOpen, onOpen, onClose, onPost, op, setQuote}: { onOpen?: () =>
                 name: formData.name || undefined,
         }})
         if (res) {
+            const name = getValues().name
             reset()
+            setValue('name', name)
             if (inputRef.current) inputRef.current.value = ''
             setFilename('')
         }

@@ -149,5 +149,5 @@ app.get('(/*)?', function (req, res) {
  })
 
 app.listen(PORT, () => {
-  log.info(`⚡️[BBS]: API is running at http://localhost:${PORT}`)
+  log.info(`⚡️API is running at http://localhost:${PORT}`)
 })
