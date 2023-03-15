@@ -7,7 +7,7 @@ import fs from 'fs'
 import { DATA_FOLDER, PORT, REQ_SIZE_LIMIT, THUMB_FORMAT, TOPICS } from './constants'
 
 const node = new BBNode(process.env.SECRET!, process.env.MEMSTORE == 'true')
-node.ready().then(() => TOPICS.split(',').map(topic => node.join(topic)))
+node.join(TOPICS.split(',')).then(() => node.init())
 
 const app: Express = express()
 

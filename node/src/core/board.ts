@@ -16,7 +16,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     private corestore: any
     public threads: {[tid: string]: Thread}
     private _streams: Set<{stream: NoiseSecretStream, inputAnnouncer: any}>
-    public peers: Set<Buffer>
+    public peers: Set<string>
     public topic: string
     private keystore: Keystorage
     private _ready: Promise<void>
@@ -41,7 +41,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     }
 
     public async attachStream(stream: NoiseSecretStream) {
-        if (this.peers.has(stream.remotePublicKey)) return // Already added peer
+        if (this.peers.has(stream.remotePublicKey.toString('hex'))) return // Already added peer
 
         const self = this
         const mux = Protomux.from(stream)
@@ -60,7 +60,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         
         const streamData = {stream, inputAnnouncer}
         this._streams.add(streamData)
-        this.peers.add(stream.remotePublicKey)
+        this.peers.add(stream.remotePublicKey.toString('hex'))
         this.announceAllInputs(streamData)
         this.emit('peerConnected', stream.remotePublicKey)
         stream.once('close', () => {

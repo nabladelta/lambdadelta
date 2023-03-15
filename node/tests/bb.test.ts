@@ -257,13 +257,15 @@ describe('BulletinBoard', () => {
         anode = new BBNode('secret1secret1secret1', true, {bootstrap: testnet.bootstrap})
         bnode = new BBNode('secret1secret1secret2', true, {bootstrap: testnet.bootstrap})
         cnode = new BBNode('secret1secret1secret3', true, {bootstrap: testnet.bootstrap})
-        await anode.ready()
-        await anode.join(T)
-        await bnode.ready()
-        await bnode.join(T)
-        await cnode.ready()
-        await cnode.join(T)
+        await anode.join([T])
+        await bnode.join([T])
+        await cnode.join([T])
+        await anode.init()
+        await bnode.init()
+        await cnode.init()
 
+        console.log('Initialized')
+        
         destroy = async() => {
             await Promise.all([testnet.destroy(), anode.destroy(), bnode.destroy(), cnode.destroy()])
         }
@@ -316,15 +318,15 @@ describe('BulletinBoard', () => {
 
         await sleep(2000)
 
-        // console.log("a", formatCatalog(await a.getCatalog()))
-        // console.log("b", formatCatalog(await b.getCatalog()))
-        // console.log("c", formatCatalog(await c.getCatalog()))
-        // console.log((await a.getThreadContent(threadId))?.posts)
-
         // Ensure all threads replicated fully on all nodes
         expect(await validateThread([a, b, c], threadId, ["test", "test-2", "test-3", "test2", "test3", "test3-2"], true)).toBe(true)
         expect(await validateThread([a, b, c], threadId2, ["test4", "test5", "test6", "test6-2", "test5-2", "test6-3"], true)).toBe(true)
 
         expect(await validateCatalog([a, b, c], ["test4", "test"])).toBe(true)
+
+        // console.log("a", formatCatalog(await a.getCatalog()))
+        // console.log("b", formatCatalog(await b.getCatalog()))
+        // console.log("c", formatCatalog(await c.getCatalog()))
+        // console.log((await a.getThreadContent(threadId))?.posts)
     })
 })
