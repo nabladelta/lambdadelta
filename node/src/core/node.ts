@@ -25,7 +25,9 @@ export class BBNode {
             memstore ? ram : path.join(DATA_FOLDER, 'users', this.secretDigest), 
             {primaryKey: Buffer.from(this.secret)})
         this.boards = new Map()
-        this.swarm = new Hyperswarm(swarmOpts)
+        
+        const swarmKeySeed = crypto.createHash('sha256').update('DHTKEY' + secret).digest()
+        this.swarm = new Hyperswarm({ seed: swarmKeySeed, ...swarmOpts})
         this.filestore = new Filestore(this.corestore)
     }
 
