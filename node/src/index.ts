@@ -75,7 +75,7 @@ app.get(`/api/thumb/:id\.:ext?`, async (req: Request, res: Response) => {
   const dir = path.join(DATA_FOLDER, 'thumbs')
 
   if (!await fileExists(dir)) {
-    fs.mkdirSync(dir)
+    fs.mkdirSync(dir, {recursive: true})
   }
 
   const filename = path.join(dir, `${req.params.id}.${THUMB_FORMAT}`)
