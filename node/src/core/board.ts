@@ -15,8 +15,7 @@ const MAX_THREADS = 256
 export class BulletinBoard extends TypedEmitter<BoardEvents> {
     private corestore: any
     public threads: {[tid: string]: Thread}
-    private _streams: Set<{stream: NoiseSecretStream, inputAnnouncer: any}>
-    public peers: Set<string>
+    public peers: Map<string, {stream: NoiseSecretStream, inputAnnouncer: any}>
     public topic: string
     private keystore: Keystorage
     private _ready: Promise<void>
@@ -29,8 +28,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         this.topic = topic
         this.lastModified = new BTree()
         this.tidLastModified = new Map()
-        this._streams = new Set()
-        this.peers = new Set()
+        this.peers = new Map()
         this.threads = {}
         this.keystore = new Keystorage(Hypercore.defaultStorage(corestore.storage), 'board/' + this.topic + '/')
         this._ready = this.readStorageKeys()
@@ -41,7 +39,8 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     }
 
     public async attachStream(stream: NoiseSecretStream) {
-        if (this.peers.has(stream.remotePublicKey.toString('hex'))) return // Already added peer
+        const remotePublicKey = stream.remotePublicKey.toString('hex')
+        if (this.peers.has(remotePublicKey)) return // Already added peer
 
         const self = this
         const mux = Protomux.from(stream)
@@ -59,12 +58,11 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         })
         
         const streamData = {stream, inputAnnouncer}
-        this._streams.add(streamData)
-        this.peers.add(stream.remotePublicKey.toString('hex'))
+        this.peers.set(remotePublicKey, streamData)
         this.announceAllInputs(streamData)
         this.emit('peerConnected', stream.remotePublicKey)
         stream.once('close', () => {
-            this._streams.delete(streamData)
+            this.peers.delete(remotePublicKey)
         })
     }
 
@@ -96,7 +94,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
 
     private async announceInputsToAll(inputs: string[][]) {
         if (!inputs.length) return
-        for (let streamData of this._streams) {
+        for (let [_, streamData] of this.peers) {
             await streamData.inputAnnouncer.send(inputs)
         }
     }
