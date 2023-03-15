@@ -137,12 +137,12 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     this.stream = this.base.createReadStream({
       live: true,
       tail: true,
-      map: (node: any) => node,
+      map: (node: InputNode) => node,
       wait: true,
-      onresolve: async (node: any) => {
-        console.log(`${self.tid.slice(0,8)} found new core`)
-      },
-      onwait: async (node: any) => undefined
+      // onresolve: async (node: InputNode) => {
+      //   console.log(`${self.tid.slice(0,8)} found new core at ${node._id.slice(-8)}`)
+      // },
+      onwait: async (node: InputNode) => undefined
     })
 
     this.stream?.on('data', (node: InputNode) => {
