@@ -201,7 +201,7 @@ declare module 'hyperswarm' {
 
 declare module 'udx-native' {
   import { TypedEmitter } from 'tiny-typed-emitter'
-  import { Duplex } from 'streamx'
+  import { Duplex, Duplex, Duplex } from 'streamx'
 
   export interface Interface {
     name: string
@@ -267,7 +267,7 @@ declare module 'udx-native' {
   }
 
   // https://github.com/hyperswarm/libudx/blob/e8cdf8f6edb598b7617784867087a69f958d84c3/lib/stream.js
-  class UDXStream extends Duplex {
+  export class UDXStream extends Duplex {
     readonly udx: UDX
     socket: UDXSocket | null
 
@@ -662,6 +662,10 @@ declare module '@hyperswarm/dht' {
     }
   }
 
+  interface KeyPair {
+    publicKey: Buffer,
+    secretKey: Buffer
+  }
   // TODO: Incomplete
   // https://github.com/hyperswarm/dht/blob/4190b7505c365ef8a6ad607fc3862780c65eb482/index.js
   class HyperDht extends Dht {
@@ -1037,4 +1041,19 @@ declare module 'b4a' {
     buffer: Parameters<typeof toBuffer>[0],
     ...readInt32LEArgs: Parameters<Buffer['readInt32LE']>
   ): number
+}
+
+declare module '@hyperswarm/secret-stream' {
+  import { Duplex } from 'streamx'
+  import { UDXStream } from 'udx-native'
+  export class NoiseSecretStream extends Duplex {                                                                                                                                                                                                                               
+    noiseStream: NoiseSecretStream
+    isInitiator: boolean
+    rawStream: UDXStream
+    publicKey: Buffer
+    remotePublicKey: Buffer
+    handshakeHash: Buffer
+    userData: Protomux | undefined
+    opened: Promise<boolean>
+  }
 }
