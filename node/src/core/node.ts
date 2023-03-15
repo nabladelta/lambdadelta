@@ -9,6 +9,9 @@ import { DATA_FOLDER } from '../constants'
 import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
+import { mainLogger } from './logger'
+
+const log = mainLogger.getSubLogger({name: 'node'})
 
 export class BBNode {
     private secret: string
@@ -39,12 +42,12 @@ export class BBNode {
     async init() {
         await this.corestore.ready()
         this.swarm.on('connection', (socket: NoiseSecretStream, info: PeerInfo) => {
-            console.log('found peer', info.publicKey.toString('hex').slice(-6))
+            log.info('Found peer', info.publicKey.toString('hex').slice(-6))
 
             this.handlePeer(socket)
 
             socket.once('close', () => {
-                console.log('Peer left', info.publicKey.toString('hex').slice(-6))
+                log.info('Peer left', info.publicKey.toString('hex').slice(-6))
             })
         })
 
@@ -91,7 +94,7 @@ export class BBNode {
     }
 
     private async recv(topicComms: Buffer[], stream: NoiseSecretStream) {
-        console.log(`Received ${topicComms.length} topic commitments from ${stream.remotePublicKey.toString('hex').slice(-6)}`)
+        log.info(`Received ${topicComms.length} topic commitments from ${stream.remotePublicKey.toString('hex').slice(-6)}`)
         const ownTopicCommitments = await this.getTopicCommitments(stream.publicKey)
         for (let tc of topicComms) {
             // We search for the topic corresponding to this commitment
@@ -113,7 +116,7 @@ export class BBNode {
                 .digest()
             tComms.push(topicCommitment)
         }
-        console.log(`Announcing all ${tComms.length} topic commitments to ${stream.remotePublicKey.toString('hex').slice(-6)}`)
+        log.info(`Announcing all ${tComms.length} topic commitments to ${stream.remotePublicKey.toString('hex').slice(-6)}`)
         await boardAnnouncer.send(tComms)
     }
 

@@ -8,6 +8,9 @@ import { Keystorage } from './keystorage'
 import crypto from 'crypto'
 import { FILE_FETCH_TIMEOUT_MS, FUTURE_TOLERANCE_SECONDS } from '../constants'
 import { Readable } from 'streamx'
+import { mainLogger } from './logger'
+
+const log = mainLogger.getSubLogger({name: 'thread'})
 
 export class Thread extends TypedEmitter<ThreadEvents> {
   public tid: string
@@ -125,7 +128,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
           if (view.length == 0) {
             await view.append([Thread.serialize(await self.getOp())])
           }
-          console.log(`New batch for ${self.tid.slice(0, 8)} of length ${batch.length}`)
+          log.debug(`New batch for ${self.tid.slice(0, 8)} of length ${batch.length}`)
           const pBatch = batch.map((node) => {
             return Thread.serialize(Thread.processNode(node))
           })
@@ -175,7 +178,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     const view = this.base.view
 
     const timeout = setTimeout(() => {
-      console.error(`View update for ${this.tid.slice(0,8)} started 5000ms ago`)
+      log.error(`View update for ${this.tid.slice(0,8)} started 5000ms ago`)
       },
       5000)
 

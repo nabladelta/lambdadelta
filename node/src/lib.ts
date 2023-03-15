@@ -5,6 +5,9 @@ import fs from 'fs'
 import mime from 'mime'
 import MediaInfo from 'mediainfo.js'
 import { FILE_SIZE_LIMIT_UPLOAD, THUMB_FORMAT, THUMB_SIZE } from './constants'
+import { mainLogger } from './core/logger'
+
+const log = mainLogger.getSubLogger({name: 'HTTP'})
 
 export async function processAttachment(filestore: Filestore, fileData: IFileData, post: IPost, tid: string) {
     const buf = Buffer.from(fileData.data, 'base64')
@@ -26,7 +29,7 @@ export async function processAttachment(filestore: Filestore, fileData: IFileDat
             post.h = meta.height
             post.mime = mime.getType(meta.format || "") || fileData.type
         } catch (e) {
-            console.log(e)
+            log.error(e)
             throw new Error("Failed to process image")
         }
     }
@@ -69,7 +72,7 @@ async function processVideo(buf: Buffer) {
             tracks = JSON.parse(info.inform()).media?.track
             if (!tracks) throw new Error("No tracks")
         } catch (e) {
-            console.log(e)
+            log.error(e)
             throw new Error("Failed to process video")
         }
 
@@ -109,7 +112,7 @@ export async function makeThumbnail(filestore: Filestore, fid: string, filename?
         }
         return await i.toBuffer()
     } catch (e) {
-        console.log(e)
+        log.error(e)
         return false
     }
 }

@@ -77,7 +77,6 @@ function Reply({isOpen, onOpen, onClose, onPost, op, setQuote}: { onOpen?: () =>
                 name: formData.name || undefined,
         }})
         if (res) {
-            console.log('reset')
             reset()
             if (inputRef.current) inputRef.current.value = ''
             setFilename('')
@@ -127,7 +126,6 @@ function Reply({isOpen, onOpen, onClose, onPost, op, setQuote}: { onOpen?: () =>
     }
 
     function quote(no: string) {
-        console.log('Quoting ', no)
         const selectedText = document.getSelection()?.toString() || ''
         const quote = buildQuote(no, selectedText)
         addText(quote)

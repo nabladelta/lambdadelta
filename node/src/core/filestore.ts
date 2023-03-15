@@ -2,7 +2,9 @@ import Hyperblobs from 'hyperblobs'
 import b4a from 'b4a'
 import c from 'compact-encoding'
 import { FILE_FETCH_TIMEOUT_MS, FILE_SIZE_LIMIT_DOWNLOAD } from '../constants'
+import { mainLogger } from './logger'
 
+const log = mainLogger.getSubLogger({name: 'filestore'})
 export class Filestore {
     private corestore: any
 
@@ -26,7 +28,7 @@ export class Filestore {
             const blobId: BlobID = await blobs.put(state.buffer)
             return { cid: core.key.toString('hex') as string, blobId }
         } catch (e) {
-            console.log(e)
+            log.error(e)
         }
         return false
     }
@@ -47,7 +49,7 @@ export class Filestore {
 
             return {mime, data}
         } catch (e) {
-            console.log(e)
+            log.error(e)
             return false
         }
     }

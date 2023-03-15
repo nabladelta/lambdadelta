@@ -5,6 +5,9 @@ import { fileExists, makeThumbnail, parseFileID, processAttachment } from './lib
 import path from 'path'
 import fs from 'fs'
 import { DATA_FOLDER, PORT, REQ_SIZE_LIMIT, THUMB_FORMAT, TOPICS } from './constants'
+import { mainLogger } from './core/logger'
+
+const log = mainLogger.getSubLogger({name: 'HTTP'})
 
 const node = new BBNode(process.env.SECRET!, process.env.MEMSTORE == 'true')
 node.join(TOPICS.split(',')).then(() => node.init())
@@ -20,13 +23,13 @@ function NotFoundError(res: express.Response) {
 }
 
 function FailedPost(res: express.Response) {
-  console.log("Failed post")
+  log.warn("Failed post")
   res.status(400)
   res.send({error: "Failed to post"})
 }
 
 function FailedException(res: express.Response, message: string) {
-  console.log(message)
+  log.warn(message)
   res.status(400)
   res.send({error: message})
 }
@@ -84,7 +87,7 @@ app.get(`/api/thumb/:id\.:ext?`, async (req: Request, res: Response) => {
     const result = await makeThumbnail(node.filestore, req.params.id, filename)
     if (!result) return NotFoundError(res)
 
-    console.log(`Generated ${THUMB_FORMAT} thumbnail for ${req.params.id}`)
+    log.info(`Generated ${THUMB_FORMAT} thumbnail for ${req.params.id}`)
   }
   
   res.contentType(THUMB_FORMAT)
@@ -96,7 +99,7 @@ app.get(`/api/thumb/:id\.:ext?`, async (req: Request, res: Response) => {
   }
   
   res.sendFile(`${req.params.id}.${THUMB_FORMAT}`, options, (e) => {
-    if (e) console.log(e)
+    if (e) log.warn(e)
   })
 })
 
@@ -146,5 +149,5 @@ app.get('(/*)?', function (req, res) {
  })
 
 app.listen(PORT, () => {
-  console.log(`⚡️[BBS]: API is running at http://localhost:${PORT}`)
+  log.info(`⚡️[BBS]: API is running at http://localhost:${PORT}`)
 })

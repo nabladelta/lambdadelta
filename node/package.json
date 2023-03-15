@@ -43,6 +43,7 @@
     "mime": "^3.0.0",
     "random-access-memory": "^6.1.0",
     "sharp": "^0.31.3",
-    "sorted-btree": "^1.8.1"
+    "sorted-btree": "^1.8.1",
+    "tslog": "^4.8.2"
   }
 }
