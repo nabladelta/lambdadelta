@@ -72,9 +72,9 @@ function Reply({isOpen, onOpen, onClose, onPost, op, setQuote}: { onOpen?: () =>
                 no: "",
                 id: "",
                 time: Math.floor(Date.now()/1000),
-                com: formData.com || "",
-                sub: op ? formData.sub || undefined : undefined,
-                name: formData.name || undefined,
+                com: formData.com.trim() || "",
+                sub: op ? formData.sub.trim() || undefined : undefined,
+                name: formData.name.trim() || undefined,
         }})
         if (res) {
             const name = getValues().name

@@ -77,7 +77,7 @@ function isGreentext(line: string) {
 
   export function processCom(com: string, quoteCallback: (quoteRef: string) => IPost | false) {
     return (
-    <Text align={'left'} py='2'>
+    <Text align={'left'} >
       {com.split('\n').map((line, i) => 
         handleLine(line, i, quoteCallback))}
     </Text>)

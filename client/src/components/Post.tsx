@@ -73,7 +73,7 @@ function Post({post, replies, highlight, quote, isPreview}: {post: IPost, replie
                         as='video'
                         controls
                         loop={true}
-                        maxW={'512px'}
+                        maxW={'400px'}
                         src={`${API_URL}/file/${post.tim}${post.ext}`}
                         title={`${post.filename}${post.ext}`}
                         objectFit='contain'
@@ -82,7 +82,7 @@ function Post({post, replies, highlight, quote, isPreview}: {post: IPost, replie
                         }}
                     />}
             <Stack flex={1}>
-                <CardHeader>
+                <CardHeader paddingBottom={3}>
                     <HStack spacing={7}>
                         {post.sub && <Text noOfLines={2} as='b'>{post.sub}</Text>}
                         <Text as='b' noOfLines={1}>{post.name || "Anonymous"}</Text>
@@ -91,11 +91,11 @@ function Post({post, replies, highlight, quote, isPreview}: {post: IPost, replie
                         {replies && <HStack spacing={2}>{Array.from(replies).map((p, i) => <ReplyLink key={i} post={p}></ReplyLink>)}</HStack>}
                     </HStack>
                 </CardHeader>
-                <CardBody>
+                <CardBody paddingTop={0}>
                     {post.parsedCom}
                 </CardBody>
 
-                <CardFooter>
+                {post.tim &&<CardFooter paddingTop={0}>
                     <HStack spacing={7}>
                         {post.filename && 
                         <Tooltip label={`${post.filename}${post.ext}`}>
@@ -103,7 +103,7 @@ function Post({post, replies, highlight, quote, isPreview}: {post: IPost, replie
                         </Tooltip>}
                         {post.fsize  && <Text as='i'>{`(${formatBytes(post.fsize)}, ${post.w}x${post.h})`}</Text>}
                     </HStack>
-                </CardFooter>
+                </CardFooter>}
             </Stack>
         </Card>
   )
