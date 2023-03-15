@@ -73,7 +73,7 @@ function Post({post, replies, highlight, quote, isPreview}: {post: IPost, replie
                         as='video'
                         controls
                         loop={true}
-                        maxW={'400px'}
+                        maxW={'300px'}
                         src={`${API_URL}/file/${post.tim}${post.ext}`}
                         title={`${post.filename}${post.ext}`}
                         objectFit='contain'
