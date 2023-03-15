@@ -173,10 +173,16 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
   public async getUpdatedView() {
     const view = this.base.view
-    console.log(`Begin view update for ${this.tid.slice(0,8)}`)
+
+    const timeout = setTimeout(() => {
+      console.error(`View update for ${this.tid.slice(0,8)} started 5000ms ago`)
+      },
+      5000)
+
     await view.ready()
     await view.update()
-    console.log(`Finish view update for ${this.tid.slice(0,8)}`)
+    clearTimeout(timeout)
+    
     return view
   }
 
