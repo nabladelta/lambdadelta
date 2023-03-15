@@ -91,6 +91,7 @@ export class BBNode {
     }
 
     private async recv(topicComms: Buffer[], stream: NoiseSecretStream) {
+        console.log(`Received ${topicComms.length} topic commitments from ${stream.remotePublicKey.toString('hex').slice(-6)}`)
         const ownTopicCommitments = await this.getTopicCommitments(stream.publicKey)
         for (let tc of topicComms) {
             // We search for the topic corresponding to this commitment
@@ -112,6 +113,7 @@ export class BBNode {
                 .digest()
             tComms.push(topicCommitment)
         }
+        console.log(`Announcing all ${tComms.length} topic commitments to ${stream.remotePublicKey.toString('hex').slice(-6)}`)
         await boardAnnouncer.send(tComms)
     }
 

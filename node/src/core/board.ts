@@ -15,7 +15,7 @@ const MAX_THREADS = 256
 export class BulletinBoard extends TypedEmitter<BoardEvents> {
     private corestore: any
     public threads: {[tid: string]: Thread}
-    public peers: Map<string, {stream: NoiseSecretStream, inputAnnouncer: any}>
+    public peers: Map<string, {stream: NoiseSecretStream, inputAnnouncer: any, channel: any}>
     public topic: string
     private keystore: Keystorage
     private _ready: Promise<void>
@@ -57,16 +57,18 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
             async onmessage(cids: string[][], _: any) { await self.recv(cids) }
         })
         
-        const streamData = {stream, inputAnnouncer}
+        const streamData = {stream, inputAnnouncer, channel}
         this.peers.set(remotePublicKey, streamData)
         this.announceAllInputs(streamData)
         this.emit('peerConnected', stream.remotePublicKey)
+        console.log(`Peer ${remotePublicKey.slice(-6)} connected board ${this.topic}`)
         stream.once('close', () => {
             this.peers.delete(remotePublicKey)
         })
     }
 
     private async recv(cids: string[][]) {
+        console.log(`Received thread update of length ${cids.length}`)
         const updated: string[][] = []
         for (let threadInputs of cids) {
             const threadId = threadInputs[0]
@@ -74,8 +76,10 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
             try {
                 if (!this.threads[threadId]) {
                     const t = await Thread.load(threadId, this.corestore)
+                    console.log(`Received thread ${t.tid}`)
                     await this._addThread(t)
                     this.emit("joinedThread", t.tid, t)
+                    console.log(`Added thread ${t.tid}`)
                     newThread = true
                 }
     
@@ -83,7 +87,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
                 const inputs = await thread.recv(threadInputs)
                 if (inputs || newThread) updated.push(inputs || thread.allInputs())
             } catch (e) {
-                console.log(`Thread rejected: ${(e as Error).message}`)
+                console.warn(`Thread rejected: ${(e as Error).message}`)
             }
         }
         if (updated.length > 0) {
@@ -94,6 +98,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
 
     private async announceInputsToAll(inputs: string[][]) {
         if (!inputs.length) return
+        console.log(`Announcing ${inputs.length} inputs to all`)
         for (let [_, streamData] of this.peers) {
             await streamData.inputAnnouncer.send(inputs)
         }
@@ -101,6 +106,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
 
     private async announceAllInputs(streamData: {stream: NoiseSecretStream, inputAnnouncer: any}) {
         const inputs = this.lastModified.valuesArray().map(tid => this.threads[tid].allInputs())
+        console.log(`Announcing all ${inputs.length} inputs to ${streamData.stream.remotePublicKey.toString('hex').slice(-6)}`)
         await streamData.inputAnnouncer.send(inputs)
     }
 
