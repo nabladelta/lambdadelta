@@ -49,7 +49,11 @@ export class Filestore {
 
             return {mime, data}
         } catch (e) {
-            log.error(e)
+            if ((e as any).code == "REQUEST_TIMEOUT") {
+                log.warn(`Timeout retrieving file (CID: ${cid} offset: ${id.blockOffset})`)
+            } else {
+                log.error(e)
+            }
             return false
         }
     }
