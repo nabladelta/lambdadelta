@@ -8,13 +8,15 @@ import Hypercore from 'hypercore'
 import BTree from 'sorted-btree'
 import { getTimestampInSeconds } from './utils/utils'
 import { FUTURE_TOLERANCE_SECONDS, UPDATE_STALE_SECONDS } from '../constants'
+import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 
 const MAX_THREADS = 256
 
 export class BulletinBoard extends TypedEmitter<BoardEvents> {
     private corestore: any
     public threads: {[tid: string]: Thread}
-    private _streams: Set<{stream: any, inputAnnouncer: any}>
+    private _streams: Set<{stream: NoiseSecretStream, inputAnnouncer: any}>
+    public peers: Set<Buffer>
     public topic: string
     private keystore: Keystorage
     private _ready: Promise<void>
@@ -28,6 +30,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         this.lastModified = new BTree()
         this.tidLastModified = new Map()
         this._streams = new Set()
+        this.peers = new Set()
         this.threads = {}
         this.keystore = new Keystorage(Hypercore.defaultStorage(corestore.storage), 'board/' + this.topic + '/')
         this._ready = this.readStorageKeys()
@@ -37,7 +40,9 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         return this._ready
     }
 
-    public async attachStream(stream: any) {
+    public async attachStream(stream: NoiseSecretStream) {
+        if (this.peers.has(stream.remotePublicKey)) return // Already added peer
+
         const self = this
         const mux = Protomux.from(stream)
 
@@ -55,8 +60,9 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         
         const streamData = {stream, inputAnnouncer}
         this._streams.add(streamData)
+        this.peers.add(stream.remotePublicKey)
         this.announceAllInputs(streamData)
-
+        this.emit('peerConnected', stream.remotePublicKey)
         stream.once('close', () => {
             this._streams.delete(streamData)
         })
@@ -95,7 +101,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         }
     }
 
-    private async announceAllInputs(streamData: {stream: any, inputAnnouncer: any}) {
+    private async announceAllInputs(streamData: {stream: NoiseSecretStream, inputAnnouncer: any}) {
         const inputs = this.lastModified.valuesArray().map(tid => this.threads[tid].allInputs())
         await streamData.inputAnnouncer.send(inputs)
     }
