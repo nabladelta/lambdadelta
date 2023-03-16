@@ -15,16 +15,12 @@ const log = mainLogger.getSubLogger({name: 'thread'})
 export class Thread extends TypedEmitter<ThreadEvents> {
   public tid: string
   private opCore: any
-  public base: any
-
-  // Whether we have posted to this thread, determines if we gossip our localInput core
-  private written: boolean
-
   private get: any
   private keystore: Keystorage
   private _ready: Promise<void | void[]>
   private stream: Readable | undefined
   public localInput: string
+  public base: any
 
   public creationTime: number | undefined // Epoch in seconds
   public op: IPost | undefined
@@ -38,7 +34,6 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
     this.opCore = corestore.get(b4a.from(tid, 'hex'))
 
-    this.written = !!written
     this.localInput = this.base.localInput.key.toString('hex')
 
     // Load storage
@@ -170,8 +165,8 @@ export class Thread extends TypedEmitter<ThreadEvents> {
       // Thread ID already added at the start
       k != this.tid 
       && 
-      // Do not return (and gossip) localinput if the thread has not been written to by us
-      (this.written || (k != this.localInput) )))
+      // Do not return (and gossip) localinput until we write to it
+      (this.base.localInput.length > 0 || (k != this.localInput) )))
   }
 
   public async getUpdatedView() {
@@ -193,8 +188,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     await this.getUpdatedView()
     await this.base.append(Thread.serialize(post))
 
-    if (!this.written) {
-      this.written = true
+    if (this.base.localInput.length == 1) {
       return true // Is the first message we posted
     }
     return false
@@ -211,7 +205,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
 
     if (allowedKeys.length == 0) return false
     // Check if any are new
-    const allKeys = new Set(this.allInputs())
+    const allKeys = new Set(this.allInputs()).add(this.localInput) // Make sure we never think localInput is new (loop-race condition)
     const newKeys = difference(allowedKeys, allKeys)
     log.debug(`${keySetFormat(allKeys)} - ${keySetFormat(allowedKeys)} = ${keySetFormat(newKeys)}, ${newKeys.size == 0}`)
     if (newKeys.size == 0) return false
