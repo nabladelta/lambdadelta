@@ -73,7 +73,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     }
 
     private async recv(cids: string[][]) {
-        log.info(`Received thread update of length ${cids.length}`)
+        log.info(`Received update for ${cids.length} threads`)
         const updated: string[][] = []
         for (let threadInputs of cids) {
             const pendingUpdate = this.tidPendingUpdate.get(threadInputs[0])
@@ -125,7 +125,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
 
     private async announceInputsToAll(inputs: string[][]) {
         if (!inputs.length) return
-        log.debug(`Announcing ${inputs.length} inputs to all`)
+        log.debug(`Announcing ${inputs.length} threads to all`)
         for (let [_, streamData] of this.peers) {
             await streamData.inputAnnouncer.send(inputs)
         }
