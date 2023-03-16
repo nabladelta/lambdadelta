@@ -5,8 +5,10 @@ import { expect } from "chai"
 import download from "download"
 import { existsSync } from "fs"
 import { ethers, run } from "hardhat"
+import crypto from 'crypto'
 // @ts-ignore: typechain-types folder will be generated after contracts compilation
 import { BernkastelGroup } from "../typechain-types"
+import { BigNumber } from "ethers"
 
 describe("BernkastelGroup", () => {
     let groupContract: BernkastelGroup
@@ -62,10 +64,47 @@ describe("BernkastelGroup", () => {
                 testSignal,
                 proof.merkleTreeRoot,
                 proof.nullifierHash,
+                groupId,
                 proof.proof
             )
 
-            await expect(transaction).to.emit(groupContract, "Signal").withArgs(testSignal)
+            await expect(transaction).to.emit(groupContract, "Signal").withArgs(testSignal, groupId)
+        })
+
+        it("Should allow same users to signal a second time with a different nullifier", async () => {
+            const originalNullifierHash = crypto.createHash('sha256').update("Unique nullifier string test test").digest()
+            let newProof = await generateProof(users[1], group, BigNumber.from(originalNullifierHash), testSignal, {
+                wasmFilePath: `${snarkArtifactsPath}/semaphore.wasm`,
+                zkeyFilePath: `${snarkArtifactsPath}/semaphore.zkey`
+            })
+
+            const transaction = groupContract.signal(
+                testSignal,
+                newProof.merkleTreeRoot,
+                newProof.nullifierHash,
+                originalNullifierHash,
+                newProof.proof
+            )
+
+            await expect(transaction).to.emit(groupContract, "Signal").withArgs(testSignal, originalNullifierHash)
+        })
+
+        it("Should not allow same users to signal a second time with the same nullifier", async () => {
+            const originalNullifierHash = crypto.createHash('sha256').update("Unique nullifier string test test").digest()
+            let newProof = await generateProof(users[1], group, BigNumber.from(originalNullifierHash), testSignal, {
+                wasmFilePath: `${snarkArtifactsPath}/semaphore.wasm`,
+                zkeyFilePath: `${snarkArtifactsPath}/semaphore.zkey`
+            })
+
+            const transaction = groupContract.signal(
+                testSignal,
+                newProof.merkleTreeRoot,
+                newProof.nullifierHash,
+                originalNullifierHash,
+                newProof.proof
+            )
+
+            await expect(transaction).to.be.reverted
         })
     })
     describe("# Offchain", () => {

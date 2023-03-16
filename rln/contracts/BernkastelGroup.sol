@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/utils/Context.sol";
 /// @title Greeter contract.
 /// @dev The following code is just a example to show how Semaphore can be used.
 contract BernkastelGroup is Context {
-    event Signal(bytes32 signalValue);
+    event Signal(bytes32 signalValue, uint256 externalNullifier);
     event NewUser(uint256 indexed identityCommitment, address indexed userAddress);
 
     ISemaphore public semaphore;
@@ -34,10 +34,11 @@ contract BernkastelGroup is Context {
         bytes32 signalValue,
         uint256 merkleTreeRoot,
         uint256 nullifierHash,
+        uint256 externalNullifier,
         uint256[8] calldata proof
     ) external {
-        semaphore.verifyProof(groupId, merkleTreeRoot, uint256(signalValue), nullifierHash, groupId, proof);
+        semaphore.verifyProof(groupId, merkleTreeRoot, uint256(signalValue), nullifierHash, externalNullifier, proof);
 
-        emit Signal(signalValue);
+        emit Signal(signalValue, externalNullifier);
     }
 }
