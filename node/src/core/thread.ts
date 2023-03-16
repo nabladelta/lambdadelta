@@ -213,6 +213,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     // Check if any are new
     const allKeys = new Set(this.allInputs())
     const newKeys = difference(allowedKeys, allKeys)
+    log.debug(`${allKeys} - ${allowedKeys} = ${newKeys}, ${newKeys.size == 0}`)
     if (newKeys.size == 0) return false
 
     await this._addKeys(newKeys)

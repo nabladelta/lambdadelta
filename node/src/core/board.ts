@@ -24,6 +24,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
     private _ready: Promise<void>
     private lastModified: BTree<number, string> // Timestamp (ms) => ThreadId
     private tidLastModified: Map<string, number> // ThreadId => Timestamp (ms)
+    private tidPendingUpdate: Map<string, Promise<any>>
 
     constructor(topic: string, corestore: any) {
         super()
@@ -32,6 +33,7 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         this.lastModified = new BTree()
         this.tidLastModified = new Map()
         this.peers = new Map()
+        this.tidPendingUpdate = new Map()
         this.threads = {}
         this.keystore = new Keystorage(Hypercore.defaultStorage(corestore.storage), 'board/' + this.topic + '/')
         this._ready = this.readStorageKeys()
@@ -74,29 +76,51 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         log.info(`Received thread update of length ${cids.length}`)
         const updated: string[][] = []
         for (let threadInputs of cids) {
-            const threadId = threadInputs[0]
-            let newThread = false
-            try {
-                if (!this.threads[threadId]) {
-                    const t = await Thread.load(threadId, this.corestore)
-                    log.debug(`Received thread ${t.tid}`)
-                    await this._addThread(t)
-                    this.emit("joinedThread", t.tid, t)
-                    log.info(`Added thread ${t.tid}`)
-                    newThread = true
-                }
-    
-                const thread = this.threads[threadId]
-                const inputs = await thread.recv(threadInputs)
-                if (inputs || newThread) updated.push(inputs || thread.allInputs())
-            } catch (e) {
-                log.warn(`Thread rejected: ${(e as Error).message}`)
-            }
+            const pendingUpdate = this.tidPendingUpdate.get(threadInputs[0])
+            // We do not want to update the same thread twice concurrently
+            await pendingUpdate
+            const currentUpdate = this.recvThread(threadInputs)
+            this.tidPendingUpdate.set(threadInputs[0], currentUpdate)
+            const update = await currentUpdate
+            this.tidPendingUpdate.delete(threadInputs[0])
+            if (update) updated.push(update)
         }
         if (updated.length > 0) {
             this.announceInputsToAll(updated)
             this.updateStorageKeys()
         }
+    }
+
+    // Handle an individual thread update
+    private async recvThread(inputs: string[]) {
+        const threadId = inputs[0]
+        let isNewThread = false
+        if (!this.threads[threadId]) { // New Thread handling
+            isNewThread = true
+            try {
+                log.debug(`Received thread ${threadId}`)
+                const t = await Thread.load(threadId, this.corestore)
+                await this._addThread(t)
+                this.emit("joinedThread", t.tid, t)
+                log.info(`Added thread ${t.tid}`)
+            } catch (e) {
+                log.warn(`Thread rejected: ${(e as Error).message}`)
+                return false
+            }
+        }
+
+        // Thread *update* handling
+        try {
+            const thread = this.threads[threadId]
+            const updatedInputs = await thread.recv(inputs)
+
+            // Has updated inputs or is a completely new thread
+            if (updatedInputs || isNewThread) return updatedInputs || thread.allInputs()
+
+        } catch (e) {
+            log.warn(`Thread update failed: ${(e as Error).message}`)
+        }
+        return false
     }
 
     private async announceInputsToAll(inputs: string[][]) {
