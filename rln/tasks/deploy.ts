@@ -1,6 +1,6 @@
 import { task, types } from "hardhat/config"
 
-task("deploy", "Deploy a Greeter contract")
+task("deploy", "Deploy a Group contract")
     .addOptionalParam("semaphore", "Semaphore contract address", undefined, types.string)
     .addOptionalParam("group", "Group id", "42", types.string)
     .addOptionalParam("logs", "Print the logs", true, types.boolean)
@@ -13,15 +13,15 @@ task("deploy", "Deploy a Greeter contract")
             semaphoreAddress = semaphore.address
         }
 
-        const Greeter = await ethers.getContractFactory("Greeter")
+        const BernkastelGroup = await ethers.getContractFactory("BernkastelGroup")
 
-        const greeter = await Greeter.deploy(semaphoreAddress, groupId)
+        const group = await BernkastelGroup.deploy(semaphoreAddress, groupId)
 
-        await greeter.deployed()
+        await group.deployed()
 
         if (logs) {
-            console.info(`Greeter contract has been deployed to: ${greeter.address}`)
+            console.info(`BernkatelGroup contract has been deployed to: ${group.address}`)
         }
 
-        return greeter
+        return group
     })

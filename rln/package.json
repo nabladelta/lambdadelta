@@ -55,6 +55,7 @@
     "typescript": ">=4.5.0"
   },
   "dependencies": {
+    "@openzeppelin/contracts": "^4.8.2",
     "@semaphore-protocol/contracts": "3.2.3"
   }
 }
