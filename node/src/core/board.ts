@@ -66,14 +66,14 @@ export class BulletinBoard extends TypedEmitter<BoardEvents> {
         this.peers.set(remotePublicKey, streamData)
         this.announceAllInputs(streamData)
         this.emit('peerConnected', stream.remotePublicKey)
-        log.info(`Peer ${remotePublicKey.slice(-6)} connected board ${this.topic}`)
+        log.info(`Peer ${remotePublicKey.slice(-6)} attached to board ${this.topic}`)
         stream.once('close', () => {
             this.peers.delete(remotePublicKey)
         })
     }
 
     private async recv(cids: string[][]) {
-        log.info(`Received update for ${cids.length} threads`)
+        log.info(`Received updates for ${cids.length} threads`)
         const updated: string[][] = []
         for (let threadInputs of cids) {
             const pendingUpdate = this.tidPendingUpdate.get(threadInputs[0])

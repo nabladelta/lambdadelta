@@ -207,9 +207,8 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     // Check if any are new
     const allKeys = new Set(this.allInputs()).add(this.localInput) // Make sure we never think localInput is new (loop-race condition)
     const newKeys = difference(allowedKeys, allKeys)
-    log.debug(`${keySetFormat(allKeys)} - ${keySetFormat(allowedKeys)} = ${keySetFormat(newKeys)}, ${newKeys.size == 0}`)
     if (newKeys.size == 0) return false
-
+    log.debug(`Adding ${newKeys.size} new cores to ${this.tid}`)
     await this._addKeys(newKeys)
     await this.updateStorageKeys()
     return this.allInputs()
