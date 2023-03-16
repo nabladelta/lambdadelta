@@ -15,3 +15,7 @@ export function difference(a: Set<any> | string[], b: Set<any> | string[]) {
     }
     return _difference
 }
+
+export function keySetFormat(a: Set<string> | string[]) {
+    return Array.from(a).map(s => s.slice(-6))
+}

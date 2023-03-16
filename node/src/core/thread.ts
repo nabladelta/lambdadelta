@@ -1,6 +1,6 @@
 import b4a from 'b4a'
 import Hypercore from 'hypercore'
-import { difference, getThreadEpoch, getTimestampInSeconds } from './utils/utils'
+import { difference, getThreadEpoch, getTimestampInSeconds, keySetFormat } from './utils/utils'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { ThreadEvents } from './types/events'
 import Autobase from 'autobase'
@@ -213,7 +213,7 @@ export class Thread extends TypedEmitter<ThreadEvents> {
     // Check if any are new
     const allKeys = new Set(this.allInputs())
     const newKeys = difference(allowedKeys, allKeys)
-    log.debug(`${allKeys} - ${allowedKeys} = ${newKeys}, ${newKeys.size == 0}`)
+    log.debug(`${keySetFormat(allKeys)} - ${keySetFormat(allowedKeys)} = ${keySetFormat(newKeys)}, ${newKeys.size == 0}`)
     if (newKeys.size == 0) return false
 
     await this._addKeys(newKeys)
