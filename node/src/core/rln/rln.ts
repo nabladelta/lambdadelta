@@ -7,13 +7,17 @@ import { groth16 } from 'snarkjs'
 import { BigNumberish, Group } from "@semaphore-protocol/group"
 import { RLNFullProof } from './types/rln'
 
-export async function verifyProof(rlnRullProof: RLNFullProof, verificationKey: any): Promise<boolean> {
+export async function verifyProof(
+        rlnRullProof: RLNFullProof,
+        verificationKey: any
+    ): Promise<boolean> {
     const { publicSignals, proof } = rlnRullProof.snarkProof
     const expectedExternalNullifier = poseidon([
             hashString(rlnRullProof.eNullifier),
             hashBigint(rlnRullProof.rlnIdentifier)
     ])
-    if (expectedExternalNullifier !== BigInt(rlnRullProof.snarkProof.publicSignals.externalNullifier)) {
+    if (expectedExternalNullifier !== BigInt(
+        rlnRullProof.snarkProof.publicSignals.externalNullifier)) {
         return false
     }
     const expectedSignalHash = hashString(rlnRullProof.signal)
@@ -70,14 +74,21 @@ export async function generateProof(
     }
 
     return {
-        snarkProof: await prove(witness, snarkArtifacts.wasmFilePath, snarkArtifacts.zkeyFilePath),
+        snarkProof: await prove(witness,
+                    snarkArtifacts.wasmFilePath,
+                    snarkArtifacts.zkeyFilePath
+                ),
         signal,
         eNullifier: externalNullifier,
         rlnIdentifier: rlnIdentifier
     }
 }
 
-async function prove(witness: RLNWitnessT, wasmFilePath: string, zkeyFilePath: string): Promise<RLNSNARKProof> {
+async function prove(
+        witness: RLNWitnessT,
+        wasmFilePath: string,
+        zkeyFilePath: string
+    ): Promise<RLNSNARKProof> {
     const { proof, publicSignals } = await groth16.fullProve(
         witness,
         wasmFilePath,
