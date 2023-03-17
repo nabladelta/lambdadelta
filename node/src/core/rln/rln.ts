@@ -1,29 +1,22 @@
-import { RLN } from "rlnjs"
 import { Identity } from '@semaphore-protocol/identity'
 import { MerkleProof } from "@zk-kit/incremental-merkle-tree"
 import poseidon from 'poseidon-lite'
-import hash from "./utils/hash"
+import { hashBigint, hashString} from "./utils/hash"
 import { RLNSNARKProof, RLNWitnessT } from "rlnjs/dist/types/types"
 import { groth16 } from 'snarkjs'
 import { BigNumberish, Group } from "@semaphore-protocol/group"
+import { RLNFullProof } from './types/rln'
 
-interface FullProof {
-    snarkProof: RLNSNARKProof
-    signal: string
-    eNullifier: string,
-    rlnIdentifier: BigNumberish
-}
-
-export async function verifyProof(rlnRullProof: FullProof, verificationKey: any): Promise<boolean> {
+export async function verifyProof(rlnRullProof: RLNFullProof, verificationKey: any): Promise<boolean> {
     const { publicSignals, proof } = rlnRullProof.snarkProof
     const expectedExternalNullifier = poseidon([
-            RLN._genSignalHash(rlnRullProof.eNullifier),
-            hash(rlnRullProof.rlnIdentifier)
+            hashString(rlnRullProof.eNullifier),
+            hashBigint(rlnRullProof.rlnIdentifier)
     ])
     if (expectedExternalNullifier !== BigInt(rlnRullProof.snarkProof.publicSignals.externalNullifier)) {
         return false
     }
-    const expectedSignalHash = RLN._genSignalHash(rlnRullProof.signal)
+    const expectedSignalHash = hashString(rlnRullProof.signal)
     if (expectedSignalHash !== BigInt(publicSignals.signalHash)) {
         return false
     }
@@ -50,7 +43,7 @@ export async function generateProof(
             zkeyFilePath: string;
         },
         rlnIdentifier?: BigNumberish
-    ): Promise<FullProof> {
+    ): Promise<RLNFullProof> {
 
     let merkleProof: MerkleProof
 
@@ -72,8 +65,8 @@ export async function generateProof(
         identitySecret: identity.commitment,
         pathElements: merkleProof.siblings,
         identityPathIndex: merkleProof.pathIndices,
-        x: RLN._genSignalHash(signal),
-        externalNullifier: poseidon([RLN._genSignalHash(externalNullifier), hash(rlnIdentifier)]),
+        x: hashString(signal),
+        externalNullifier: poseidon([hashString(externalNullifier), hashBigint(rlnIdentifier)]),
     }
 
     return {
