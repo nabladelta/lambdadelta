@@ -44,8 +44,8 @@ describe('RLN', () => {
             wasmFilePath: wasmFilePath,
             zkeyFilePath: finalZkeyPath 
         })
-
     })
+
     it('Verifies the proof', async () => {
         const result = await verifyProof(proof, vKey)
         expect(result).toBe(true)
