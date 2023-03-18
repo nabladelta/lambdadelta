@@ -8,19 +8,19 @@ import { BigNumberish, Group } from "@semaphore-protocol/group"
 import { RLNFullProof } from './types/rln'
 
 export async function verifyProof(
-        rlnRullProof: RLNFullProof,
+        rlnFullProof: RLNFullProof,
         verificationKey: any
     ): Promise<boolean> {
-    const { publicSignals, proof } = rlnRullProof.snarkProof
+    const { publicSignals, proof } = rlnFullProof.snarkProof
     const expectedExternalNullifier = poseidon([
-            hashString(rlnRullProof.eNullifier),
-            hashBigint(rlnRullProof.rlnIdentifier)
+            hashString(rlnFullProof.eNullifier),
+            hashBigint(rlnFullProof.rlnIdentifier)
     ])
     if (expectedExternalNullifier !== BigInt(
-        rlnRullProof.snarkProof.publicSignals.externalNullifier)) {
+        rlnFullProof.snarkProof.publicSignals.externalNullifier)) {
         return false
     }
-    const expectedSignalHash = hashString(rlnRullProof.signal)
+    const expectedSignalHash = hashString(rlnFullProof.signal)
     if (expectedSignalHash !== BigInt(publicSignals.signalHash)) {
         return false
     }
