@@ -1,5 +1,5 @@
 const { execSync } = require("child_process")
-const { mkdirSync, renameSync, rmSync } = require('fs')
+const { mkdirSync, renameSync, rmSync, existsSync } = require('fs')
 const path = require('path')
 const crypto = require('crypto')
 
@@ -14,7 +14,11 @@ function run(name, scheme, tauname) {
     const circuitFile = path.join(root, 'circuits', name+'.circom')
     const setup = path.join(build, 'setup', scheme, name)
     const dest = path.join(root, 'compiled', name)
-
+    if (!existsSync(tauFile)) {
+        const tauURL = `https://hermez.s3-eu-west-1.amazonaws.com/${tauname}`
+        console.error(`You must download ${tauURL} and save it as ${tauFile}`)
+        return
+    }
     rmSync(build, {recursive: true, force: true})
 
     mkdirSync(setup, {recursive: true})
