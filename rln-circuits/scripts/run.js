@@ -1,12 +1,6 @@
-const { program } = require('commander')
-const { spawn, execSync } = require("child_process");
+const { execSync } = require("child_process");
 const { mkdirSync, renameSync, rmSync } = require('fs');
 const path = require('path');
-
-program
-    .command('run <name> <scheme>')
-    .description('Run')
-    .action(run)
 
 function run(name, scheme, tauname) {
     const root = process.cwd()
@@ -22,13 +16,11 @@ function run(name, scheme, tauname) {
 
     process.chdir(build)
     execSync(`circom ${circuitFile} --r1cs --wasm --sym`)
-    try {
-        rmSync(path.join(dest, 'js'), {recursive: true})
-        renameSync(path.join(build, `${name}_js`, `${name}.wasm`), path.join(build, `${name}_js`, `circuit.wasm`))
-        renameSync(path.join(build, `${name}_js`), path.join(dest, 'js'))
-    } catch (e) {
-        console.log("Not renaming JS", e)
-    }
+
+    rmSync(path.join(dest, 'js'), {recursive: true, force: true})
+    renameSync(path.join(build, `${name}_js`, `${name}.wasm`), path.join(build, `${name}_js`, `circuit.wasm`))
+    renameSync(path.join(build, `${name}_js`), path.join(dest, 'js'))
+
     execSync(`snarkjs r1cs export json ${name}.r1cs ${name}.r1cs.json`)
     if (scheme == 'groth16') {
         execSync(`snarkjs groth16 setup ${name}.r1cs ${tauFile} ${path.join(setup, 'rln_0000.zkey')} `)
@@ -46,7 +38,8 @@ function run(name, scheme, tauname) {
     execSync(`snarkjs zkey export verificationkey ${path.join(setup, 'final.zkey')} ${path.join(dest, scheme, 'verification_key.json')}`)
     execSync(`snarkjs zkey export solidityverifier ${path.join(setup, 'final.zkey')}  ${path.join(dest, scheme, 'verifier.sol')}`)
     renameSync(path.join(setup, 'final.zkey'), path.join(dest, scheme, 'final.zkey'))
+    process.chdir(root)
     rmSync(build, {recursive: true})
 }
 
-run('rln-multi', 'groth16', "powersOfTau28_hez_final_17.ptau")
+run('rln', 'groth16', "powersOfTau28_hez_final_17.ptau")
