@@ -5,8 +5,7 @@ import { Identity } from '@semaphore-protocol/identity'
 import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
 import poseidon from 'poseidon-lite'
 import { Group } from "@semaphore-protocol/group"
-import { hashBigint, hashString } from '../src/core/rln/utils/hash'
-import { RLNFullProof } from '../src/core/rln/types/rln'
+import { hashBigint } from '../src/core/rln/utils/hash'
 import { generateMultiProof, RLNMFullProof, verifyMultiProof } from '../src/core/rln/rln_multi'
 
 const zkeyFilesPath = "./zkeyfiles_multi"

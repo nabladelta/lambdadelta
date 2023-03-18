@@ -127,7 +127,6 @@ async function prove(
         zkeyFilePath,
         null,
     )
-    console.log(publicSignals)
     return {
         proof,
         publicSignals: {
