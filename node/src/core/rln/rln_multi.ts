@@ -8,11 +8,36 @@ import { BigNumberish, Group } from "@semaphore-protocol/group"
 export type StrBigInt = string | bigint
 
 export async function verifyMultiProof(
-        rlnRullProof: RLNMFullProof,
+        rlnFullProof: RLNMFullProof,
         verificationKey: any
     ): Promise<boolean> {
-    const { publicSignals, proof } = rlnRullProof.snarkProof
+    const { publicSignals, proof } = rlnFullProof.snarkProof
+    const expectedExternalNullifierMulti = poseidon([
+        hashString(rlnFullProof.eNullifierMulti),
+        hashBigint(rlnFullProof.rlnIdentifier)
+    ])
+    if (expectedExternalNullifierMulti !== BigInt(
+        rlnFullProof.snarkProof.publicSignals.externalNullifierMultiMessage)) {
+        return false
+    }
 
+    const expectedExternalNullifierSingle = poseidon([
+        hashString(rlnFullProof.eNullifierSingle),
+        hashBigint(rlnFullProof.rlnIdentifier)
+    ])
+    if (expectedExternalNullifierSingle !== BigInt(
+        rlnFullProof.snarkProof.publicSignals.externalNullifierSingleMessage)) {
+        return false
+    }
+
+    const expectedSignalHash = hashString(rlnFullProof.signal)
+    if (expectedSignalHash !== BigInt(publicSignals.signalHash)) {
+        return false
+    }
+
+    if (BigInt(rlnFullProof.messageLimit) !== BigInt(publicSignals.messageLimit)) {
+        return false
+    }
     return groth16.verify(
         verificationKey,
         [
