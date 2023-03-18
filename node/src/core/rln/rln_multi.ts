@@ -2,14 +2,15 @@ import { Identity } from '@semaphore-protocol/identity'
 import { MerkleProof } from "@zk-kit/incremental-merkle-tree"
 import poseidon from 'poseidon-lite'
 import { hashBigint, hashString } from "./utils/hash"
-import { groth16 } from 'snarkjs'
+import { plonk, groth16 } from 'snarkjs'
 import { BigNumberish, Group } from "@semaphore-protocol/group"
 
 export type StrBigInt = string | bigint
 
 export async function verifyMultiProof(
         rlnFullProof: RLNMFullProof,
-        verificationKey: any
+        verificationKey: any,
+        scheme?: 'groth16' | 'plonk'
     ): Promise<boolean> {
     const { publicSignals, proof } = rlnFullProof.snarkProof
     const expectedExternalNullifierMulti = poseidon([
@@ -38,7 +39,8 @@ export async function verifyMultiProof(
     if (BigInt(rlnFullProof.messageLimit) !== BigInt(publicSignals.messageLimit)) {
         return false
     }
-    return groth16.verify(
+    const prover = scheme === 'plonk' ? plonk : groth16
+    return prover.verify(
         verificationKey,
         [
             publicSignals.merkleRoot,
@@ -67,7 +69,8 @@ export async function generateMultiProof(
             wasmFilePath: string
             zkeyFilePath: string
         },
-        rlnIdentifier?: BigNumberish
+        rlnIdentifier?: BigNumberish,
+        scheme?: 'groth16' | 'plonk'
     ): Promise<RLNMFullProof> {
 
     let merkleProof: MerkleProof
@@ -106,7 +109,8 @@ export async function generateMultiProof(
     return {
         snarkProof: await prove(witness,
                     snarkArtifacts.wasmFilePath,
-                    snarkArtifacts.zkeyFilePath
+                    snarkArtifacts.zkeyFilePath,
+                    scheme
                 ),
         signal,
         eNullifierMulti: externalNullifierMulti,
@@ -119,9 +123,12 @@ export async function generateMultiProof(
 async function prove(
         witness: RLNMWitnessT,
         wasmFilePath: string,
-        zkeyFilePath: string
-    ): Promise<any> {
-    const { proof, publicSignals } = await groth16.fullProve(
+        zkeyFilePath: string,
+        scheme?: 'groth16' | 'plonk'
+): Promise<any> {
+
+    const prover = scheme === 'plonk' ? plonk : groth16
+    const { proof, publicSignals } = await prover.fullProve(
         witness,
         wasmFilePath,
         zkeyFilePath,

@@ -3,13 +3,14 @@ import { MerkleProof } from "@zk-kit/incremental-merkle-tree"
 import poseidon from 'poseidon-lite'
 import { hashBigint, hashString} from "./utils/hash"
 import { RLNSNARKProof, RLNWitnessT } from "rlnjs/dist/types/types"
-import { groth16 } from 'snarkjs'
+import { plonk, groth16 } from 'snarkjs'
 import { BigNumberish, Group } from "@semaphore-protocol/group"
 import { RLNFullProof } from './types/rln'
 
 export async function verifyProof(
         rlnFullProof: RLNFullProof,
-        verificationKey: any
+        verificationKey: any,
+        scheme?: 'groth16' | 'plonk'
     ): Promise<boolean> {
     const { publicSignals, proof } = rlnFullProof.snarkProof
     const expectedExternalNullifier = poseidon([
@@ -24,7 +25,8 @@ export async function verifyProof(
     if (expectedSignalHash !== BigInt(publicSignals.signalHash)) {
         return false
     }
-    return groth16.verify(
+    const prover = scheme === 'plonk' ? plonk : groth16
+    return prover.verify(
         verificationKey,
         [
           publicSignals.yShare,
@@ -46,7 +48,8 @@ export async function generateProof(
             wasmFilePath: string;
             zkeyFilePath: string;
         },
-        rlnIdentifier?: BigNumberish
+        rlnIdentifier?: BigNumberish,
+        scheme?: 'groth16' | 'plonk'
     ): Promise<RLNFullProof> {
 
     let merkleProof: MerkleProof
@@ -90,9 +93,12 @@ export async function generateProof(
 async function prove(
         witness: RLNWitnessT,
         wasmFilePath: string,
-        zkeyFilePath: string
+        zkeyFilePath: string,
+        scheme?: 'groth16' | 'plonk'
     ): Promise<RLNSNARKProof> {
-    const { proof, publicSignals } = await groth16.fullProve(
+    
+    const prover = scheme === 'plonk' ? plonk : groth16
+    const { proof, publicSignals } = await prover.fullProve(
         witness,
         wasmFilePath,
         zkeyFilePath,

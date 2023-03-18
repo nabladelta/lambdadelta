@@ -135,7 +135,8 @@ async function prove(
         zkeyFilePath: string,
         scheme?: 'groth16' | 'plonk'
     ): Promise<RLNDSNARKProof> {
-        const prover = scheme === 'plonk' ? plonk : groth16
+    
+    const prover = scheme === 'plonk' ? plonk : groth16
     const { proof, publicSignals } = await prover.fullProve(
         witness,
         wasmFilePath,
