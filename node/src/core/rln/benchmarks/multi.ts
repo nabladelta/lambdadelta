@@ -6,7 +6,7 @@ import { hashBigint, hashString } from '../utils/hash'
 import { generateMultiProof, RLNMFullProof, verifyMultiProof } from '../rln_multi'
 import { getZKFiles } from '../utils/files'
 
-const SCHEME = 'plonk'
+const SCHEME = 'groth16'
 const TREE_DEPTH = 20
 
 const t = async () => {
