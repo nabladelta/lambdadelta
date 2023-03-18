@@ -36,6 +36,7 @@ const t = async () => {
         const final = Date.now()
         console.log('verify', final - mid, 'ms')
     }
+    process.exit()
 }
 
 t()
