@@ -22,6 +22,8 @@ COPY node/tsconfig.json /node/
 COPY node/src /node/src
 RUN npm run build
 
+COPY rln-circuits/ /rln-circuits
+
 RUN ["mv", "/client/", "/node/"]
 
 CMD ["node", "./dist/src/index.js"]
