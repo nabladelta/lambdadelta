@@ -46,6 +46,7 @@
     "random-access-memory": "^6.1.0",
     "rlnjs": "^2.0.6",
     "sharp": "^0.31.3",
+    "snarkjs": "^0.6.9",
     "sorted-btree": "^1.8.1",
     "tslog": "^4.8.2"
   }
