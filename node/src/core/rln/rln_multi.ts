@@ -1,10 +1,11 @@
 import { Identity } from '@semaphore-protocol/identity'
 import { MerkleProof } from "@zk-kit/incremental-merkle-tree"
 import poseidon from 'poseidon-lite'
-import { hashBigint, hashString} from "./utils/hash"
+import { hashBigint, hashString } from "./utils/hash"
 import { groth16 } from 'snarkjs'
 import { BigNumberish, Group } from "@semaphore-protocol/group"
-import { StrBigInt } from 'rlnjs'
+
+export type StrBigInt = string | bigint
 
 export async function verifyMultiProof(
         rlnRullProof: RLNMFullProof,
@@ -90,26 +91,6 @@ export async function generateMultiProof(
     }
 }
 
-
-export interface RLNMFullProof {
-    snarkProof: RLNMSNARKProof
-    signal: string
-    rlnIdentifier: BigNumberish
-    eNullifierMulti: string
-    eNullifierSingle: string
-    messageLimit: number
-}
-
-interface RLNMWitnessT {
-    identitySecret: bigint
-    pathElements: any[]
-    identityPathIndex: number[]
-    x: string | bigint
-    externalNullifierMultiMessage: bigint,
-    messageId: bigint,
-    externalNullifierSingleMessage: bigint,
-}
-
 async function prove(
         witness: RLNMWitnessT,
         wasmFilePath: string,
@@ -138,7 +119,7 @@ async function prove(
     }
 }
 
-export type RLNMPublicSignals = {
+export interface RLNMPublicSignals {
     merkleRoot: StrBigInt,
     y_mm: StrBigInt,
     nullifierMultiMessage: StrBigInt,
@@ -148,12 +129,9 @@ export type RLNMPublicSignals = {
     externalNullifierMultiMessage: StrBigInt,
     messageLimit: StrBigInt,
     externalNullifierSingleMessage: StrBigInt,
-};
-/**
- * SNARK proof that contains both proof and public signals.
- * Can be verified directly by a SNARK verifier.
- */
-export type RLNMSNARKProof = {
+}
+
+export interface RLNMSNARKProof {
     proof: Proof;
     publicSignals: RLNMPublicSignals;
 }
@@ -164,4 +142,23 @@ export interface Proof {
     pi_c: StrBigInt[];
     protocol: string;
     curve: string;
+}
+
+export interface RLNMFullProof {
+    snarkProof: RLNMSNARKProof
+    signal: string
+    rlnIdentifier: BigNumberish
+    eNullifierMulti: string
+    eNullifierSingle: string
+    messageLimit: number
+}
+
+export interface RLNMWitnessT {
+    identitySecret: bigint
+    pathElements: any[]
+    identityPathIndex: number[]
+    x: string | bigint
+    externalNullifierMultiMessage: bigint,
+    messageId: bigint,
+    externalNullifierSingleMessage: bigint,
 }
