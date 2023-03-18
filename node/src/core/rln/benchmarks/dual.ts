@@ -7,6 +7,7 @@ import { generateDualProof, RLNDFullProof, verifyDualProof } from '../rln_same_d
 import { getZKFiles } from '../utils/files'
 
 const SCHEME = 'groth16'
+const TREE_DEPTH = 20
 
 const t = async () => {
     const identity = new Identity()
@@ -16,7 +17,6 @@ const t = async () => {
     const signal = "This is a test signal"
 
     const identifier = "32"
-    const TREE_DEPTH = 20
 
     const tree = new IncrementalMerkleTree(poseidon, TREE_DEPTH, hashBigint(identifier), 2)
     tree.insert(identity.commitment)

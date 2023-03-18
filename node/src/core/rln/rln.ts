@@ -82,7 +82,8 @@ export async function generateProof(
     return {
         snarkProof: await prove(witness,
                     snarkArtifacts.wasmFilePath,
-                    snarkArtifacts.zkeyFilePath
+                    snarkArtifacts.zkeyFilePath,
+                    scheme
                 ),
         signal,
         eNullifier: externalNullifier,
