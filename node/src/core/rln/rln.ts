@@ -70,7 +70,10 @@ export async function generateProof(
         pathElements: merkleProof.siblings,
         identityPathIndex: merkleProof.pathIndices,
         x: hashString(signal),
-        externalNullifier: poseidon([hashString(externalNullifier), hashBigint(rlnIdentifier)]),
+        externalNullifier: poseidon([
+            hashString(externalNullifier),
+            hashBigint(rlnIdentifier)
+        ]),
     }
 
     return {
