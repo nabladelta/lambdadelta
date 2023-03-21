@@ -90,7 +90,7 @@ export async function generateMultiProof(
     }
 
     const witness = {
-        identitySecret: identity.commitment,
+        identitySecret: poseidon([identity.nullifier, identity.trapdoor]),
         pathElements: merkleProof.siblings,
         identityPathIndex: merkleProof.pathIndices,
         x: hashString(signal),
