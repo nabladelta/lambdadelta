@@ -2,7 +2,7 @@ import { readFileSync } from "fs"
 import path from "path"
 
 
-export function getZKFiles(name: string, scheme: string) {
+export function getZKFiles(name: string, scheme: 'groth16' | 'plonk') {
     const circuitpath = path.join('..', 'rln-circuits', 'compiled', name)
     const vkeyPath = path.join(circuitpath, scheme, "verification_key.json")
     const vKey = JSON.parse(readFileSync(vkeyPath, "utf-8"))
