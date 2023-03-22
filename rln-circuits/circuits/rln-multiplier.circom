@@ -43,12 +43,12 @@ template RLN(DEPTH, LIMIT_BIT_SIZE) {
 
     root <== MerkleTreeInclusionProof(DEPTH)(rateCommitment, identityPathIndex, pathElements);
 
-    signal userMessageLimitA = messageLimitA * userMessageLimitMultiplier;
+    signal userMessageLimitA <== messageLimitA * userMessageLimitMultiplier;
 
     signal checkIntervalA <== IsInInterval(LIMIT_BIT_SIZE)([1, messageIdA, userMessageLimitA]);
     checkIntervalA === 1;
 
-    signal userMessageLimitB = messageLimitB * userMessageLimitMultiplier;
+    signal userMessageLimitB <== messageLimitB * userMessageLimitMultiplier;
 
     signal checkIntervalB <== IsInInterval(LIMIT_BIT_SIZE)([1, messageIdB, userMessageLimitB]);
     checkIntervalB === 1;
