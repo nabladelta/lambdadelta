@@ -53,9 +53,10 @@ function run(name, scheme, tauname) {
     rmSync(build, {recursive: true})
 }
 
-run('rln', 'groth16', "powersOfTau28_hez_final_17.ptau")
-run('rln-multi', 'groth16', "powersOfTau28_hez_final_17.ptau")
-run('rln-same-dual', 'groth16', "powersOfTau28_hez_final_17.ptau")
+// run('rln', 'groth16', "powersOfTau28_hez_final_17.ptau")
+// run('rln-multi', 'groth16', "powersOfTau28_hez_final_17.ptau")
+// run('rln-same-dual', 'groth16', "powersOfTau28_hez_final_17.ptau")
 // run('rln', 'plonk', "powersOfTau28_hez_final_17.ptau")
 // run('rln-multi', 'plonk', "powersOfTau28_hez_final_17.ptau")
 // run('rln-same-dual', 'plonk', "powersOfTau28_hez_final_17.ptau")
+run('rln-multiplier-generic', 'groth16', "powersOfTau28_hez_final_17.ptau")
