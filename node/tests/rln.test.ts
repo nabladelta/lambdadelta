@@ -36,7 +36,7 @@ describe('RLN', () => {
         group.addMember(identity.commitment)
 
         const merkleProofGroup = group.generateMerkleProof(group.indexOf(identity.commitment))
-
+        
         // Should produce the same root
         expect(merkleProof.root).toBe(merkleProofGroup.root)
 
