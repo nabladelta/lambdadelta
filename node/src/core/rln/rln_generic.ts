@@ -9,8 +9,10 @@ export type StrBigInt = string | bigint
 
 export async function verifyProof(
         rlnFullProof: RLNGFullProof,
-        verificationKey: any,
-        scheme: 'groth16' | 'plonk' = 'groth16'
+        config: {
+            vKey: any,
+            scheme: 'groth16' | 'plonk'
+        }
     ): Promise<boolean> {
     const { publicSignals, proof } = rlnFullProof.snarkProof
 
@@ -29,15 +31,15 @@ export async function verifyProof(
             return false
         }
     }
-    
+
     const expectedSignalHash = hashString(rlnFullProof.signal)
     if (expectedSignalHash !== BigInt(publicSignals.signalHash)) {
         return false
     }
-
+    let { scheme, vKey } = config
     const prover = scheme === 'plonk' ? plonk : groth16
     return prover.verify(
-        verificationKey,
+        vKey,
         [
             publicSignals.y,
             publicSignals.merkleRoot,
@@ -59,16 +61,24 @@ export async function generateProof(
             messageLimit: number
         }[],
         signal: string,
-        snarkArtifacts: {
+        config: {
+            rlnIdentifier: BigNumberish,
+            userMessageLimitMultiplier: number,
+            scheme: 'groth16' | 'plonk'
             wasmFilePath: string
             zkeyFilePath: string
         },
-        rlnIdentifier: BigNumberish = 0,
-        userMessageLimitMultiplier: number = 1,
-        scheme: 'groth16' | 'plonk' = 'groth16'
     ): Promise<RLNGFullProof> {
 
     let merkleProof: MerkleProof
+
+    let {
+        rlnIdentifier,
+        userMessageLimitMultiplier,
+        scheme,
+        wasmFilePath,
+        zkeyFilePath
+    } = config
 
     if ("depth" in groupOrMerkleProof) {
         rlnIdentifier = groupOrMerkleProof.id
@@ -99,8 +109,8 @@ export async function generateProof(
     return {
         snarkProof: await prove(
             witness,
-            snarkArtifacts.wasmFilePath,
-            snarkArtifacts.zkeyFilePath,
+            wasmFilePath,
+            zkeyFilePath,
             scheme
         ),
         signal,

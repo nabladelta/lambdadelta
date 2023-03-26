@@ -23,7 +23,7 @@ const t = async () => {
     tree.insert(rateCommitment)
     const merkleProof = tree.createProof(tree.indexOf(rateCommitment))
 
-    const {vKey, files} = getZKFiles('rln-multiplier-generic', SCHEME)
+    const {vKey, files, scheme} = getZKFiles('rln-multiplier-generic', SCHEME)
 
     let proof: RLNGFullProof
     for (let i = 0; i < 10; i++) {
@@ -33,13 +33,15 @@ const t = async () => {
             merkleProof,
             enullifiers,
             signal,
-            files,
-            1,
-            2,
-            SCHEME)
+            {
+                scheme,
+                ...files,
+                rlnIdentifier: 1,
+                userMessageLimitMultiplier: 2,
+            })
         const mid = Date.now()
         console.log('prove', mid - initialtime, 'ms')
-        const result = await verifyProof(proof, vKey, SCHEME)
+        const result = await verifyProof(proof, {vKey, scheme})
 
         if (proof.snarkProof.publicSignals.merkleRoot !== tree.root.toString()) console.log(false)
         if (!result) console.log(result)
