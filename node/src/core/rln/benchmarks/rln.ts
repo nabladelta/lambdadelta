@@ -4,7 +4,7 @@ import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
 import poseidon from 'poseidon-lite'
 import { hashBigint } from '../utils/hash'
 import { RLNFullProof } from '../types/rln'
-import { generateProof, verifyProof } from '../rln'
+import { generateProof, verifyProof } from './bindings/rln'
 import { getZKFiles } from '../utils/files'
 
 const SCHEME = 'groth16'

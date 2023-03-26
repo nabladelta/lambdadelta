@@ -2,7 +2,7 @@ import { Identity } from "@semaphore-protocol/identity"
 import { SECRET } from "../../constants"
 import { GroupDataProvider } from "./providers/dataProvider"
 import { FileProvider } from "./providers/file"
-import { generateProof } from "./rln"
+import { generateProof } from "./benchmarks/bindings/rln"
 import { generateDualProof } from "./rln_same_dual"
 import { getZKFiles } from "./utils/files"
 

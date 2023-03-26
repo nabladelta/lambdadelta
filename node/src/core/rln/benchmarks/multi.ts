@@ -3,7 +3,7 @@ import { Identity } from '@semaphore-protocol/identity'
 import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
 import poseidon from 'poseidon-lite'
 import { hashBigint, hashString } from '../utils/hash'
-import { generateMultiProof, RLNMFullProof, verifyMultiProof } from '../rln_multi'
+import { generateMultiProof, RLNMFullProof, verifyMultiProof } from './bindings/rln_multi'
 import { getZKFiles } from '../utils/files'
 
 const SCHEME = 'groth16'

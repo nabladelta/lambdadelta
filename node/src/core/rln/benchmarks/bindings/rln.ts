@@ -1,11 +1,11 @@
 import { Identity } from '@semaphore-protocol/identity'
 import { MerkleProof } from "@zk-kit/incremental-merkle-tree"
 import poseidon from 'poseidon-lite'
-import { hashBigint, hashString} from "./utils/hash"
+import { hashBigint, hashString} from "../../utils/hash"
 import { RLNSNARKProof, RLNWitnessT } from "rlnjs/dist/types/types"
 import { plonk, groth16 } from 'snarkjs'
 import { BigNumberish, Group } from "@semaphore-protocol/group"
-import { RLNFullProof } from './types/rln'
+import { RLNFullProof } from '../../types/rln'
 
 export async function verifyProof(
         rlnFullProof: RLNFullProof,

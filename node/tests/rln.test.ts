@@ -5,7 +5,7 @@ import { Identity } from '@semaphore-protocol/identity'
 import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
 import poseidon from 'poseidon-lite'
 import { Group } from "@semaphore-protocol/group"
-import { generateProof, verifyProof } from '../src/core/rln/rln'
+import { generateProof, verifyProof } from '../src/core/rln/benchmarks/bindings/rln'
 import { hashBigint, hashString } from '../src/core/rln/utils/hash'
 import { RLNFullProof } from '../src/core/rln/types/rln'
 
