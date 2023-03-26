@@ -13,36 +13,28 @@ export async function verifyProof(
         scheme: 'groth16' | 'plonk' = 'groth16'
     ): Promise<boolean> {
     const { publicSignals, proof } = rlnFullProof.snarkProof
-    const expectedExtNullifiers = rlnFullProof
-        .extNullifiers.map(ex => 
-            poseidon([
-                hashString(ex),
-                hashBigint(rlnFullProof.rlnIdentifier)
-            ]))
-    
-    const actualExtNullifiers = publicSignals
-        .externalNullifiers.map(e => BigInt(e))
-    
-    for (let i = 0; i < actualExtNullifiers.length; i++) {
-        if (expectedExtNullifiers[i] !== actualExtNullifiers[i]) {
+
+    for (let i = 0; i < publicSignals.externalNullifiers.length; i++) {
+        const expectedExtNullifier = poseidon([
+            hashString(rlnFullProof.externalNullifiers[i].nullifier),
+            hashBigint(rlnFullProof.rlnIdentifier)
+        ])
+
+        if (expectedExtNullifier !== BigInt(publicSignals.externalNullifiers[i])) {
+            return false
+        }
+
+        const expectedLimit = BigInt(rlnFullProof.externalNullifiers[i].messageLimit)
+        if (expectedLimit !== BigInt(publicSignals.messageLimits[i])) {
             return false
         }
     }
-
-    const expectedLimits = rlnFullProof.messageLimits.map(l => BigInt(l))
-    const actualLimits = publicSignals.messageLimits.map(l => BigInt(l))
-
-    for (let i = 0; i < actualLimits.length; i++) {
-        if (expectedLimits[i] !== actualLimits[i]) {
-            return false
-        }
-    }
-
+    
     const expectedSignalHash = hashString(rlnFullProof.signal)
     if (expectedSignalHash !== BigInt(publicSignals.signalHash)) {
         return false
     }
-    
+
     const prover = scheme === 'plonk' ? plonk : groth16
     return prover.verify(
         verificationKey,
@@ -61,9 +53,11 @@ export async function verifyProof(
 export async function generateProof(
         identity: Identity,
         groupOrMerkleProof: Group | MerkleProof,
-        externalNullifiers: string[],
-        messageIds: number[],
-        messageLimits: number[],
+        externalNullifiers: {
+            nullifier: string,
+            messageId: number,
+            messageLimit: number
+        }[],
         signal: string,
         snarkArtifacts: {
             wasmFilePath: string
@@ -96,11 +90,11 @@ export async function generateProof(
         x: hashString(signal),
         userMessageLimitMultiplier: BigInt(userMessageLimitMultiplier),
         externalNullifiers: externalNullifiers.map(e => poseidon([
-            hashString(e),
+            hashString(e.nullifier),
             hashBigint(rlnIdentifier)
         ])),
-        messageIds: messageIds.map(id => BigInt(id)),
-        messageLimits: messageLimits.map(limit => BigInt(limit))
+        messageIds: externalNullifiers.map(e => BigInt(e.messageId)),
+        messageLimits: externalNullifiers.map(e => BigInt(e.messageLimit))
     }
     return {
         snarkProof: await prove(
@@ -110,8 +104,10 @@ export async function generateProof(
             scheme
         ),
         signal,
-        extNullifiers: externalNullifiers,
-        messageLimits,
+        externalNullifiers: externalNullifiers
+            .map(({ nullifier, messageLimit }) => (
+                    { nullifier, messageLimit }
+                )),
         rlnIdentifier: rlnIdentifier
     }
 }
@@ -177,8 +173,10 @@ export interface RLNGFullProof {
     snarkProof: RLNGSNARKProof
     signal: string
     rlnIdentifier: BigNumberish
-    extNullifiers: string[]
-    messageLimits: number[]
+    externalNullifiers: {
+        nullifier: string
+        messageLimit: number
+    }[]
 }
 
 export interface RLNGWitnessT {
