@@ -12,12 +12,14 @@ const TREE_DEPTH = 20
 const t = async () => {
     const identity = new Identity()
 
-    const enullifiers = ["Test nullifier1", "nullifier2"]
+    const enullifiers = [
+        {nullifier: "Test nullifier1", messageId: 5, messageLimit: 6},
+        {nullifier: "Test nullifier2", messageId: 10, messageLimit: 7}]
     const signal = "This is a test signal"
     const identifier = "32"
 
     const tree = new IncrementalMerkleTree(poseidon, TREE_DEPTH, hashBigint(identifier), 2)
-    const rateCommitment = poseidon([identity.commitment, BigInt(1)])
+    const rateCommitment = poseidon([identity.commitment, BigInt(2)])
     tree.insert(rateCommitment)
     const merkleProof = tree.createProof(tree.indexOf(rateCommitment))
 
@@ -28,17 +30,20 @@ const t = async () => {
         const initialtime = Date.now()
         proof = await generateProof(
             identity,
-            merkleProof, 
-            enullifiers, [5, 6], [10, 7],
+            merkleProof,
+            enullifiers,
             signal,
             files,
             1,
-            1,
+            2,
             SCHEME)
         const mid = Date.now()
         console.log('prove', mid - initialtime, 'ms')
         const result = await verifyProof(proof, vKey, SCHEME)
+
+        if (proof.snarkProof.publicSignals.merkleRoot !== tree.root.toString()) console.log(false)
         if (!result) console.log(result)
+        
         const final = Date.now()
         console.log('verify', final - mid, 'ms')
     }
