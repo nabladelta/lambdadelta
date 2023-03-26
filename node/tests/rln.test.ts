@@ -7,7 +7,7 @@ import poseidon from 'poseidon-lite'
 import { Group } from "@semaphore-protocol/group"
 import { generateProof, verifyProof } from '../src/core/rln/benchmarks/bindings/rln'
 import { hashBigint, hashString } from '../src/core/rln/utils/hash'
-import { RLNFullProof } from '../src/core/rln/types/rln'
+import { RLNFullProof } from '../src/core/rln/benchmarks/bindings/rln'
 
 const zkeyFilesPath = "./zkeyFiles"
 const vkeyPath = path.join(zkeyFilesPath, "verification_key.json")

@@ -5,7 +5,7 @@ import { hashBigint, hashString} from "../../utils/hash"
 import { RLNSNARKProof, RLNWitnessT } from "rlnjs/dist/types/types"
 import { plonk, groth16 } from 'snarkjs'
 import { BigNumberish, Group } from "@semaphore-protocol/group"
-import { RLNFullProof } from '../../types/rln'
+import { RLNFullProof } from './rln'
 
 export async function verifyProof(
         rlnFullProof: RLNFullProof,
