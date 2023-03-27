@@ -52,14 +52,21 @@ export async function verifyProof(
     )
 }
 
+export interface nullifierInput {
+    nullifier: string
+    messageId: number
+    messageLimit: number
+}
+
+export interface nullifierOutput {
+    nullifier: string
+    messageLimit: number
+}
+
 export async function generateProof(
         identity: Identity,
         groupOrMerkleProof: Group | MerkleProof,
-        externalNullifiers: {
-            nullifier: string,
-            messageId: number,
-            messageLimit: number
-        }[],
+        externalNullifiers: nullifierInput[],
         signal: string,
         config: {
             rlnIdentifier: BigNumberish,
@@ -183,10 +190,7 @@ export interface RLNGFullProof {
     snarkProof: RLNGSNARKProof
     signal: string
     rlnIdentifier: BigNumberish
-    externalNullifiers: {
-        nullifier: string
-        messageLimit: number
-    }[]
+    externalNullifiers: nullifierOutput[]
 }
 
 export interface RLNGWitnessT {
