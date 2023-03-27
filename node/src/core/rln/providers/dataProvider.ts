@@ -32,7 +32,7 @@ export abstract class GroupDataProvider {
     public async update() {
         const events = await this.loadEvents(this.lastEvent)
         for (let event of events) {
-            this.pastRootsRemoved.set(this.members.root, event.time) // Set time the current root was invalidated
+            this.pastRootsRemoved.set(this.members.root.toString(), event.time) // Set time the current root was invalidated
             const rateCommitment = GroupDataProvider.getRateCommitment(BigInt(event.commitment), event.multiplier)
             if (event.type == "ADD") {
                 this.members.insert(rateCommitment)
@@ -41,7 +41,7 @@ export abstract class GroupDataProvider {
                 this.members.delete(event.entryIndex || this.members.indexOf(rateCommitment))
             }
             this.multipliers.set(BigInt(event.commitment), event.multiplier)
-            this.pastRootsAdded.set(this.members.root, event.time) // Set time this root became the root
+            this.pastRootsAdded.set(this.members.root.toString(), event.time) // Set time this root became the root
             this.lastEvent++
         }
     }
@@ -77,7 +77,7 @@ export abstract class GroupDataProvider {
     }
     
     public getRoot() {
-        return this.members.root
+        return this.members.root.toString()
     }
 
     public static createEvent(secret: string, multiplier?: number, type: "ADD" | "REMOVE" = "ADD"): GroupEvent {
