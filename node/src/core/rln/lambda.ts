@@ -16,7 +16,7 @@ export enum VerificationResult {
 /**
  * Verifies RLN proofs
  */
-class Lambda {
+export class Lambda {
     private provider: GroupDataProvider
     private settings: {vKey: any, scheme: "groth16" | "plonk"}
     public expiredTolerance: number
@@ -26,9 +26,9 @@ class Lambda {
         this.provider = provider
         this.expiredTolerance = 0
     }
-    public static async load() {
+    public static async load(secret?: string): Promise<[Lambda, Delta]> {
         const provider = await FileProvider.load()
-        return [new Lambda(provider), new Delta(provider)]
+        return [new Lambda(provider), new Delta(provider, secret)]
     }
     public async verifyProof(proof: RLNGFullProof, claimedTime?: number) {
         const root = proof.snarkProof.publicSignals.merkleRoot
@@ -55,9 +55,9 @@ class Delta {
         zkeyFilePath: string
     }
 
-    public constructor(provider: GroupDataProvider) {
+    public constructor(provider: GroupDataProvider, secret?: string) {
         this.provider = provider
-        this.identity = new Identity(SECRET)
+        this.identity = new Identity(secret || SECRET)
         const {files, scheme} = getZKFiles('rln-multiplier-generic', 'groth16')
         this.settings = {...files, userMessageLimitMultiplier: this.provider.getMultiplier(this.identity.commitment)!, scheme}
     }

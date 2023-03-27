@@ -51,7 +51,7 @@ export class FileProvider extends GroupDataProvider {
             console.log((e as any).message)
         }
         if (!groupData) groupData = {id: "1", treeDepth: 20, groupEvents: []}
-        groupData.groupEvents.concat(groupEvents)
+        groupData.groupEvents = groupData.groupEvents.concat(groupEvents)
         FileProvider.saveFile(groupData, filename)
     }
 }

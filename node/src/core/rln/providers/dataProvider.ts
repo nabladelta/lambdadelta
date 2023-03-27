@@ -1,6 +1,8 @@
 import { IncrementalMerkleTree, MerkleProof } from "@zk-kit/incremental-merkle-tree"
 import { hashBigint } from "../utils/hash"
 import poseidon from 'poseidon-lite'
+import { Identity } from "@semaphore-protocol/identity"
+import { getTimestampInSeconds } from "../../utils/utils"
 
 export interface GroupEvent {
     type: "ADD" | "REMOVE"
@@ -31,7 +33,7 @@ export abstract class GroupDataProvider {
         const events = await this.loadEvents(this.lastEvent)
         for (let event of events) {
             this.pastRootsRemoved.set(this.members.root, event.time) // Set time the current root was invalidated
-            const rateCommitment = this.getRateCommitment(BigInt(event.commitment), event.multiplier)
+            const rateCommitment = GroupDataProvider.getRateCommitment(BigInt(event.commitment), event.multiplier)
             if (event.type == "ADD") {
                 this.members.insert(rateCommitment)
             }
@@ -54,13 +56,13 @@ export abstract class GroupDataProvider {
         return this.multipliers.get(commitment)
     }
 
-    public getRateCommitment(commitment: bigint, multiplier?: number) {
+    public static getRateCommitment(commitment: bigint, multiplier?: number) {
         return poseidon([commitment, BigInt(multiplier || 1)])
     }
 
     public createMerkleProof(commitment: bigint, multiplier?: number) {
         return this.members.createProof(
-            this.members.indexOf(this.getRateCommitment(commitment, multiplier))
+            this.members.indexOf(GroupDataProvider.getRateCommitment(commitment, multiplier))
         )
     }
 
@@ -70,12 +72,23 @@ export abstract class GroupDataProvider {
 
     public indexOf(commitment: bigint, multiplier?: number){
         return this.members.indexOf(
-            this.getRateCommitment(commitment, multiplier)
+            GroupDataProvider.getRateCommitment(commitment, multiplier)
         )
     }
     
     public getRoot() {
         return this.members.root
+    }
+
+    public static createEvent(secret: string, multiplier?: number, type: "ADD" | "REMOVE" = "ADD"): GroupEvent {
+        const identity = new Identity(secret)
+        GroupDataProvider.getRateCommitment(identity.commitment, multiplier)
+        return {
+            type,
+            commitment: identity.commitment.toString(),
+            time: getTimestampInSeconds(),
+            multiplier: multiplier || 1
+        }
     }
 
     protected abstract loadEvents(lastEventIndex: number): Promise<GroupEvent[]>
