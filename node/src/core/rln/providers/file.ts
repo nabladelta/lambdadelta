@@ -1,6 +1,7 @@
 import { readFile, writeFile } from "fs/promises"
 import { GroupDataProvider, GroupEvent } from "./dataProvider"
 import { GROUP_FILE } from "../../../constants"
+import poseidon from 'poseidon-lite'
 
 export interface GroupFile {
     id: string,
@@ -53,5 +54,13 @@ export class FileProvider extends GroupDataProvider {
         if (!groupData) groupData = {id: "1", treeDepth: 20, groupEvents: []}
         groupData.groupEvents = groupData.groupEvents.concat(groupEvents)
         FileProvider.saveFile(groupData, filename)
+    }
+    public async slash(secretIdentity: bigint) {
+        const identityCommitment = poseidon([secretIdentity])
+        const event = GroupDataProvider.createEvent(
+            identityCommitment.toString(),
+            this.getMultiplier(identityCommitment),
+            "REMOVE")
+        await FileProvider.write([event], this.filename)
     }
 }

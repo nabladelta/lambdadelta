@@ -37,7 +37,7 @@ export class Lambda {
     }
     public async verify(proof: RLNGFullProof, claimedTime?: number) {
         const root = proof.snarkProof.publicSignals.merkleRoot
-        const [start, end] = await this.provider.getRootTimeRange(root.toString())
+        const [start, end] = await this.provider.getRootTimeRange(BigInt(root))
         if (!start) return VerificationResult.MISSING_ROOT
         const result = await verifyProof(proof, this.settings)
         if (!result) return VerificationResult.INVALID
@@ -92,6 +92,7 @@ export class Lambda {
             slashes++
 
             const secret = await this.retrieveSecret(known, i)
+            await this.provider.slash(secret)
         }
         if (slashes > 0) return VerificationResult.BREACH
 
