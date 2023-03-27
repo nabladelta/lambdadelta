@@ -17,7 +17,7 @@ describe.only('RLN', () => {
 
         const [lambda, delta] = await Lambda.load(secret1)
         const proof = await delta.createProof('test', enullifiers, "1")
-        const result = await lambda.verifyProof(proof, getTimestampInSeconds())
+        const result = await lambda.verify(proof, getTimestampInSeconds())
         expect(result).toEqual(VerificationResult.VALID)
         
         const [lambdaB, deltaB] = await Lambda.load(secret2)
