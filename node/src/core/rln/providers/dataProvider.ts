@@ -32,24 +32,25 @@ export abstract class GroupDataProvider {
     public async update() {
         const events = await this.loadEvents(this.lastEvent)
         for (let event of events) {
-            this.pastRootsRemoved.set(this.members.root.toString(), event.time) // Set time the current root was invalidated
-            const rateCommitment = GroupDataProvider.getRateCommitment(BigInt(event.commitment), event.multiplier)
+            const commitment = BigInt(event.commitment)
+            this.pastRootsRemoved.set(this.members.root.toString(16), event.time) // Set time the current root was invalidated
+            const rateCommitment = GroupDataProvider.getRateCommitment(commitment, event.multiplier)
             if (event.type == "ADD") {
                 this.members.insert(rateCommitment)
             }
             if (event.type == "REMOVE") {
                 this.members.delete(event.entryIndex || this.members.indexOf(rateCommitment))
             }
-            this.multipliers.set(BigInt(event.commitment), event.multiplier)
-            this.pastRootsAdded.set(this.members.root.toString(), event.time) // Set time this root became the root
+            this.multipliers.set(commitment, event.multiplier)
+            this.pastRootsAdded.set(this.members.root.toString(16), event.time) // Set time this root became the root
             this.lastEvent++
         }
     }
 
-    public async getRootTimeRange(root: string) {
-        const addedTime = this.pastRootsAdded.get(root)
-        if (addedTime) return [addedTime, this.pastRootsRemoved.get(root)]
-        return await this.retrieveRoot(root)
+    public async getRootTimeRange(root: bigint) {
+        const addedTime = this.pastRootsAdded.get(root.toString(16))
+        if (addedTime) return [addedTime, this.pastRootsRemoved.get(root.toString(16))]
+        return await this.retrieveRoot(root.toString(16))
     }
 
     public getMultiplier(commitment: bigint) {
@@ -77,7 +78,7 @@ export abstract class GroupDataProvider {
     }
     
     public getRoot() {
-        return this.members.root.toString()
+        return this.members.root.toString(16)
     }
 
     public static createEvent(secret: string, multiplier?: number, type: "ADD" | "REMOVE" = "ADD"): GroupEvent {
@@ -85,7 +86,7 @@ export abstract class GroupDataProvider {
         GroupDataProvider.getRateCommitment(identity.commitment, multiplier)
         return {
             type,
-            commitment: identity.commitment.toString(),
+            commitment: '0x'+identity.commitment.toString(16),
             time: getTimestampInSeconds(),
             multiplier: multiplier || 1
         }
@@ -93,4 +94,5 @@ export abstract class GroupDataProvider {
 
     protected abstract loadEvents(lastEventIndex: number): Promise<GroupEvent[]>
     protected abstract retrieveRoot(root: string): Promise<(number | undefined)[]>
+    public abstract slash(secretIdentity: bigint): Promise<void>
 }
