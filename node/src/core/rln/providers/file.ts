@@ -1,4 +1,4 @@
-import { readFile } from "fs/promises"
+import { readFile, writeFile } from "fs/promises"
 import { GroupDataProvider, GroupEvent } from "./dataProvider"
 import { GROUP_FILE } from "../../../constants"
 
@@ -22,6 +22,11 @@ export class FileProvider extends GroupDataProvider {
         return groupData
     }
 
+    private static async saveFile(data: GroupFile, filename: string): Promise<void> {
+        const groupData = JSON.stringify(data)
+        await writeFile(filename, groupData)
+    }
+
     protected async loadEvents(lastEventIndex: number): Promise<GroupEvent[]> {
         const groupData = await FileProvider.loadFile(this.filename)
         return groupData.groupEvents.slice(lastEventIndex)
@@ -36,5 +41,17 @@ export class FileProvider extends GroupDataProvider {
         const provider = new FileProvider(groupData.id, groupData.treeDepth, GROUP_FILE)
         await provider.update()
         return provider
+    }
+
+    public static async write(groupEvents: GroupEvent[], filename: string) {
+        let groupData: GroupFile | undefined
+        try {
+            groupData = await this.loadFile(filename)
+        } catch (e) {
+            console.log((e as any).message)
+        }
+        if (!groupData) groupData = {id: "1", treeDepth: 20, groupEvents: []}
+        groupData.groupEvents.concat(groupEvents)
+        FileProvider.saveFile(groupData, filename)
     }
 }
