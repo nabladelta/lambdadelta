@@ -5,13 +5,7 @@
   "directories": {
     "doc": "docs"
   },
-  "workspaces": [
-    "client",
-    "node",
-    "rln-circuits",
-    "rlsem",
-    "rln"
-  ],
+  "workspaces": ["./packages/*"],
   "author": "moot",
   "license": "AGPL-3.0-or-later"
 }
