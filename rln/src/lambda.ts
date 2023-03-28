@@ -1,6 +1,4 @@
-import { BigNumberish } from "@semaphore-protocol/group"
 import { Identity } from "@semaphore-protocol/identity"
-import { SECRET } from "../../constants"
 import { GroupDataProvider } from "./providers/dataProvider"
 import { FileProvider } from "./providers/file"
 import { generateProof, nullifierInput, RLNGFullProof, verifyProof } from "./rln"
@@ -32,8 +30,8 @@ export class Lambda {
         this.expiredTolerance = 0
     }
 
-    public static async load(secret?: string): Promise<[Lambda, Delta]> {
-        const provider = await FileProvider.load()
+    public static async load(secret: string, filename: string): Promise<[Lambda, Delta]> {
+        const provider = await FileProvider.load(filename)
         return [new Lambda(provider), new Delta(provider, secret)]
     }
 
@@ -110,7 +108,7 @@ class Delta {
 
     public constructor(provider: GroupDataProvider, secret?: string) {
         this.provider = provider
-        this.identity = new Identity(secret || SECRET)
+        this.identity = new Identity(secret)
         const {files, scheme} = getZKFiles('rln-multiplier-generic', 'groth16')
         this.settings = {...files, userMessageLimitMultiplier: this.provider.getMultiplier(this.identity.commitment)!, scheme}
     }

@@ -2,7 +2,7 @@ import { IncrementalMerkleTree, MerkleProof } from "@zk-kit/incremental-merkle-t
 import { hashBigint } from "../utils/hash"
 import poseidon from 'poseidon-lite'
 import { Identity } from "@semaphore-protocol/identity"
-import { getTimestampInSeconds } from "../../utils/utils"
+import { getTimestampInSeconds } from "../utils/time"
 
 export interface GroupEvent {
     type: "ADD" | "REMOVE"

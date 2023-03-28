@@ -6,9 +6,11 @@ import { GroupDataProvider } from '../src/providers/dataProvider'
 import { FileProvider } from '../src/providers/file'
 import { Lambda, VerificationResult } from '../src/lambda'
 
+const GROUPFILE = 'groupData.json'
+
 describe.only('RLN', () => {
     it('Creates groups, proofs, verifies, rejects', async () => {
-        if (existsSync('groupData.json')) rmSync('groupData.json', {force: true})
+        if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
         const secret1 = "john"
         const secret2 = "steve"
         const enullifiers = [
@@ -19,20 +21,20 @@ describe.only('RLN', () => {
                 GroupDataProvider.createEvent(new Identity(secret1).commitment, 2),
                 GroupDataProvider.createEvent(new Identity(secret2).commitment)
             ],
-            'groupData.json')
+            GROUPFILE)
 
-        const [lambda, delta] = await Lambda.load(secret1)
+        const [lambda, delta] = await Lambda.load(secret1, GROUPFILE)
         const proof = await delta.createProof('test', enullifiers, "1")
         const result = await lambda.verify(proof, getTimestampInSeconds())
         expect(result).toEqual(VerificationResult.VALID)
         
-        const [lambdaB, deltaB] = await Lambda.load(secret2)
+        const [lambdaB, deltaB] = await Lambda.load(secret2, GROUPFILE)
         expect(async () => deltaB.createProof('test', enullifiers, "1")).rejects
-        if (existsSync('groupData.json')) rmSync('groupData.json', {force: true})
+        if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
     })
 
     it('Submit proofs', async () => {
-        if (existsSync('groupData.json')) rmSync('groupData.json', {force: true})
+        if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
         const secret1 = "john"
         const secret2 = "steve"
         const enullifiers = [
@@ -43,9 +45,9 @@ describe.only('RLN', () => {
                 GroupDataProvider.createEvent(new Identity(secret1).commitment, 2),
                 GroupDataProvider.createEvent(new Identity(secret2).commitment)
             ],
-            'groupData.json')
+            GROUPFILE)
 
-        const [lambda, delta] = await Lambda.load(secret1)
+        const [lambda, delta] = await Lambda.load(secret1, GROUPFILE)
         const proof = await delta.createProof('test', enullifiers, "1")
         const result = await lambda.submitProof(proof, getTimestampInSeconds())
         expect(result).toEqual(VerificationResult.VALID)
@@ -72,6 +74,6 @@ describe.only('RLN', () => {
         expect(r6).toEqual(VerificationResult.DUPLICATE)
 
         expect(async () => await delta.createProof('test2', e2nullifiers, "1")).rejects
-        if (existsSync('groupData.json')) rmSync('groupData.json', {force: true})
+        if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
     })
 })

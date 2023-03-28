@@ -1,6 +1,5 @@
 import { readFile, writeFile } from "fs/promises"
 import { GroupDataProvider, GroupEvent } from "./dataProvider"
-import { GROUP_FILE } from "../../../constants"
 import poseidon from 'poseidon-lite'
 
 export interface GroupFile {
@@ -37,9 +36,9 @@ export class FileProvider extends GroupDataProvider {
         return [undefined, undefined]
     }
 
-    public static async load(filename?: string) {
-        const groupData = await FileProvider.loadFile(filename || GROUP_FILE)
-        const provider = new FileProvider(groupData.id, groupData.treeDepth, GROUP_FILE)
+    public static async load(filename: string) {
+        const groupData = await FileProvider.loadFile(filename)
+        const provider = new FileProvider(groupData.id, groupData.treeDepth, filename)
         await provider.update()
         return provider
     }
