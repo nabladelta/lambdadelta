@@ -72,20 +72,19 @@ export class Lambda {
             const nullifier = BigInt(proof.snarkProof.publicSignals.nullifiers[i])
             // Same nullifier
             const known = this.knownNullifiers.get(nullifier) || []
-            const prevLength = known.length
             // Find any that have same nullifier and signal
             const duplicates = known.filter(p => 
                 p.snarkProof.publicSignals.signalHash 
                 ===
                 proof.snarkProof.publicSignals.signalHash)
-            if (duplicates.length == 0){
-                // Not a duplicate proof
-                known.push(proof)
-                this.knownNullifiers.set(nullifier, known)
-            } else {
-                return VerificationResult.BREACH
+
+            if (duplicates.length > 0) {
+                return VerificationResult.DUPLICATE
             }
-            // Not a duplicate, no two proofs with same nullifier
+            // Not a duplicate proof, add it
+            known.push(proof)
+            this.knownNullifiers.set(nullifier, known)
+            // Not a duplicate, first one with this nullifier
             if (known.length == 1) continue
 
             // We found a slashing target
