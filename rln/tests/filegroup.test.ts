@@ -1,13 +1,11 @@
 import 'jest'
-import { existsSync, readFileSync, rmSync } from "fs"
-import { FileProvider } from '../src/core/rln/providers/file'
-import { Lambda, VerificationResult } from '../src/core/rln/lambda'
+import { existsSync, rmSync } from "fs"
 import { Identity } from '@semaphore-protocol/identity'
-import { GroupDataProvider } from '../providers/dataProvider'
+import { getTimestampInSeconds } from '../src/utils/time'
+import { GroupDataProvider } from '../src/providers/dataProvider'
+import { FileProvider } from '../src/providers/file'
+import { Lambda, VerificationResult } from '../src/lambda'
 
-export function getTimestampInSeconds() {
-    return Math.floor(Date.now() / 1000)
-}
 describe.only('RLN', () => {
     it('Creates groups, proofs, verifies, rejects', async () => {
         if (existsSync('groupData.json')) rmSync('groupData.json', {force: true})
