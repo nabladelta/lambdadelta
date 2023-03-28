@@ -5,7 +5,7 @@ import { GroupDataProvider } from "./providers/dataProvider"
 import { FileProvider } from "./providers/file"
 import { generateProof, nullifierInput, RLNGFullProof, verifyProof } from "./rln"
 import { getZKFiles } from "./utils/files"
-import { shamirRecovery } from "./utils/recovery"
+import { retrieveSecret } from "./utils/recovery"
 
 export enum VerificationResult {
     VALID,
@@ -31,10 +31,12 @@ export class Lambda {
         this.knownNullifiers = new Map()
         this.expiredTolerance = 0
     }
+
     public static async load(secret?: string): Promise<[Lambda, Delta]> {
         const provider = await FileProvider.load()
         return [new Lambda(provider), new Delta(provider, secret)]
     }
+
     public async verify(proof: RLNGFullProof, claimedTime?: number) {
         const root = proof.snarkProof.publicSignals.merkleRoot
         const [start, end] = await this.provider.getRootTimeRange(BigInt(root))
@@ -46,25 +48,11 @@ export class Lambda {
         if (end && claimedTime >= start && claimedTime <= (end + this.expiredTolerance)) return VerificationResult.VALID
         return VerificationResult.OUT_OF_RANGE
     }
-    public async retrieveSecret(proofs: RLNGFullProof[], nullifierIndex: number) {
-        if (proofs[0].snarkProof.publicSignals.nullifiers[nullifierIndex] 
-            !==
-            proofs[1].snarkProof.publicSignals.nullifiers[nullifierIndex]) {
-            throw new Error('External Nullifiers do not match! Cannot recover secret.')
-        }
-        const y1 = proofs[0].snarkProof.publicSignals.y[nullifierIndex]
-        const y2 = proofs[1].snarkProof.publicSignals.y[nullifierIndex]
-        const x1 = proofs[0].snarkProof.publicSignals.signalHash
-        const x2 = proofs[1].snarkProof.publicSignals.signalHash
-        if (x1 === x2) {
-            throw new Error('Signal is the same. Cannot recover secret.')
-        }
-        return shamirRecovery(BigInt(x1), BigInt(x2), BigInt(y1), BigInt(y2))
-    }
 
     public async submitProof(proof: RLNGFullProof, claimedTime?: number) {
         const res = await this.verify(proof, claimedTime)
         if (res == VerificationResult.INVALID || res == VerificationResult.MISSING_ROOT) {
+            // There is no point in storing a proof that is either not correct, or from a different group
             return res
         }
         let slashes = 0
@@ -89,14 +77,17 @@ export class Lambda {
 
             // We found a slashing target
             slashes++
+            if (slashes > 1) continue // Can't slash same user twice
 
-            const secret = await this.retrieveSecret(known, i)
+            const secret = await retrieveSecret(known, i)
             await this.provider.slash(secret)
         }
         if (slashes > 0) return VerificationResult.BREACH
 
         return res
     }
+
+    
 }
 /**
  * Creates RLN proofs
