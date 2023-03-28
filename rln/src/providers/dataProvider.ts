@@ -1,7 +1,6 @@
-import { IncrementalMerkleTree, MerkleProof } from "@zk-kit/incremental-merkle-tree"
+import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
 import { hashBigint } from "../utils/hash"
 import poseidon from 'poseidon-lite'
-import { Identity } from "@semaphore-protocol/identity"
 import { getTimestampInSeconds } from "../utils/time"
 
 export interface GroupEvent {
