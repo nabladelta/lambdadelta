@@ -11,7 +11,6 @@
   },
   "author": "moot",
   "license": "AGPL-3.0-or-later",
-
   "devDependencies": {
     "@types/jest": "^29.4.0",
     "@types/node": "^18.14.1",
@@ -25,6 +24,7 @@
   "dependencies": {
     "@semaphore-protocol/group": "^3.2.3",
     "@semaphore-protocol/identity": "^3.2.3",
+    "bernkastel-rln-circuits": "^1.0.1",
     "dotenv": "^16.0.3",
     "rlnjs": "^2.0.6",
     "snarkjs": "^0.6.9",

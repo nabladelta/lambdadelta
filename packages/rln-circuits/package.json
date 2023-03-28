@@ -1,8 +1,11 @@
 {
   "name": "bernkastel-rln-circuits",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "index.js",
+  "files": [
+    "compiled/*"
+  ],
   "scripts": {
     "build": "node scripts/run.js",
     "test": "echo \"Error: no test specified\" && exit 1"
