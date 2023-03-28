@@ -58,9 +58,10 @@ export class FileProvider extends GroupDataProvider {
     public async slash(secretIdentity: bigint) {
         const identityCommitment = poseidon([secretIdentity])
         const event = GroupDataProvider.createEvent(
-            identityCommitment.toString(),
+            identityCommitment,
             this.getMultiplier(identityCommitment),
             "REMOVE")
         await FileProvider.write([event], this.filename)
+        await this.update()
     }
 }

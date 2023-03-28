@@ -81,12 +81,10 @@ export abstract class GroupDataProvider {
         return this.members.root.toString(16)
     }
 
-    public static createEvent(secret: string, multiplier?: number, type: "ADD" | "REMOVE" = "ADD"): GroupEvent {
-        const identity = new Identity(secret)
-        GroupDataProvider.getRateCommitment(identity.commitment, multiplier)
+    public static createEvent(commitment: bigint, multiplier?: number, type: "ADD" | "REMOVE" = "ADD"): GroupEvent {
         return {
             type,
-            commitment: '0x'+identity.commitment.toString(16),
+            commitment: '0x'+commitment.toString(16),
             time: getTimestampInSeconds(),
             multiplier: multiplier || 1
         }
