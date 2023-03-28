@@ -46,7 +46,7 @@ export class Lambda {
 
         if (!result) return VerificationResult.INVALID
         if (!claimedTime) return VerificationResult.VALID
-        if (!end 
+        if (!end
             && claimedTime >= start)
                 return VerificationResult.VALID
         if (end
@@ -94,8 +94,6 @@ export class Lambda {
 
         return res
     }
-
-    
 }
 /**
  * Creates RLN proofs
