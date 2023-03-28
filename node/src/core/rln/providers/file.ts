@@ -48,9 +48,7 @@ export class FileProvider extends GroupDataProvider {
         let groupData: GroupFile | undefined
         try {
             groupData = await this.loadFile(filename)
-        } catch (e) {
-            console.log((e as any).message)
-        }
+        } catch (e) {}
         if (!groupData) groupData = {id: "1", treeDepth: 20, groupEvents: []}
         groupData.groupEvents = groupData.groupEvents.concat(groupEvents)
         FileProvider.saveFile(groupData, filename)

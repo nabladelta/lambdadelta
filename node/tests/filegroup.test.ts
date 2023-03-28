@@ -70,6 +70,8 @@ describe.only('RLN', () => {
 
         const r6 = await lambda.submitProof(p4, 100)
         expect(r6).toEqual(VerificationResult.DUPLICATE)
+
+        expect(async () => await delta.createProof('test2', e2nullifiers, "1")).rejects
         if (existsSync('groupData.json')) rmSync('groupData.json', {force: true})
     })
 })
