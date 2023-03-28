@@ -96,7 +96,7 @@ export class Lambda {
 /**
  * Creates RLN proofs
  */
-class Delta {
+export class Delta {
     private provider: GroupDataProvider
     private identity: Identity
     private settings: {
