@@ -41,11 +41,19 @@ export class Lambda {
         const root = proof.snarkProof.publicSignals.merkleRoot
         const [start, end] = await this.provider.getRootTimeRange(BigInt(root))
         if (!start) return VerificationResult.MISSING_ROOT
+
         const result = await verifyProof(proof, this.settings)
+
         if (!result) return VerificationResult.INVALID
         if (!claimedTime) return VerificationResult.VALID
-        if (!end && claimedTime >= start) return VerificationResult.VALID
-        if (end && claimedTime >= start && claimedTime <= (end + this.expiredTolerance)) return VerificationResult.VALID
+        if (!end 
+            && claimedTime >= start)
+                return VerificationResult.VALID
+        if (end
+            && claimedTime >= start 
+            && claimedTime <= (end + this.expiredTolerance)) 
+                return VerificationResult.VALID
+
         return VerificationResult.OUT_OF_RANGE
     }
 
