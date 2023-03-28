@@ -1,0 +1,17 @@
+{
+  "name": "bernkastel",
+  "version": "0.3.0",
+  "description": "Bernkastel",
+  "directories": {
+    "doc": "docs"
+  },
+  "workspaces": [
+    "client",
+    "node",
+    "rln-circuits",
+    "rlsem",
+    "rln"
+  ],
+  "author": "moot",
+  "license": "AGPL-3.0-or-later"
+}
