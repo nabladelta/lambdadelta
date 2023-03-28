@@ -5,8 +5,8 @@
   "main": "src/index.ts",
   "scripts": {
     "build": "npx tsc",
-    "start": "ts-node ./",
-    "dev": "concurrently \"npx tsc --watch\" \"nodemon -q dist/src/index.js\"",
+    "start": "ts-node ./ --transpile-only",
+    "dev": "ts-node ./",
     "test": "jest --coverage",
     "test:watch": "jest --watch"
   },
