@@ -11,6 +11,10 @@ import { Filestore } from '../src/core/filestore'
 import crypto from 'crypto'
 import { makeThumbnail, parseFileID, processAttachment } from '../src/lib'
 import sharp from 'sharp'
+import { FileProvider, GroupDataProvider } from 'bernkastel-rln'
+import { Identity } from '@semaphore-protocol/identity'
+import { GROUP_FILE } from '../src/constants'
+import { existsSync, rmSync } from 'fs'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -245,7 +249,7 @@ describe('Thumbnails', () => {
 })
 
 
-describe('BulletinBoard', () => {
+describe.only('BulletinBoard', () => {
     let anode: BBNode
     let bnode: BBNode
     let cnode: BBNode
@@ -253,10 +257,21 @@ describe('BulletinBoard', () => {
     let destroy: () => Promise<void>
 
     beforeEach(async () => {
+        const secretA = 'secret1secret1secret1'
+        const secretB = 'secret1secret1secret2'
+        const secretC = 'secret1secret1secret3'
+        await FileProvider.write(
+        [
+            GroupDataProvider.createEvent(new Identity(secretA).commitment, 2),
+            GroupDataProvider.createEvent(new Identity(secretB).commitment),
+            GroupDataProvider.createEvent(new Identity(secretC).commitment, 5)
+        ],
+        GROUP_FILE)
+        
         const testnet = await createTestnet(3)
-        anode = new BBNode('secret1secret1secret1', true, {bootstrap: testnet.bootstrap})
-        bnode = new BBNode('secret1secret1secret2', true, {bootstrap: testnet.bootstrap})
-        cnode = new BBNode('secret1secret1secret3', true, {bootstrap: testnet.bootstrap})
+        anode = new BBNode(secretA, true, {bootstrap: testnet.bootstrap})
+        bnode = new BBNode(secretB, true, {bootstrap: testnet.bootstrap})
+        cnode = new BBNode(secretC, true, {bootstrap: testnet.bootstrap})
         await anode.join([T])
         await bnode.join([T])
         await cnode.join([T])
@@ -267,6 +282,7 @@ describe('BulletinBoard', () => {
         console.log('Initialized')
         
         destroy = async() => {
+            if (existsSync(GROUP_FILE)) rmSync(GROUP_FILE, {force: true})
             await Promise.all([testnet.destroy(), anode.destroy(), bnode.destroy(), cnode.destroy()])
         }
     })

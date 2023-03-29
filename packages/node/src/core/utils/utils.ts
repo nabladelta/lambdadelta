@@ -4,7 +4,12 @@ export function getTimestampInSeconds() {
 
 // Rounded to 1000 seconds. This is the Thread-Epoch
 export function getThreadEpoch() {
-    return Math.floor(Date.now() / 1000000)
+    return Math.floor(Date.now() / (1000 * 1000))
+}
+
+// Rounded to 100000 seconds. This is the Member-Epoch
+export function getMemberCIDEpoch() {
+    return Math.floor(Date.now() / (100000 * 1000))
 }
 
 export function difference(a: Set<any> | string[], b: Set<any> | string[]) {

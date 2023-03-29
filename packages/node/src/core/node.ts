@@ -5,11 +5,13 @@ import ram from 'random-access-memory'
 import { BulletinBoard } from './board'
 import { Filestore } from './filestore'
 import path from 'path'
-import { DATA_FOLDER } from '../constants'
+import { DATA_FOLDER, GROUP_FILE } from '../constants'
 import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { mainLogger } from './logger'
+import { Delta, deserializeProof, Lambda, RLNGFullProof, serializeProof } from 'bernkastel-rln'
+import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 
 const log = mainLogger.getSubLogger({name: 'node'})
 
@@ -20,6 +22,8 @@ export class BBNode {
     public boards: Map<string, BulletinBoard>
     public swarm: Hyperswarm
     public filestore: Filestore
+    private lambda?: Lambda
+    private delta?: Delta
 
     constructor(secret: string, memstore?: boolean, swarmOpts?: any) {
         this.secret = secret
@@ -40,6 +44,10 @@ export class BBNode {
     }
 
     async init() {
+        const [lambda, delta] = await Lambda.load(this.secret, GROUP_FILE)
+        this.lambda = lambda
+        this.delta = delta
+
         await this.corestore.ready()
         this.swarm.on('connection', (socket: NoiseSecretStream, info: PeerInfo) => {
             log.info('Found peer', info.publicKey.toString('hex').slice(-6))
@@ -74,9 +82,28 @@ export class BBNode {
             encoding: c.array(c.buffer),
             async onmessage(topics: Buffer[], _: any) { await self.recv(topics, stream) }
         })
+
+        const handshakeSender = channel.addMessage({
+            encoding: c.buffer,
+            async onmessage(proof: Buffer, _: any) { await self.handshakeRecv(proof, stream, boardAnnouncer) }
+        })
         
-        const streamData = {stream, boardAnnouncer}
-        this.announceBoards(streamData)
+        const streamData = {stream, boardAnnouncer, handshakeSender}
+        this.handshakeSend(streamData)
+    }
+
+    private async handshakeRecv(proofBuf: Buffer, stream: NoiseSecretStream, boardAnnouncer: any) {
+        const proof = deserializeProof(proofBuf)
+        const result = await verifyMemberCIDProof(proof, stream, this.lambda!)
+        log.info(`Received MemberCID from ${stream.remotePublicKey.toString('hex').slice(-8)} (Valid: ${result})`)
+        if (result) await this.announceBoards({stream, boardAnnouncer})
+    }
+
+    private async handshakeSend(streamData: {stream: NoiseSecretStream, boardAnnouncer: any, handshakeSender: any}) {
+        log.info(`Sending MemberCID to ${streamData.stream.remotePublicKey.toString('hex').slice(-8)}`)
+        const proof = await generateMemberCID(this.secret, streamData.stream, this.delta!)
+        const proofBuf = serializeProof(proof)
+        await streamData.handshakeSender.send(proofBuf)
     }
 
     private async getTopicCommitments(key: Buffer) {

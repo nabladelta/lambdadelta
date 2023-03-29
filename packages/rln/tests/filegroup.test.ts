@@ -8,7 +8,7 @@ import { Lambda, VerificationResult } from '../src/lambda'
 
 const GROUPFILE = 'groupData.json'
 
-describe.only('RLN', () => {
+describe('RLN', () => {
     it('Creates groups, proofs, verifies, rejects', async () => {
         if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
         const secret1 = "john"
