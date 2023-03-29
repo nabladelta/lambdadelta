@@ -12,6 +12,7 @@ import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { mainLogger } from './logger'
 import { Delta, deserializeProof, Lambda, RLNGFullProof, serializeProof } from 'bernkastel-rln'
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
+import { getMemberCIDEpoch } from './utils/utils'
 
 const log = mainLogger.getSubLogger({name: 'node'})
 
@@ -32,8 +33,8 @@ export class BBNode {
             memstore ? ram : path.join(DATA_FOLDER, 'users', this.secretDigest), 
             {primaryKey: Buffer.from(this.secret)})
         this.boards = new Map()
-        
-        const swarmKeySeed = crypto.createHash('sha256').update('DHTKEY' + secret).digest()
+
+        const swarmKeySeed = crypto.createHash('sha256').update('DHTKEY' + secret).update(getMemberCIDEpoch().toString()).digest()
         this.swarm = new Hyperswarm({ seed: swarmKeySeed, ...swarmOpts})
         this.filestore = new Filestore(this.corestore)
     }
@@ -60,7 +61,7 @@ export class BBNode {
         })
 
         for (let [topic, _] of this.boards) {
-            const htopic = crypto.createHash('sha256').update("BBS>"+topic).digest()
+            const htopic = crypto.createHash('sha256').update('1').update("BBS>"+topic).digest()
             this.swarm.join(htopic)
         }
         await this.swarm.flush()
