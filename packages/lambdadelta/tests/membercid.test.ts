@@ -2,10 +2,10 @@
 import crypto from 'crypto'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { Delta, deserializeProof, FileProvider, GroupDataProvider, Lambda, nullifierInput, RLNGFullProof, serializeProof, VerificationResult } from 'bernkastel-rln'
-import { getMemberCIDEpoch, getTimestampInSeconds } from '../src/core/utils/utils'
+import { getMemberCIDEpoch, getTimestampInSeconds } from '../src/utils'
 import { existsSync, rmSync } from "fs"
 import { Identity } from '@semaphore-protocol/identity'
-import { generateMemberCID, verifyMemberCIDProof } from '../src/core/membercid'
+import { generateMemberCID, verifyMemberCIDProof } from '../src/membercid'
 
 const GROUPFILE = 'testData.json'
 

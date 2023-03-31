@@ -1,3 +1,4 @@
 import { Lambdadelta } from "./lambdadelta"
+import { generateMemberCID, verifyMemberCIDProof } from "./membercid"
 
-export { Lambdadelta }
+export { Lambdadelta, generateMemberCID, verifyMemberCIDProof }

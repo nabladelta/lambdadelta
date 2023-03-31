@@ -11,7 +11,7 @@ import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { mainLogger } from './logger'
 import { Delta, deserializeProof, Lambda, RLNGFullProof, serializeProof } from 'bernkastel-rln'
-import { generateMemberCID, verifyMemberCIDProof } from './membercid'
+import { generateMemberCID, verifyMemberCIDProof } from 'lambdadelta'
 import { getMemberCIDEpoch } from './utils/utils'
 
 const log = mainLogger.getSubLogger({name: 'node'})

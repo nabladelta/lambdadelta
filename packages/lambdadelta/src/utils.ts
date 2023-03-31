@@ -52,3 +52,8 @@ export function serializeEvent(event: FeedEvent): Buffer {
 export function deserializeEvent(eventBuf: Buffer): FeedEvent {
     return JSON.parse(eventBuf.toString('utf-8'))
 }
+
+// Rounded to 100000 seconds. This is the Member-Epoch
+export function getMemberCIDEpoch() {
+    return Math.floor(Date.now() / (100000 * 1000))
+}
