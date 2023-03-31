@@ -5,21 +5,21 @@ import { Delta, deserializeProof, FileProvider, GroupDataProvider, Lambda, nulli
 import { existsSync, rmSync } from "fs"
 import { Identity } from '@semaphore-protocol/identity'
 import { generateMemberCID, verifyMemberCIDProof } from '../src/membercid'
+import { Lambdadelta } from '../src'
+import Corestore from 'corestore'
+import ram from 'random-access-memory'
+import { NullifierSpec } from '../src/lambdadelta'
 
 const GROUPFILE = 'testData.json'
 
-describe('Member CID', () => {
+describe('Event feed', () => {
+    let peerA: {lambda: Lambda, delta: Delta, mcid: string, corestore: any}
+    let peerB: {lambda: Lambda, delta: Delta, mcid: string, corestore: any}
 
     beforeEach(async () => {
         if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
-
-    })
-    afterEach(async () => {
-        if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
-    })
-    it('Creates and verifies member CID', async () => {
-        const secretA = "john"
-        const secretB = "steve"
+        const secretA = "secret1secret1secret1"
+        const secretB = "secret1secret1secret1"
         await FileProvider.write(
             [
                 GroupDataProvider.createEvent(new Identity(secretA).commitment, 2),
@@ -37,7 +37,40 @@ describe('Member CID', () => {
 
         const proofA = await generateMemberCID(secretA, mockStreamA, delta)
         const proofB = await generateMemberCID(secretB, mockStreamB, deltaB)
-        
 
+        const corestoreA = new Corestore(ram, {primaryKey: Buffer.from(secretA)})
+        const corestoreB = new Corestore(ram, {primaryKey: Buffer.from(secretB)})
+        const s1 = corestoreA.replicate(true)
+        const s2 = corestoreA.replicate(false)
+        s1.pipe(s2).pipe(s1)
+        peerA = {lambda, delta, mcid: proofA.signal, corestore: corestoreA}
+        peerB = {lambda: lambdaB, delta: deltaB, mcid: proofB.signal, corestore: corestoreB}
+    })
+
+    afterEach(async () => {
+        if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
+    })
+
+    it('Replicates events', async () => {
+        const topic = "1"
+        const eventTypePost = "POST"
+        const postNullifierSpec: NullifierSpec = {
+            messageLimit: 1,
+            epoch: 10
+        }
+        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.lambda, peerA.delta)
+        feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec])
+
+        const feedB = new Lambdadelta(topic, peerB.corestore, peerB.lambda, peerB.delta)
+        feedB.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec])
+
+        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
+
+        await feedB.newEvent(eventTypePost, Buffer.from("test2"))
+
+        await feedA.addPeer(peerB.mcid, feedB.getCoreID())
+        await feedB.addPeer(peerA.mcid, feedA.getCoreID())
+
+        
     })
 })
