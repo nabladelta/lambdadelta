@@ -40,6 +40,12 @@ interface TopicEvents {
     'eventSyncResult': (memberCID: string, result: false | VerificationResult) => void
 }
 
+interface EventMetadata {
+    index: number, // Index on own hypercore
+    received: number, // Time received for us
+    membersReceived: Map<string, number> // MemberCID => time received
+}
+
 /**
  * Decentralized Multi-writer event feed on a `topic`
  * with timestamps based on local consensus
@@ -55,7 +61,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private lambda: Lambda
     private delta: Delta
     private oldestIndex: number
-    private events: Map<string, number>
+    private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
     protected nullifierSpecs: Map<string, NullifierSpec[]>
 
     constructor(topic: string, corestore: any, lambda: Lambda, delta: Delta) {
@@ -66,7 +72,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.timeline = new BTree()
         this.eidTime = new Map()
         this.nullifierSpecs = new Map()
-        this.events = new Map()
+        this.eventMetadata = new Map()
         this.core = this.corestore
             .namespace('lambdadelta')
             .get({ name: topic })
@@ -97,7 +103,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return prevTime
     }
 
-    public addPeer(memberCID: string, coreID: string) {
+    public getCoreID() {
+        return this.core.key.toString('hex')
+    }
+
+    public async addPeer(memberCID: string, coreID: string) {
         if (this.peers.has(memberCID)) {
             // Peer already added
             return false
@@ -105,6 +115,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const core = this.corestore.get(b4a.from(coreID, 'hex'))
         this.peers.set(memberCID, core)
         this.emit('peerAdded', memberCID)
+        await this.syncPeer(memberCID)
     }
 
     private async syncPeer(memberCID: string) {
@@ -116,9 +127,18 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const lastEventBuf: Buffer = await core.get(core.length - 1)
         const lastEvent = deserializeEvent(lastEventBuf)
         for (let i = lastEvent.oldestIndex; i < core.length; i++) {
-            const event: Buffer = await core.get(i)
-            const result = await this.addEvent(deserializeEvent(event))
-            this.emit('eventSyncResult', memberCID, result)
+            const eventBuf: Buffer = await core.get(i)
+            const event = deserializeEvent(eventBuf)
+            const eventID = this.getFeedEventContentHash(event)
+            const eventMetadata = this.eventMetadata.get(eventID)
+            if (!eventMetadata) {
+                const result = await this.addEvent(event)
+                this.emit('eventSyncResult', memberCID, result)
+            } else if (eventMetadata.membersReceived.has(memberCID)) {
+                throw new Error("Duplicate event sync from peer")
+            } else {
+                eventMetadata.membersReceived.set(memberCID, event.received)
+            }
         }
     }
 
@@ -154,8 +174,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     private async addEvent(event: FeedEvent) {
-        if (this.events.has(event.proof.signal)) {
+        if (this.eventMetadata.has(event.proof.signal)) {
             throw new Error("Event already added")
+        }
+        const eventMetadata: EventMetadata = {
+            index: 0,
+            received: 0,
+            membersReceived: new Map()
         }
         const eventID = this.getFeedEventContentHash(event)
         if (event.proof.signal !== eventID) {
@@ -170,9 +195,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         // This makes it harder to tell who first saw an event
         event.received = (Math.abs(currentTime - event.received) <= TOLERANCE)
                             ? event.received : currentTime
+        eventMetadata.received = event.received
 
         const {length, byteLength} = await this.core.append(serializeEvent(event))
-        this.events.set(eventID, length - 1)
+
+        eventMetadata.index = length - 1
+        this.eventMetadata.set(eventID, eventMetadata)
         return result
     }
 
