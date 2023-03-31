@@ -38,6 +38,7 @@ export interface NullifierSpec {
 interface TopicEvents {
     'peerAdded': (memberCID: string) => void
     'eventSyncResult': (memberCID: string, result: false | VerificationResult) => void
+    'eventSyncTimestamp': (memberCID: string, eventID: string, received: number) => void
 }
 
 interface EventMetadata {
@@ -106,6 +107,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     public getCoreID() {
         return this.core.key.toString('hex')
     }
+    public async getCoreLength(): Promise<number> {
+        await this.core.ready()
+        return this.core.length
+    }
 
     public async addPeer(memberCID: string, coreID: string) {
         if (this.peers.has(memberCID)) {
@@ -124,10 +129,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             throw new Error("Peer core not found")
         }
         await core.ready()
-        const lastEventBuf: Buffer = await core.get(core.length - 1)
+        if (core.length < 1) {
+            throw new Error("Peer core is empty")
+        }
+        const lastEventBuf: Buffer = await core.get(core.length - 1, {timeout: 3000})
         const lastEvent = deserializeEvent(lastEventBuf)
         for (let i = lastEvent.oldestIndex; i < core.length; i++) {
-            const eventBuf: Buffer = await core.get(i)
+            const eventBuf: Buffer = await core.get(i, {timeout: 3000})
             const event = deserializeEvent(eventBuf)
             const eventID = this.getFeedEventContentHash(event)
             const eventMetadata = this.eventMetadata.get(eventID)
@@ -137,6 +145,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             } else if (eventMetadata.membersReceived.has(memberCID)) {
                 throw new Error("Duplicate event sync from peer")
             } else {
+                this.emit('eventSyncTimestamp', memberCID, eventID, event.received)
                 eventMetadata.membersReceived.set(memberCID, event.received)
             }
         }
@@ -250,5 +259,20 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     public async newEvent(eventType: string, content: Buffer) {
         const event = await this.createEvent(eventType, this.createNullifier(eventType), content)
         return await this.addEvent(event)
+    }
+
+    public async getEvents(startTime: number = 0, endTime?: number): Promise<FeedEvent[]> {
+        endTime = endTime || this.timeline.maxKey()
+        if (!endTime) return []
+        let returns = []
+        for (let [time, eventID] of this.timeline.getRange(startTime, endTime, true)) {
+            const meta = this.eventMetadata.get(eventID)
+            if (!meta) {
+                throw new Error("Event from timeline is missing")
+            }
+            const eventBuf = await this.core.get(meta.index)
+            returns.push(deserializeEvent(eventBuf))
+        }
+        return returns
     }
 }
