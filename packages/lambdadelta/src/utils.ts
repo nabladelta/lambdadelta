@@ -50,7 +50,9 @@ export function serializeEvent(event: FeedEvent): Buffer {
 }
 
 export function deserializeEvent(eventBuf: Buffer): FeedEvent {
-    return JSON.parse(eventBuf.toString('utf-8'))
+    const event = JSON.parse(eventBuf.toString('utf-8'))
+    event.content = Buffer.from(event.content)
+    return event
 }
 
 // Rounded to 100000 seconds. This is the Member-Epoch
