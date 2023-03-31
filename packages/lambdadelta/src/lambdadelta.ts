@@ -201,6 +201,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         eventMetadata.index = length - 1
         this.eventMetadata.set(eventID, eventMetadata)
+        this.setTime(eventMetadata.received, eventID)
         return result
     }
 
