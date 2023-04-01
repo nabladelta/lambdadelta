@@ -1,4 +1,4 @@
-import { FeedEvent } from "./lambdadelta"
+import { FeedEntry, FeedEventHeader } from "./lambdadelta"
 
 export function getTimestampInSeconds() {
     return Math.floor(Date.now() / 1000)
@@ -45,17 +45,34 @@ export function getEpochRange(
     return epochs
 }
 
-export function serializeEvent(event: FeedEvent): Buffer {
+export function serializeEvent(event: FeedEventHeader): Buffer {
     return Buffer.from(JSON.stringify(event), 'utf-8')
 }
 
-export function deserializeEvent(eventBuf: Buffer): FeedEvent {
+export function deserializeEvent(eventBuf: Buffer): FeedEventHeader {
     const event = JSON.parse(eventBuf.toString('utf-8'))
-    event.content = Buffer.from(event.content)
     return event
+}
+
+export function serializeFeedEntry(event: FeedEntry): Buffer {
+    return Buffer.from(JSON.stringify(event), 'utf-8')
+}
+
+export function deserializeFeedEntry(eventBuf: Buffer): FeedEntry {
+    return JSON.parse(eventBuf.toString('utf-8'))
 }
 
 // Rounded to 100000 seconds. This is the Member-Epoch
 export function getMemberCIDEpoch() {
     return Math.floor(Date.now() / (100000 * 1000))
+}
+
+export function getStandardDeviation(array: number[]) {
+    const n = array.length
+    const mean = array.reduce((a, b) => a + b) / n
+    return Math.sqrt(array.map(x => Math.pow(x - mean, 2)).reduce((a, b) => a + b) / n)
+}
+
+export function getMean(array: number[]) {
+    return array.reduce((a, b) => a + b) / array.length
 }

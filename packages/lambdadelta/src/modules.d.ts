@@ -9,6 +9,8 @@ declare module 'autobase'
 declare module 'protomux'
 declare module 'compact-encoding'
 declare module 'hyperblobs'
+declare module 'hyperdrive'
+
 
 declare module 'brittle'
 declare module 'multi-core-indexer'
