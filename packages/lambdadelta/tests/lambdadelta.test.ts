@@ -10,6 +10,8 @@ import Corestore from 'corestore'
 import ram from 'random-access-memory'
 import { NullifierSpec } from '../src/lambdadelta'
 
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
+
 const GROUPFILE = 'testData.json'
 jest.setTimeout(120000)
 describe('Event feed', () => {
@@ -63,7 +65,7 @@ describe('Event feed', () => {
         const eventTypePost = "POST"
         const postNullifierSpec: NullifierSpec = {
             messageLimit: 1,
-            epoch: 10
+            epoch: 1
         }
         const feedA = new Lambdadelta(topic, peerA.corestore, peerA.lambda, peerA.delta)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
@@ -93,14 +95,26 @@ describe('Event feed', () => {
 
         await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
         await feedB.addPeer(peerA.mcid, feedA.getCoreIDs()[0], feedA.getCoreIDs()[1])
-        const eventsA = (await feedA.getEvents()).map(e => e.toString('utf-8'))
-        const eventsB = (await feedB.getEvents()).map(e => e.toString('utf-8'))
+        let eventsA = (await feedA.getEvents()).map(e => e.toString('utf-8'))
+        let eventsB = (await feedB.getEvents()).map(e => e.toString('utf-8'))
         
         expect(eventsA.length).toEqual(2)
         expect(eventsB.length).toEqual(2)
         expect(await feedA.getCoreLength()).toEqual(2)
         expect(await feedB.getCoreLength()).toEqual(2)
 
+        for (let i = 0; i < 2; i++) {
+            expect(eventsA[i]).toEqual(eventsB[i])
+        }
+        await sleep(1000)
+        const result = await feedA.newEvent(eventTypePost, Buffer.from("test3"))
+        expect(result).toEqual(VerificationResult.VALID)
+        await sleep(1000)
+        expect(await feedA.getCoreLength()).toEqual(3)
+        expect(await feedB.getCoreLength()).toEqual(3)
+        eventsA = (await feedA.getEvents()).map(e => e.toString('utf-8'))
+        eventsB = (await feedB.getEvents()).map(e => e.toString('utf-8'))
+        
         for (let i = 0; i < 2; i++) {
             expect(eventsA[i]).toEqual(eventsB[i])
         }
