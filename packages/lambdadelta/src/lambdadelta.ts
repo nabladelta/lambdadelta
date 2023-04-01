@@ -550,13 +550,20 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return result
     }
 
-    public async getEvents(startTime: number = 0, endTime?: number): Promise<Buffer[]> {
+    public async getEvents(
+        startTime: number = 0,
+        endTime?: number,
+        maxLength?: number
+        ): Promise<{header: FeedEventHeader, content: Buffer}[]> {
+
         endTime = endTime || this.timeline.maxKey()
         if (!endTime) return []
         let returns = []
-        for (let [time, eventID] of this.timeline.getRange(startTime, endTime, true)) {
+        for (let [time, eventID] of this.timeline.getRange(startTime, endTime, true, maxLength)) {
+            const eventHeaderBuf: Buffer = await this.drive.get(`/events/${eventID}/header`)
+            const eventHeader: FeedEventHeader = deserializeEvent(eventHeaderBuf)
             const contentBuf: Buffer = await this.drive.get(`/events/${eventID}/content`)
-            returns.push(contentBuf)
+            returns.push({header: eventHeader, content: contentBuf})
         }
         return returns
     }
