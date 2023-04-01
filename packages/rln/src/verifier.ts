@@ -103,7 +103,7 @@ export class RLN {
         return res
     }
 
-    public async createProof(signal: string, externalNullifiers: nullifierInput[], rlnIdentifier: string) {
+    public async createProof(signal: string, externalNullifiers: nullifierInput[], rlnIdentifier: string, checkCache: boolean = false) {
         const merkleProof = this.provider.createMerkleProof(this.identity.commitment, this.verifierSettings.userMessageLimitMultiplier)
 
         const proof = await generateProof(
@@ -116,6 +116,12 @@ export class RLN {
                ...this.verifierSettings
             })
 
+        if (checkCache) {
+            const matches = proof.snarkProof.publicSignals.nullifiers.filter(n => this.knownNullifiers.get(BigInt(n)))
+            if (matches.length > 0) {
+                throw new Error("Duplicate nullifier found")
+            }
+        }
         return proof
     }
 }
