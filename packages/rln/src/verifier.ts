@@ -15,24 +15,34 @@ export enum VerificationResult {
 }
 
 /**
- * Verifies RLN proofs
+ * Cretes & verifies RLN proofs
  */
-export class Lambda {
+export class RLN {
     private provider: GroupDataProvider
     private settings: {vKey: any, scheme: "groth16" | "plonk"}
+    private identity: Identity
     public expiredTolerance: number
-    private knownNullifiers: Map<bigint, RLNGFullProof[]> // nullifier => Proof
+    private knownNullifiers: Map<bigint, RLNGFullProof[]> // nullifier => Proof (cache)
+    private verifierSettings: {
+        userMessageLimitMultiplier: number,
+        scheme: 'groth16' | 'plonk'
+        wasmFilePath: string
+        zkeyFilePath: string
+    }
 
-    private constructor(provider: GroupDataProvider) {
+    private constructor(provider: GroupDataProvider, secret?: string) {
         this.settings = getZKFiles('rln-multiplier-generic', 'groth16')
         this.provider = provider
         this.knownNullifiers = new Map()
         this.expiredTolerance = 0
+        this.identity = new Identity(secret)
+        const {files, scheme} = getZKFiles('rln-multiplier-generic', 'groth16')
+        this.verifierSettings = {...files, userMessageLimitMultiplier: this.provider.getMultiplier(this.identity.commitment)!, scheme}
     }
 
-    public static async load(secret: string, filename: string): Promise<[Lambda, Delta]> {
+    public static async load(secret: string, filename: string): Promise<RLN> {
         const provider = await FileProvider.load(filename)
-        return [new Lambda(provider), new Delta(provider, secret)]
+        return new RLN(provider, secret)
     }
 
     public async verify(proof: RLNGFullProof, claimedTime?: number) {
@@ -92,37 +102,20 @@ export class Lambda {
 
         return res
     }
-}
-/**
- * Creates RLN proofs
- */
-export class Delta {
-    private provider: GroupDataProvider
-    private identity: Identity
-    private settings: {
-        userMessageLimitMultiplier: number,
-        scheme: 'groth16' | 'plonk'
-        wasmFilePath: string
-        zkeyFilePath: string
-    }
 
-    public constructor(provider: GroupDataProvider, secret?: string) {
-        this.provider = provider
-        this.identity = new Identity(secret)
-        const {files, scheme} = getZKFiles('rln-multiplier-generic', 'groth16')
-        this.settings = {...files, userMessageLimitMultiplier: this.provider.getMultiplier(this.identity.commitment)!, scheme}
-    }
     public async createProof(signal: string, externalNullifiers: nullifierInput[], rlnIdentifier: string) {
-        const merkleProof = this.provider.createMerkleProof(this.identity.commitment, this.settings.userMessageLimitMultiplier)
+        const merkleProof = this.provider.createMerkleProof(this.identity.commitment, this.verifierSettings.userMessageLimitMultiplier)
 
-        return await generateProof(
+        const proof = await generateProof(
             this.identity,
             merkleProof,
             externalNullifiers,
             signal,
             {
                 rlnIdentifier,
-               ...this.settings
+               ...this.verifierSettings
             })
+
+        return proof
     }
 }

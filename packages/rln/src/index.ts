@@ -1,7 +1,10 @@
-import { Lambda, Delta, VerificationResult } from "./lambda"
+import { RLN, VerificationResult } from "./verifier"
 import { RLNGFullProof, nullifierInput } from "./rln"
 import { GroupDataProvider } from "./providers/dataProvider"
 import { FileProvider } from "./providers/file"
 import { serializeProof, deserializeProof } from "./serialize"
 
-export { Lambda, Delta, RLNGFullProof, serializeProof, deserializeProof, nullifierInput, VerificationResult, GroupDataProvider, FileProvider }
+export { RLN as Lambda, RLNGFullProof, 
+        serializeProof, deserializeProof,
+        nullifierInput, VerificationResult,
+        GroupDataProvider, FileProvider }
