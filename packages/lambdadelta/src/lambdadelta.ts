@@ -51,7 +51,10 @@ export interface NullifierSpec {
 interface TopicEvents {
     'peerAdded': (memberCID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
-    'eventSyncResult': (memberCID: string, result: boolean | VerificationResult, contentResult: boolean) => void
+    'eventSyncResult': (memberCID: string, 
+            result: boolean | VerificationResult,
+            contentResult: ContentVerificationResult | undefined) => void
+    'contentSyncResult': (memberCID: string, contentResult: ContentVerificationResult) => void
     'eventSyncTimestamp': (memberCID: string, eventID: string, received: number) => void
     'eventTimelineAdd': (eventID: string, time: number, consensusTime: number) => void
     'eventTimelineRemove': (eventID: string, prevTime: number, consensusTime: number) => void
@@ -72,6 +75,14 @@ interface PeerData {
     events: Map<string, number> // All events we obtained from this peer => index on core
     feedCore: any
     drive: any
+}
+
+enum ContentVerificationResult {
+    VALID,
+    UNAVAILABLE,
+    SIZE,
+    HASH_MISMATCH,
+    INVALID
 }
 
 /**
@@ -217,20 +228,22 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 if (result === VerificationResult.VALID) {
                     contentResult = await this.addContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
                 }
-                this.emit('eventSyncResult', memberCID, result, contentResult || false)
+                this.emit('eventSyncResult', memberCID, result, contentResult)
 
             } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
                 // We could be missing the content
                 const eventHeaderBuf = await peer.drive.get(`/events/${eventID}/header`)
                 const eventHeader = deserializeEvent(eventHeaderBuf)
                 contentResult = await this.addContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
+                this.emit('contentSyncResult', memberCID, contentResult)
             }
 
             let eventMetadata = this.eventMetadata.get(eventID)
 
             if (!eventMetadata) { // Is a new event
-                if (result !== VerificationResult.VALID) {
+                if (result !== VerificationResult.VALID || contentResult !== ContentVerificationResult.VALID) {
                     // Skip invalid events
+                    // As well as events we couldn't get a valid content buffer for
                     peer.lastIndex = i
                     this.peers.set(memberCID, peer)
                     continue
@@ -280,27 +293,28 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         const entry = await peer.drive.entry(`/events/${eventID}/content`)
         if (!entry) {
-            return false
+            return ContentVerificationResult.UNAVAILABLE
         }
         if (entry.value.blob.byteLength > this.maxContentSize.get(eventType)!) {
-            return false
+            return ContentVerificationResult.SIZE
         }
 
         const contentBuf = await peer.drive.get(`/events/${eventID}/content`)
         if (contentBuf.length > this.maxContentSize.get(eventType)!) {
-            return false
+            return ContentVerificationResult.SIZE
         }
         const hash = crypto.createHash('sha256').update(contentBuf).digest('hex')
         if (hash !== contentHash) {
-            return false
+            return ContentVerificationResult.HASH_MISMATCH
         }
 
         if (!(await this.validateContent(eventID, eventType, contentBuf))){
-            return false
+            return ContentVerificationResult.INVALID
         }
 
         await this.drive.put(`/events/${eventID}/content`, contentBuf)
-        return true
+
+        return ContentVerificationResult.VALID
     }
 
     protected async validateContent(eventID: string, eventType: string, buf: Buffer) {
