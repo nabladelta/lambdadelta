@@ -50,6 +50,7 @@ export interface NullifierSpec {
 
 interface TopicEvents {
     'peerAdded': (memberCID: string) => void
+    'publishReceivedTime': (eventID: string, time: number) => void
     'eventSyncResult': (memberCID: string, result: boolean | VerificationResult) => void
     'eventSyncTimestamp': (memberCID: string, eventID: string, received: number) => void
     'eventTimelineAdd': (eventID: string, time: number, consensusTime: number) => void
@@ -68,7 +69,7 @@ interface EventMetadata {
 
 interface PeerData {
     lastIndex: number // Last index we scanned
-    events: Set<string> // All events we obtained from this peer
+    events: Map<string, number> // All events we obtained from this peer => index on core
     feedCore: any
     drive: any
 }
@@ -172,14 +173,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             feedCore,
             drive,
             lastIndex: 0,
-            events: new Set(),
+            events: new Map(),
         })
         this.emit('peerAdded', memberCID)
         await this.syncPeer(memberCID, true)
 
-        feedCore.on('append', async () => {
-            await this.syncPeer(memberCID, false)
-        })
+        // feedCore.on('append', async () => {
+        //     await this.syncPeer(memberCID, false)
+        // })
     }
 
     private async syncPeer(memberCID: string, initialSync: boolean) {
@@ -201,6 +202,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         for (let i = startFrom; i < feedCore.length; i++) {
+            console.log(i, memberCID)
             const entryBuf: Buffer = await feedCore.get(i, {timeout: TIMEOUT})
             const entry = deserializeFeedEntry(entryBuf)
             const eventID = entry.eventID
@@ -249,17 +251,18 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 }
 
             } else if (eventMetadata.membersReceived.has(memberCID)) {
-                throw new Error("Duplicate event sync from peer")
+                throw new Error(`Duplicate event sync from peer (index: ${i} prevIndex: ${peer.events.get(eventID)} peer: ${memberCID} event: ${eventID})`)
             }
             // Add peer's received timestamp
             this.emit('eventSyncTimestamp', memberCID, eventID, entry.received)
             eventMetadata.membersReceived.set(memberCID, entry.received)
             this.eventMetadata.set(eventID, eventMetadata)
-            await this.updateMemberReceivedTime(eventID)
 
-            peer.events.add(eventID)
+            peer.events.set(eventID, i)
             peer.lastIndex = i
             this.peers.set(memberCID, peer)
+
+            await this.updateMemberReceivedTime(eventID)
         }
     }
 
@@ -294,6 +297,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             received: received,
             oldestIndex: this.oldestIndex
         }))
+        this.emit('publishReceivedTime', eventID, received)
         return length - 1
     }
 

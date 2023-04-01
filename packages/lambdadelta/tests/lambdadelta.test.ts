@@ -84,6 +84,13 @@ describe('Event feed', () => {
             console.log(`[B]: ${cid} ${eventID} ${result}`)
         })
 
+        feedA.on('publishReceivedTime', async (eventID, time) => {
+            console.log(`[A]: EID: ${eventID} Time:  ${time}`)
+        })
+        feedB.on('publishReceivedTime', async (eventID, time) => {
+            console.log(`[B]: EID: ${eventID} Time: ${time}`)
+        })
+
         await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
         await feedB.addPeer(peerA.mcid, feedA.getCoreIDs()[0], feedA.getCoreIDs()[1])
         const eventsA = (await feedA.getEvents()).map(e => e.toString('utf-8'))
