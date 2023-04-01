@@ -50,6 +50,7 @@ export interface NullifierSpec {
 
 interface TopicEvents {
     'peerAdded': (memberCID: string) => void
+    'peerRemoved': (memberCID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
     'eventSyncResult': (memberCID: string, 
             result: boolean | VerificationResult,
@@ -217,6 +218,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             this.eventMetadata.set(eventID, eventMetadata)
             await this.updateMemberReceivedTime(eventID)
         }
+        this.emit('peerRemoved', memberCID)
     }
 
     private async syncPeer(memberCID: string, initialSync: boolean) {
