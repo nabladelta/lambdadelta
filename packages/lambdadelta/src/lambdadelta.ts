@@ -77,6 +77,7 @@ interface PeerData {
     events: Map<string, number> // All events we obtained from this peer => index on core
     feedCore: any
     drive: any
+    finishedInitialSync: boolean,
     _onappend: () => Promise<void>
 }
 
@@ -188,6 +189,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             drive,
             lastIndex: 0,
             events: new Map(),
+            finishedInitialSync: false,
             _onappend: async () => {
                 await this.syncPeer(memberCID, false)
             }
@@ -221,11 +223,23 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.emit('peerRemoved', memberCID)
     }
 
+    protected onInvalidInput(
+            memberCID: string,
+            headerResult: boolean | VerificationResult | undefined,
+            contentResult: ContentVerificationResult | undefined) {
+        return true
+    }
+
     private async syncPeer(memberCID: string, initialSync: boolean) {
         const peer = this.peers.get(memberCID)
         if (!peer) {
             throw new Error("Unknown peer")
         }
+
+        if (!initialSync && !peer.finishedInitialSync) {
+            throw new Error("Trying to sync new events before finishing initial sync")
+        }
+
         const feedCore = peer.feedCore
         await feedCore.ready()
         if (feedCore.length < 1) {
@@ -233,7 +247,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         let startFrom = peer.lastIndex + 1
 
-        if (initialSync) {
+        if (initialSync && peer.lastIndex == 0) {
             const lastEntryBuf: Buffer = await feedCore.get(feedCore.length - 1, {timeout: TIMEOUT})
             const lastEntry = deserializeFeedEntry(lastEntryBuf)
             startFrom = lastEntry.oldestIndex
@@ -277,7 +291,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                     // As well as events we couldn't get a valid content buffer for
                     peer.lastIndex = i
                     this.peers.set(memberCID, peer)
-                    continue
+                    // Decides whether to continue syncing events from peer or not
+                    const shouldContinue = this.onInvalidInput(memberCID, result, contentResult)
+                    if (shouldContinue) {
+                        continue
+                    } else {
+                        // Interrupt initial sync
+                        return
+                    }
                 }
                 if (!claimedTime) {
                     throw new Error("Invalid claimed time")
@@ -316,6 +337,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
             await this.updateMemberReceivedTime(eventID)
         }
+        peer.finishedInitialSync = true
+        this.peers.set(memberCID, peer)
     }
 
     private async addContent(memberCID: string, eventID: string, eventType: string, contentHash: string) {
