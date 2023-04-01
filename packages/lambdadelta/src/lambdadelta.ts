@@ -55,6 +55,7 @@ interface TopicEvents {
             result: boolean | VerificationResult,
             contentResult: ContentVerificationResult | undefined) => void
     'contentSyncResult': (memberCID: string, contentResult: ContentVerificationResult) => void
+    'duplicateEventSync': (memberCID: string, eventID: string, index: number, prevIndex: number | undefined) => void
     'eventSyncTimestamp': (memberCID: string, eventID: string, received: number) => void
     'eventTimelineAdd': (eventID: string, time: number, consensusTime: number) => void
     'eventTimelineRemove': (eventID: string, prevTime: number, consensusTime: number) => void
@@ -275,6 +276,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 }
 
             } else if (eventMetadata.membersReceived.has(memberCID)) {
+                this.emit('duplicateEventSync', memberCID, eventID, i, peer.events.get(eventID))
                 throw new Error(`Duplicate event sync from peer (index: ${i} prevIndex: ${peer.events.get(eventID)} peer: ${memberCID} event: ${eventID})`)
             }
             // Add peer's received timestamp
