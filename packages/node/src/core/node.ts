@@ -10,7 +10,7 @@ import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { mainLogger } from './logger'
-import { Delta, deserializeProof, Lambda, RLNGFullProof, serializeProof } from 'bernkastel-rln'
+import { RLN, deserializeProof, RLNGFullProof, serializeProof } from 'bernkastel-rln'
 import { generateMemberCID, verifyMemberCIDProof } from 'lambdadelta'
 import { getMemberCIDEpoch } from './utils/utils'
 
@@ -23,8 +23,7 @@ export class BBNode {
     public boards: Map<string, BulletinBoard>
     public swarm: Hyperswarm
     public filestore: Filestore
-    private lambda?: Lambda
-    private delta?: Delta
+    private rln?: RLN
 
     constructor(secret: string, memstore?: boolean, swarmOpts?: any) {
         this.secret = secret
@@ -45,9 +44,7 @@ export class BBNode {
     }
 
     async init() {
-        const [lambda, delta] = await Lambda.load(this.secret, GROUP_FILE)
-        this.lambda = lambda
-        this.delta = delta
+        this.rln = await RLN.load(this.secret, GROUP_FILE)
 
         await this.corestore.ready()
         this.swarm.on('connection', (socket: NoiseSecretStream, info: PeerInfo) => {
@@ -95,14 +92,14 @@ export class BBNode {
 
     private async handshakeRecv(proofBuf: Buffer, stream: NoiseSecretStream, boardAnnouncer: any) {
         const proof = deserializeProof(proofBuf)
-        const result = await verifyMemberCIDProof(proof, stream, this.lambda!)
+        const result = await verifyMemberCIDProof(proof, stream, this.rln!)
         log.info(`Received MemberCID from ${stream.remotePublicKey.toString('hex').slice(-8)} (Valid: ${result})`)
         if (result) await this.announceBoards({stream, boardAnnouncer})
     }
 
     private async handshakeSend(streamData: {stream: NoiseSecretStream, boardAnnouncer: any, handshakeSender: any}) {
         log.info(`Sending MemberCID to ${streamData.stream.remotePublicKey.toString('hex').slice(-8)}`)
-        const proof = await generateMemberCID(this.secret, streamData.stream, this.delta!)
+        const proof = await generateMemberCID(this.secret, streamData.stream, this.rln!)
         const proofBuf = serializeProof(proof)
         await streamData.handshakeSender.send(proofBuf)
     }
