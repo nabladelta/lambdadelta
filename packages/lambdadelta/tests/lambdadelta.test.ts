@@ -61,7 +61,7 @@ describe('Event feed', () => {
     })
 
     it('Replicates events', async () => {
-        const topic = "1"
+        const topic = "a"
         const eventTypePost = "POST"
         const postNullifierSpec: NullifierSpec = {
             messageLimit: 1,

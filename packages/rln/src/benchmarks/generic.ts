@@ -36,7 +36,7 @@ const t = async () => {
             {
                 scheme,
                 ...files,
-                rlnIdentifier: 1,
+                rlnIdentifier: "1",
                 userMessageLimitMultiplier: 2,
             })
         const mid = Date.now()

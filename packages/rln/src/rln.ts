@@ -19,7 +19,7 @@ export async function verifyProof(
     for (let i = 0; i < publicSignals.externalNullifiers.length; i++) {
         const expectedExtNullifier = poseidon([
             hashString(rlnFullProof.externalNullifiers[i].nullifier),
-            hashBigint(rlnFullProof.rlnIdentifier)
+            hashString(rlnFullProof.rlnIdentifier)
         ])
 
         if (expectedExtNullifier !== BigInt(publicSignals.externalNullifiers[i])) {
@@ -69,7 +69,7 @@ export async function generateProof(
         externalNullifiers: nullifierInput[],
         signal: string,
         config: {
-            rlnIdentifier: BigNumberish,
+            rlnIdentifier: string,
             userMessageLimitMultiplier: number,
             scheme: 'groth16' | 'plonk'
             wasmFilePath: string
@@ -88,7 +88,7 @@ export async function generateProof(
     } = config
 
     if ("depth" in groupOrMerkleProof) {
-        rlnIdentifier = groupOrMerkleProof.id
+        rlnIdentifier = groupOrMerkleProof.id.toString()
         const index = groupOrMerkleProof.indexOf(poseidon([identity.commitment, BigInt(userMessageLimitMultiplier)]))
         
         if (index === -1) {
@@ -108,7 +108,7 @@ export async function generateProof(
         userMessageLimitMultiplier: BigInt(userMessageLimitMultiplier),
         externalNullifiers: externalNullifiers.map(e => poseidon([
             hashString(e.nullifier),
-            hashBigint(rlnIdentifier)
+            hashString(rlnIdentifier)
         ])),
         messageIds: externalNullifiers.map(e => BigInt(e.messageId)),
         messageLimits: externalNullifiers.map(e => BigInt(e.messageLimit))
@@ -189,7 +189,7 @@ export interface Proof {
 export interface RLNGFullProof {
     snarkProof: RLNGSNARKProof
     signal: string
-    rlnIdentifier: BigNumberish
+    rlnIdentifier: string
     externalNullifiers: nullifierOutput[]
 }
 
