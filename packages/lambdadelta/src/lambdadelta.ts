@@ -178,9 +178,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.emit('peerAdded', memberCID)
         await this.syncPeer(memberCID, true)
 
-        // feedCore.on('append', async () => {
-        //     await this.syncPeer(memberCID, false)
-        // })
+        feedCore.on('append', async () => {
+            await this.syncPeer(memberCID, false)
+        })
     }
 
     private async syncPeer(memberCID: string, initialSync: boolean) {
@@ -193,7 +193,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (feedCore.length < 1) {
             throw new Error("Peer core is empty")
         }
-        let startFrom = peer.lastIndex
+        let startFrom = peer.lastIndex + 1
 
         if (initialSync) {
             const lastEntryBuf: Buffer = await feedCore.get(feedCore.length - 1, {timeout: TIMEOUT})
