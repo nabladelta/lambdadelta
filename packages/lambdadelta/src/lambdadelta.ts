@@ -578,6 +578,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return result
     }
 
+    public async getEventByID(eventID: string) {
+        const eventHeaderBuf: Buffer = await this.drive.get(`/events/${eventID}/header`)
+        const eventHeader: FeedEventHeader = deserializeEvent(eventHeaderBuf)
+        const contentBuf: Buffer = await this.drive.get(`/events/${eventID}/content`)
+        return {header: eventHeader, content: contentBuf}
+    }
+
     public async getEvents(
         startTime: number = 0,
         endTime?: number,
