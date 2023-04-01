@@ -283,7 +283,16 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (hash !== contentHash) {
             return false
         }
+
+        if (!(await this.validateContent(eventID, eventType, contentBuf))){
+            return false
+        }
+
         await this.drive.put(`/events/${eventID}/content`, contentBuf)
+        return true
+    }
+
+    protected async validateContent(eventID: string, eventType: string, buf: Buffer) {
         return true
     }
 
