@@ -226,12 +226,16 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 claimedTime = eventHeader.claimed
                 result = await this.addEvent(eventHeader)
                 if (result === VerificationResult.VALID) {
+                    // If we can't fetch the content, or the content is invalid, we keep the header saved
+                    // But we do not add the event anywhere else. We skip it later in this function.
+                    // We will ignore `received` for this event from this peer (and possibly ban the peer)
+                    // But if we find this event again we'll just try fetching the content again from another peer
                     contentResult = await this.addContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
                 }
                 this.emit('eventSyncResult', memberCID, result, contentResult)
 
             } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
-                // We could be missing the content
+                // We could be missing the content, from a previous peer not having it, or having an invalid version, etc
                 const eventHeaderBuf = await peer.drive.get(`/events/${eventID}/header`)
                 const eventHeader = deserializeEvent(eventHeaderBuf)
                 contentResult = await this.addContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
@@ -264,7 +268,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                     // If our peer's received time is close to our current time, use their time
                     // This makes it harder to tell who first saw an event
                     eventMetadata.received = (Math.abs(currentTime - entry.received) <= TOLERANCE)
-                                        ? entry.received : currentTime
+                                                    ? entry.received : currentTime
                     const index = await this.publishReceived(eventID, eventMetadata.received)
                     eventMetadata.index = index
                     this.eventMetadata.set(eventID, eventMetadata)
