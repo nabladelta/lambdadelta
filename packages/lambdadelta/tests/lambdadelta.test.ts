@@ -95,8 +95,8 @@ describe('Event feed', () => {
 
         await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
         await feedB.addPeer(peerA.mcid, feedA.getCoreIDs()[0], feedA.getCoreIDs()[1])
-        let eventsA = (await feedA.getEvents()).map(e => e.toString('utf-8'))
-        let eventsB = (await feedB.getEvents()).map(e => e.toString('utf-8'))
+        let eventsA = (await feedA.getEvents()).map(e => e.content.toString('utf-8'))
+        let eventsB = (await feedB.getEvents()).map(e => e.content.toString('utf-8'))
         
         expect(eventsA.length).toEqual(2)
         expect(eventsB.length).toEqual(2)
@@ -112,10 +112,10 @@ describe('Event feed', () => {
         await sleep(1000)
         expect(await feedA.getCoreLength()).toEqual(3)
         expect(await feedB.getCoreLength()).toEqual(3)
-        eventsA = (await feedA.getEvents()).map(e => e.toString('utf-8'))
-        eventsB = (await feedB.getEvents()).map(e => e.toString('utf-8'))
+        eventsA = (await feedA.getEvents()).map(e => e.content.toString('utf-8'))
+        eventsB = (await feedB.getEvents()).map(e => e.content.toString('utf-8'))
         
-        for (let i = 0; i < 2; i++) {
+        for (let i = 0; i < 3; i++) {
             expect(eventsA[i]).toEqual(eventsB[i])
         }
     })
