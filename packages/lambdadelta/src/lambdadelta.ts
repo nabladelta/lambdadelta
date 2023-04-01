@@ -3,7 +3,7 @@ import b4a from 'b4a'
 import Hyperdrive from 'hyperdrive'
 import crypto from 'crypto'
 import { TypedEmitter } from 'tiny-typed-emitter'
-import { Delta, Lambda, RLNGFullProof, VerificationResult, nullifierInput } from 'bernkastel-rln'
+import { RLN, RLNGFullProof, VerificationResult, nullifierInput } from 'bernkastel-rln'
 import { deserializeEvent, deserializeFeedEntry, getEpoch, getEpochRange, getMean, getStandardDeviation, getTimestampInSeconds, serializeEvent, serializeFeedEntry } from './utils'
 
 const TOLERANCE = 10
@@ -99,8 +99,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     public topic: string
 
     // RLN
-    private lambda: Lambda
-    private delta: Delta
+    private rln: RLN
 
     private timeline: BTree<number, string> // Timestamp (ms) => EventID
     private eidTime: Map<string, number> // EventID => Timestamp (ms)
@@ -115,11 +114,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
     private peers: Map<string, PeerData> // MemberCID => Hypercore
 
-    constructor(topic: string, corestore: any, lambda: Lambda, delta: Delta) {
+    constructor(topic: string, corestore: any, rln: RLN) {
         super()
         this.topic = topic
-        this.lambda = lambda
-        this.delta = delta
+        this.rln = rln
         this.oldestIndex = 0
 
         this.timeline = new BTree()
@@ -520,7 +518,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 return false
             }
         }
-        return await this.lambda.submitProof(proof, event.claimed)
+        return await this.rln.submitProof(proof, event.claimed)
     }
 
     private async addEvent(event: FeedEventHeader) {
@@ -573,7 +571,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             .update(contentHash)
             .digest('hex')
 
-        const proof = await this.delta.createProof(eventID, nullifiers, this.topic)
+        const proof = await this.rln.createProof(eventID, nullifiers, this.topic)
         return [{
             eventType,
             proof,

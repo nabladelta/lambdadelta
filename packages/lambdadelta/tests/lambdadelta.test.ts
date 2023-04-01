@@ -1,7 +1,7 @@
 
 import crypto from 'crypto'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
-import { Delta, deserializeProof, FileProvider, GroupDataProvider, Lambda, nullifierInput, RLNGFullProof, serializeProof, VerificationResult } from 'bernkastel-rln'
+import { RLN, deserializeProof, FileProvider, GroupDataProvider, nullifierInput, RLNGFullProof, serializeProof, VerificationResult } from 'bernkastel-rln'
 import { existsSync, rmSync } from "fs"
 import { Identity } from '@semaphore-protocol/identity'
 import { generateMemberCID, verifyMemberCIDProof } from '../src/membercid'
@@ -15,8 +15,8 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 const GROUPFILE = 'testData.json'
 jest.setTimeout(120000)
 describe('Event feed', () => {
-    let peerA: {lambda: Lambda, delta: Delta, mcid: string, corestore: any}
-    let peerB: {lambda: Lambda, delta: Delta, mcid: string, corestore: any}
+    let peerA: { rln: RLN, mcid: string, corestore: any}
+    let peerB: { rln: RLN, mcid: string, corestore: any}
 
     beforeEach(async () => {
         if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
@@ -29,16 +29,16 @@ describe('Event feed', () => {
             ],
             GROUPFILE)
 
-        const [lambda, delta] = await Lambda.load(secretA, GROUPFILE)
-        const [lambdaB, deltaB] = await Lambda.load(secretB, GROUPFILE)
+        const rln = await RLN.load(secretA, GROUPFILE)
+        const rlnB = await RLN.load(secretB, GROUPFILE)
 
         const pubkeyA = crypto.createHash('sha256').update(secretA).update('fakekey').digest()
         const pubkeyB = crypto.createHash('sha256').update(secretB).update('fakekey').digest()
         const mockStreamA: NoiseSecretStream = {publicKey: pubkeyA, remotePublicKey: pubkeyB} as NoiseSecretStream // Stream from persp. of A
         const mockStreamB: NoiseSecretStream = {publicKey: pubkeyB, remotePublicKey: pubkeyA} as NoiseSecretStream // Stream from persp. of B
 
-        const proofA = await generateMemberCID(secretA, mockStreamA, delta)
-        const proofB = await generateMemberCID(secretB, mockStreamB, deltaB)
+        const proofA = await generateMemberCID(secretA, mockStreamA, rln)
+        const proofB = await generateMemberCID(secretB, mockStreamB, rlnB)
 
         const corestoreA = new Corestore(ram, {primaryKey: Buffer.from(secretA)})
         const corestoreB = new Corestore(ram, {primaryKey: Buffer.from(secretB)})
@@ -52,8 +52,8 @@ describe('Event feed', () => {
         const core2 = corestoreB.get(core.key)
         await core2.ready()
         await core2.update()
-        peerA = {lambda, delta, mcid: proofA.signal, corestore: corestoreA}
-        peerB = {lambda: lambdaB, delta: deltaB, mcid: proofB.signal, corestore: corestoreA.namespace('b')}
+        peerA = {rln, mcid: proofA.signal, corestore: corestoreA}
+        peerB = {rln: rlnB, mcid: proofB.signal, corestore: corestoreA.namespace('b')}
     })
 
     afterEach(async () => {
@@ -67,10 +67,10 @@ describe('Event feed', () => {
             messageLimit: 1,
             epoch: 1
         }
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.lambda, peerA.delta)
+        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
 
-        const feedB = new Lambdadelta(topic, peerB.corestore, peerB.lambda, peerB.delta)
+        const feedB = new Lambdadelta(topic, peerB.corestore, peerB.rln)
         feedB.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
 
         await feedA.newEvent(eventTypePost, Buffer.from("test1"))
