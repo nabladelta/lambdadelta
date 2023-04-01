@@ -51,7 +51,7 @@ export interface NullifierSpec {
 interface TopicEvents {
     'peerAdded': (memberCID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
-    'eventSyncResult': (memberCID: string, result: boolean | VerificationResult) => void
+    'eventSyncResult': (memberCID: string, result: boolean | VerificationResult, contentResult: boolean) => void
     'eventSyncTimestamp': (memberCID: string, eventID: string, received: number) => void
     'eventTimelineAdd': (eventID: string, time: number, consensusTime: number) => void
     'eventTimelineRemove': (eventID: string, prevTime: number, consensusTime: number) => void
@@ -202,21 +202,28 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         for (let i = startFrom; i < feedCore.length; i++) {
-            console.log(i, memberCID)
             const entryBuf: Buffer = await feedCore.get(i, {timeout: TIMEOUT})
             const entry = deserializeFeedEntry(entryBuf)
             const eventID = entry.eventID
 
             let claimedTime: number | undefined
-            let result
+            let result, contentResult
             if (!(await this.drive.entry(`/events/${eventID}/header`))) {
                 // We never encountered this event before
                 const eventHeaderBuf = await peer.drive.get(`/events/${eventID}/header`)
                 const eventHeader = deserializeEvent(eventHeaderBuf)
                 claimedTime = eventHeader.claimed
                 result = await this.addEvent(eventHeader)
-                await this.addContent(eventID, eventHeader.eventType, eventHeader.contentHash, peer)
-                this.emit('eventSyncResult', memberCID, result)
+                if (result === VerificationResult.VALID) {
+                    contentResult = await this.addContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
+                }
+                this.emit('eventSyncResult', memberCID, result, contentResult || false)
+
+            } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
+                // We could be missing the content
+                const eventHeaderBuf = await peer.drive.get(`/events/${eventID}/header`)
+                const eventHeader = deserializeEvent(eventHeaderBuf)
+                contentResult = await this.addContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
             }
 
             let eventMetadata = this.eventMetadata.get(eventID)
@@ -266,7 +273,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
     }
 
-    private async addContent(eventID: string, eventType: string, contentHash: string, peer: PeerData) {
+    private async addContent(memberCID: string, eventID: string, eventType: string, contentHash: string) {
+        const peer = this.peers.get(memberCID)
+        if (!peer) {
+            throw new Error("Unkown peer")
+        }
         const entry = await peer.drive.entry(`/events/${eventID}/content`)
         if (!entry) {
             return false
