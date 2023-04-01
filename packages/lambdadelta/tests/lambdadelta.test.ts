@@ -66,10 +66,10 @@ describe('Event feed', () => {
             epoch: 10
         }
         const feedA = new Lambdadelta(topic, peerA.corestore, peerA.lambda, peerA.delta)
-        feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec])
+        feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
 
         const feedB = new Lambdadelta(topic, peerB.corestore, peerB.lambda, peerB.delta)
-        feedB.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec])
+        feedB.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
 
         await feedA.newEvent(eventTypePost, Buffer.from("test1"))
 
@@ -83,10 +83,11 @@ describe('Event feed', () => {
         feedB.on('eventSyncTimestamp', async (cid, eventID, result) => {
             console.log(`[B]: ${cid} ${eventID} ${result}`)
         })
-        await feedA.addPeer(peerB.mcid, feedB.getCoreID())
-        await feedB.addPeer(peerA.mcid, feedA.getCoreID())
-        const eventsA = (await feedA.getEvents()).map(e => e.content.toString('utf-8'))
-        const eventsB = (await feedB.getEvents()).map(e => e.content.toString('utf-8'))
+
+        await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
+        await feedB.addPeer(peerA.mcid, feedA.getCoreIDs()[0], feedA.getCoreIDs()[1])
+        const eventsA = (await feedA.getEvents()).map(e => e.toString('utf-8'))
+        const eventsB = (await feedB.getEvents()).map(e => e.toString('utf-8'))
         
         expect(eventsA.length).toEqual(2)
         expect(eventsB.length).toEqual(2)

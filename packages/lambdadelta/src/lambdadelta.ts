@@ -264,8 +264,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     private async addContent(eventID: string, eventType: string, contentHash: string, peer: PeerData) {
-        const entry = peer.drive.entry(`/events/${eventID}/content`)
-        console.log(entry)
+        const entry = await peer.drive.entry(`/events/${eventID}/content`)
+        if (!entry) {
+            return false
+        }
+        if (entry.value.blob.byteLength > this.maxContentSize.get(eventType)!) {
+            return false
+        }
 
         const contentBuf = await peer.drive.get(`/events/${eventID}/content`)
         if (contentBuf.length > this.maxContentSize.get(eventType)!) {
@@ -280,6 +285,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     private async publishReceived(eventID: string, received: number) {
+        const eventMetadata = this.eventMetadata.get(eventID)
+        if (eventMetadata && eventMetadata.index !== -1) {
+            throw new Error("Trying to publish received time twice")
+        }
         const {length, byteLength} = await this.core.append(serializeFeedEntry({
             eventID,
             received: received,
