@@ -64,6 +64,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private oldestIndex: number
     private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
     protected nullifierSpecs: Map<string, NullifierSpec[]>
+    private lastIndex: Map<string, number>
 
     constructor(topic: string, corestore: any, lambda: Lambda, delta: Delta) {
         super()
@@ -74,6 +75,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.eidTime = new Map()
         this.nullifierSpecs = new Map()
         this.eventMetadata = new Map()
+        this.lastIndex = new Map()
         this.core = this.corestore
             .namespace('lambdadelta')
             .get({ name: topic })
@@ -120,10 +122,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const core = this.corestore.get(b4a.from(coreID, 'hex'))
         this.peers.set(memberCID, core)
         this.emit('peerAdded', memberCID)
-        await this.syncPeer(memberCID)
+        await this.syncPeer(memberCID, true)
+        core.on('append', async () => {
+            await this.syncPeer(memberCID, false)
+        })
     }
 
-    private async syncPeer(memberCID: string) {
+    private async syncPeer(memberCID: string, initialSync: boolean = true) {
         const core = this.peers.get(memberCID)
         if (!core) {
             throw new Error("Peer core not found")
@@ -132,15 +137,25 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (core.length < 1) {
             throw new Error("Peer core is empty")
         }
-        const lastEventBuf: Buffer = await core.get(core.length - 1, {timeout: 3000})
-        const lastEvent = deserializeEvent(lastEventBuf)
-        for (let i = lastEvent.oldestIndex; i < core.length; i++) {
+        let startFrom = 0;
+        if (initialSync) {
+            const lastEventBuf: Buffer = await core.get(core.length - 1, {timeout: 3000})
+            const lastEvent = deserializeEvent(lastEventBuf)
+            startFrom = lastEvent.oldestIndex
+        } else {
+            const lastIndex = this.lastIndex.get(memberCID)
+            if (!lastIndex) {
+                throw new Error("Peer was not previously synced")
+            }
+            startFrom = lastIndex
+        }
+        for (let i = startFrom; i < core.length; i++) {
             const eventBuf: Buffer = await core.get(i, {timeout: 3000})
             const event = deserializeEvent(eventBuf)
             const eventID = this.getFeedEventContentHash(event)
             const eventMetadata = this.eventMetadata.get(eventID)
             if (!eventMetadata) {
-                const result = await this.addEvent(event)
+                const result = await this.addEvent(event, initialSync)
                 this.emit('eventSyncResult', memberCID, result)
             } else if (eventMetadata.membersReceived.has(memberCID)) {
                 throw new Error("Duplicate event sync from peer")
@@ -148,7 +163,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 this.emit('eventSyncTimestamp', memberCID, eventID, event.received)
                 eventMetadata.membersReceived.set(memberCID, event.received)
             }
+            this.lastIndex.set(memberCID, i)
         }
+    }
+
+    private syncEvent(event: FeedEvent, eventID: string, initialSync: boolean, memberCID: string) {
+        
     }
 
     private getFeedEventContentHash(event: FeedEvent) {
@@ -182,7 +202,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return await this.lambda.submitProof(proof, event.claimed)
     }
 
-    private async addEvent(event: FeedEvent) {
+    private async addEvent(event: FeedEvent, fromInitialSync = false) {
         if (this.eventMetadata.has(event.proof.signal)) {
             throw new Error("Event already added")
         }
@@ -199,13 +219,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (result !== VerificationResult.VALID) {
             return result
         }
-        const currentTime = getTimestampInSeconds()
-        // If our peer's received time is close to our current time, use their time
-        // This makes it harder to tell who first saw an event
-        event.received = (Math.abs(currentTime - event.received) <= TOLERANCE)
-                            ? event.received : currentTime
-        eventMetadata.received = event.received
-
+        if (!fromInitialSync) { // Event was received live, not from an initial peer sync
+            const currentTime = getTimestampInSeconds()
+            // If our peer's received time is close to our current time, use their time
+            // This makes it harder to tell who first saw an event
+            event.received = (Math.abs(currentTime - event.received) <= TOLERANCE)
+                                ? event.received : currentTime
+            eventMetadata.received = event.received
+        }
         const {length, byteLength} = await this.core.append(serializeEvent(event))
 
         eventMetadata.index = length - 1
