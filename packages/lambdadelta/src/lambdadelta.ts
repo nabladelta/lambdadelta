@@ -76,6 +76,7 @@ interface PeerData {
     events: Map<string, number> // All events we obtained from this peer => index on core
     feedCore: any
     drive: any
+    _onappend: () => Promise<void>
 }
 
 enum ContentVerificationResult {
@@ -181,18 +182,41 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const drive = new Hyperdrive(this.corestore, b4a.from(driveID, 'hex'))
         await feedCore.ready()
         await drive.ready()
-        this.peers.set(memberCID, {
+        const peer = {
             feedCore,
             drive,
             lastIndex: 0,
             events: new Map(),
-        })
+            _onappend: async () => {
+                await this.syncPeer(memberCID, false)
+            }
+        }
+        this.peers.set(memberCID, peer)
         this.emit('peerAdded', memberCID)
         await this.syncPeer(memberCID, true)
+        feedCore.on('append', peer._onappend)
+        return true
+    }
 
-        feedCore.on('append', async () => {
-            await this.syncPeer(memberCID, false)
-        })
+    public async removePeer(memberCID: string) {
+        const peer = this.peers.get(memberCID)
+        if (!peer) {
+            // Peer does not exist
+            return false
+        }
+        peer.feedCore.removeListener('append', peer._onappend)
+        this.peers.delete(memberCID)
+        await peer.drive.close()
+        await peer.feedCore.close()
+        for (let [eventID, _] of peer.events) {
+            const eventMetadata = this.eventMetadata.get(eventID)
+            if (!eventMetadata) {
+                continue
+            }
+            eventMetadata.membersReceived.delete(memberCID)
+            this.eventMetadata.set(eventID, eventMetadata)
+            await this.updateMemberReceivedTime(eventID)
+        }
     }
 
     private async syncPeer(memberCID: string, initialSync: boolean) {
