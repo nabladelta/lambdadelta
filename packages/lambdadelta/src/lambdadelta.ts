@@ -227,6 +227,19 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             memberCID: string,
             headerResult: boolean | VerificationResult | undefined,
             contentResult: ContentVerificationResult | undefined) {
+        
+        return true
+    }
+
+    protected onDuplicateInput(
+            memberCID: string,
+            eventID: string,
+            index: number,
+            prevIndex: number | undefined) {
+        
+        throw new Error(`Duplicate event sync from peer (index: ${index}
+             prevIndex: ${prevIndex} peer: ${memberCID} event: ${eventID})`)
+
         return true
     }
 
@@ -324,7 +337,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
             } else if (eventMetadata.membersReceived.has(memberCID)) {
                 this.emit('duplicateEventSync', memberCID, eventID, i, peer.events.get(eventID))
-                throw new Error(`Duplicate event sync from peer (index: ${i} prevIndex: ${peer.events.get(eventID)} peer: ${memberCID} event: ${eventID})`)
+                this.onDuplicateInput(memberCID, eventID, i, peer.events.get(eventID))
             }
             // Add peer's received timestamp
             this.emit('eventSyncTimestamp', memberCID, eventID, entry.received)
