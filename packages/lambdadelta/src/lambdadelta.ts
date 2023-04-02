@@ -295,8 +295,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 this.emit('eventSyncResult', memberCID, result, contentResult)
 
             } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
-                // We could be missing the content, from a previous peer not having it, or having an invalid version, etc
-                const eventHeaderBuf = await peer.drive.get(`/events/${eventID}/header`)
+                // In this case we have the header, but we are missing the content
+                // Probably from a previous peer not having it, or having an invalid version of it, etc
+                const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
                 const eventHeader = deserializeEvent(eventHeaderBuf)
                 contentResult = await this.addContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
                 this.emit('contentSyncResult', memberCID, contentResult)
