@@ -93,7 +93,9 @@ enum HeaderVerificationError {
     HASH_MISMATCH = 16, // Make sure we don't overlap with other enums
     UNEXPECTED_RLN_IDENTIFIER,
     UNEXPECTED_MESSAGE_LIMIT,
-    UNEXPECTED_NULLIFIER
+    UNEXPECTED_NULLIFIER,
+    UNAVAILABLE,
+    SIZE
 }
 
 /**
@@ -234,6 +236,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             headerResult: VerificationResult | HeaderVerificationError | undefined,
             contentResult: ContentVerificationResult | undefined) {
         
+        if (headerResult !== undefined) {
+            
+        }
+
+        if (contentResult !== undefined) {
+
+        }
         return true
     }
 
@@ -281,25 +290,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             let result, contentResult
             if (!(await this.drive.entry(`/events/${eventID}/header`))) {
                 // We never encountered this event before
-                const eventHeaderBuf = await peer.drive.get(`/events/${eventID}/header`)
-                const eventHeader = deserializeEvent(eventHeaderBuf)
-                claimedTime = eventHeader.claimed
-                result = await this.addEvent(eventHeader)
-                if (result === VerificationResult.VALID) {
-                    // If we can't fetch the content, or the content is invalid, we keep the header saved
-                    // But we do not add the event anywhere else. We skip it later in this function.
-                    // We will ignore `received` for this event from this peer (and possibly ban the peer)
-                    // But if we find this event again we'll just try fetching the content again from another peer
-                    contentResult = await this.addContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
-                }
-                this.emit('eventSyncResult', memberCID, result, contentResult)
+                const results = await this.syncEvent(memberCID, eventID)
+                this.emit('eventSyncResult', memberCID, results.headerResult, results.contentResult)
 
             } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
                 // In this case we have the header, but we are missing the content
                 // Probably from a previous peer not having it, or having an invalid version of it, etc
-                const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
-                const eventHeader = deserializeEvent(eventHeaderBuf)
-                contentResult = await this.addContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
+                contentResult = await this.syncContent(memberCID, eventID)
                 this.emit('contentSyncResult', memberCID, contentResult)
             }
 
@@ -361,7 +358,17 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.peers.set(memberCID, peer)
     }
 
-    private async addContent(memberCID: string, eventID: string, eventType: string, contentHash: string) {
+    private async syncContent(memberCID: string, eventID: string, eventType?: string, contentHash?: string) {
+        // Retrieve info from header if not provided
+        if (!eventType || !contentHash) {
+            const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
+            if (!eventHeaderBuf) {
+                throw new Error("Missing header while trying to fetch content")
+            }
+            const eventHeader = deserializeEvent(eventHeaderBuf)
+            eventType = eventHeader.eventType
+            contentHash = eventHeader.contentHash
+        }
         const peer = this.peers.get(memberCID)
         if (!peer) {
             throw new Error("Unkown peer")
@@ -390,6 +397,46 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         await this.drive.put(`/events/${eventID}/content`, contentBuf)
 
         return ContentVerificationResult.VALID
+    }
+
+    private async syncEvent(
+        memberCID: string,
+        eventID: string
+        ): Promise<{
+            headerResult: HeaderVerificationError | VerificationResult,
+            contentResult?: ContentVerificationResult,
+            claimedTime?: number
+        }> {
+
+        const peer = this.peers.get(memberCID)
+        if (!peer) {
+            throw new Error("Unkown peer")
+        }
+        const headerEntry = await peer.drive.entry(`/events/${eventID}/header`)
+        if (!(headerEntry)) {
+            // Header cannot be retrieved
+            return { headerResult: HeaderVerificationError.UNAVAILABLE }
+        }
+        // TODO: Check header size before retrieving
+        const eventHeaderBuf: Buffer = await peer.drive.get(`/events/${eventID}/header`)
+        if (!(eventHeaderBuf)) {
+            return { headerResult: HeaderVerificationError.UNAVAILABLE }
+        }
+
+        const eventHeader = deserializeEvent(eventHeaderBuf)
+
+        const headerResult = await this.addEvent(eventHeader)
+        if (headerResult !== VerificationResult.VALID) {
+            return { headerResult, claimedTime: eventHeader.claimed }
+        }
+
+        // If we can't fetch the content, or the content is invalid, we keep the header (which is already verified) saved
+        // But we do not add the event anywhere else. We skip it later in the sync flow.
+        // We will ignore the `received` for this event from this peer (and possibly ban the peer)
+        // But if we find this event again on another peer we'll just try fetching the content again from them
+        const contentResult = await this.syncContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
+
+        return { headerResult, contentResult, claimedTime: eventHeader.claimed }
     }
 
     protected async validateContent(eventID: string, eventType: string, buf: Buffer) {
