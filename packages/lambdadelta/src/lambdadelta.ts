@@ -188,6 +188,16 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return this.core.length
     }
 
+    public async close() {
+        for (let [id, peer] of this.peers) {
+            peer.feedCore.removeListener('append', peer._onappend)
+        }
+        for (let [id, peer] of this.peers) {
+            await peer.drive.close()
+            await peer.feedCore.close()
+        }
+    }
+
     public async addPeer(memberCID: string, feedCoreID: string, driveID: string) {
         if (this.peers.has(memberCID)) {
             // Peer already added
