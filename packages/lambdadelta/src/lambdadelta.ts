@@ -54,6 +54,7 @@ interface TopicEvents {
     'peerAdded': (memberCID: string) => void
     'peerRemoved': (memberCID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
+    'fatalSyncError': (memberCID: string, error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
     'eventSyncResult': (memberCID: string, 
             headerResult: VerificationResult | HeaderVerificationError,
             contentResult: ContentVerificationResult | undefined) => void
@@ -248,6 +249,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 return true
             }
             this.removePeer(memberCID)
+            this.emit('fatalSyncError', memberCID, headerResult)
             return false
         }
 
@@ -256,20 +258,37 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 return true
             }
             this.removePeer(memberCID)
+            this.emit('fatalSyncError', memberCID, contentResult)
             return false
         }
 
         return true
     }
 
-    protected onDuplicateInput(
+    protected async onDuplicateInput(
             memberCID: string,
             eventID: string,
             index: number,
             prevIndex: number | undefined) {
         
-        throw new Error(`Duplicate event sync from peer (index: ${index}
-             prevIndex: ${prevIndex} peer: ${memberCID} event: ${eventID})`)
+        const peer = this.peers.get(memberCID)
+        if (!peer) {
+            throw new Error("Unknown peer")
+        }
+        if (index === prevIndex && index !== undefined && prevIndex !== undefined) {
+            throw new Error("Scanned same index entry twice")
+        }
+
+        const entryBufA: Buffer = await peer.feedCore.get(prevIndex, {timeout: TIMEOUT})
+        const entryA = deserializeFeedEntry(entryBufA)
+
+        const entryBufB: Buffer = await peer.feedCore.get(index, {timeout: TIMEOUT})
+        const entryB = deserializeFeedEntry(entryBufB)
+
+        if (entryA.eventID == entryB.eventID) {
+            this.emit('duplicateEventSync', memberCID, eventID, index, prevIndex)
+            await this.removePeer(memberCID)
+        }
 
         return false
     }
@@ -284,20 +303,20 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             throw new Error("Trying to sync new events before finishing initial sync")
         }
 
-        const feedCore = peer.feedCore
-        await feedCore.ready()
-        if (feedCore.length < 1) {
+        await peer.feedCore.ready()
+        if (peer.feedCore.length < 1) {
             throw new Error("Peer core is empty")
         }
         let startFrom = peer.lastIndex + 1
 
         if (initialSync && peer.lastIndex == 0) {
-            const lastEntryBuf: Buffer = await feedCore.get(feedCore.length - 1, {timeout: TIMEOUT})
+            // Find the first valid entry
+            const lastEntryBuf: Buffer = await peer.feedCore.get(peer.feedCore.length - 1, {timeout: TIMEOUT})
             const lastEntry = deserializeFeedEntry(lastEntryBuf)
             startFrom = lastEntry.oldestIndex
         }
 
-        for (let i = startFrom; i < feedCore.length; i++) {
+        for (let i = startFrom; i < peer.feedCore.length; i++) {
             const shouldContinue = await this.syncEntry(memberCID, i, initialSync)
             // Interrupt synchronization from this peer immediately
             if (!shouldContinue) return false
@@ -377,8 +396,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             }
 
         } else if (eventMetadata.membersReceived.has(memberCID)) {
-            this.emit('duplicateEventSync', memberCID, eventID, i, peer.events.get(eventID))
-            return this.onDuplicateInput(memberCID, eventID, i, peer.events.get(eventID))
+            return await this.onDuplicateInput(memberCID, eventID, i, peer.events.get(eventID))
         }
 
         // Add peer's received timestamp
