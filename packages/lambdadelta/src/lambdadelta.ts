@@ -747,7 +747,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         startTime: number = 0,
         endTime?: number,
         maxLength?: number
-        ): Promise<{header: FeedEventHeader, content: Buffer}[]> {
+        ): Promise<{
+            header: FeedEventHeader,
+            content: Buffer
+        }[]> {
 
         endTime = endTime || this.timeline.maxKey()
         if (!endTime) return []
