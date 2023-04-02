@@ -26,6 +26,8 @@ interface NodePeerData {
         handshakeSender: any
     }
     topics: Set<string>
+    coresSent: Map<string, [string, string]>
+    coresReceived: Map<string, [string, string]>
     memberCID?: string
 }
 
@@ -91,8 +93,8 @@ export class LDNode {
         const peerID = stream.remotePublicKey.toString('hex')
 
         const topicAnnouncer = channel.addMessage({
-            encoding: c.array(c.array(c.buffer)),
-            async onmessage(topics: Buffer[][], _: any) { await self.recvTopics(peerID, topics) }
+            encoding: c.array(c.buffer),
+            async onmessage(topics: Buffer[], _: any) { await self.recvTopics(peerID, topics) }
         })
 
         const handshakeSender = channel.addMessage({
@@ -102,7 +104,9 @@ export class LDNode {
 
         this.peers.set(peerID, {
                     topics: new Set(),
-                    connection: {stream, topicAnnouncer, handshakeSender}
+                    connection: {stream, topicAnnouncer, handshakeSender},
+                    coresSent: new Map(),
+                    coresReceived: new Map()
                 })
         this.sendHandshake(peerID)
     }
@@ -156,7 +160,7 @@ export class LDNode {
         return comms
     }
 
-    private async recvTopics(peerID: string, topicComms: Buffer[][]) {
+    private async recvTopics(peerID: string, topicComms: Buffer[]) {
         const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
@@ -165,33 +169,43 @@ export class LDNode {
             log.error(`Received topics from peer ${peerID} before handshake`)
             return
         }
-        log.info(`Received ${topicComms.length} topic commitments from ${peerID.slice(-6)}`)
 
         const ownTopicCommitments = await this.getTopicCommitments(peer.connection.stream.publicKey)
+        let newTopicsAmount = 0
         const newTopicList: Set<string> = new Set()
         for (let tc of topicComms) {
             // We search for the topic corresponding to this commitment
-            const feed = ownTopicCommitments.get(tc[0].toString('hex'))
+            const feed = ownTopicCommitments.get(tc.toString('hex'))
             if (!feed) continue
 
             newTopicList.add(feed.topic)
 
             if (!peer.topics.has(feed.topic)) {
-                feed.addPeer(peer.memberCID, tc[1].toString('hex'), tc[2].toString('hex'))
                 peer.topics.add(feed.topic)
+                newTopicsAmount++
             }
         }
+        let deletedTopicsAmount = 0
         // Check which topics are no longer relevant to this peer
         for (let topic of peer.topics) {
             if (!newTopicList.has(topic)) { // Previously subscribed topic is no longer
+                peer.topics.delete(topic)
+                deletedTopicsAmount++
                 const feed = this.topicFeeds.get(topic)
                 if (feed) {
                     await feed.removePeer(peer.memberCID)
                 }
-                peer.topics.delete(topic)
             }
         }
         this.peers.set(peerID, peer)
+        log.info(`Received ${topicComms.length} topic commitments from ${peerID.slice(-6)} \
+        (Added: ${newTopicsAmount} Removed: ${deletedTopicsAmount})`)
+
+        if (newTopicsAmount > 0) {
+            // If we got any new topics, we need to reannounce ours to the peer
+            // Otherwise they will not know to attach us for them on the other side
+            this.announceTopics(peerID)
+        }
     }
 
     private async announceTopics(peerID: string) {
@@ -199,16 +213,15 @@ export class LDNode {
         if (!peer) {
             throw new Error("Unknown peer")
         }
-        const tComms: Buffer[][] = []
-        for (let [topic, feed] of this.topicFeeds) {
+        const tComms: Buffer[] = []
+        for (let [topic, _] of this.topicFeeds) {
             // We compute a hash of peerPubkey + topic to send to the peer
             // We don't want to reveal our topics to peers unless they already know them
             const topicCommitment = crypto.createHash('sha256')
                 .update(peer.connection.stream.remotePublicKey)
                 .update(topic)
                 .digest()
-            const [feedCore, drive] = feed.getCoreIDs()
-            tComms.push([topicCommitment, Buffer.from(feedCore, 'hex'), Buffer.from(drive, 'hex')])
+            tComms.push(topicCommitment)
         }
         log.info(`Announcing all ${tComms.length} topic commitments to ${peerID.slice(-6)}`)
         await peer.connection.topicAnnouncer.send(tComms)
@@ -248,7 +261,6 @@ export class LDNode {
             peer.topics.delete(topic)
         }
         await this.swarm.leave(this.topicHash(topic))
-        
     }
 
     public async join(topics: string[]) {
