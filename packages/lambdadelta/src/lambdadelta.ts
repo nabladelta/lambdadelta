@@ -203,7 +203,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         this.peers.set(memberCID, peer)
         this.emit('peerAdded', memberCID)
-        await this.syncPeer(memberCID, true)
+        const completed = await this.syncPeer(memberCID, true)
+        if (!completed) return false // Sync did not complete successfully
         feedCore.on('append', peer._onappend)
         return true
     }
@@ -218,6 +219,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.peers.delete(memberCID)
         await peer.drive.close()
         await peer.feedCore.close()
+        // Remove peer's received timestamps contributions
         for (let [eventID, _] of peer.events) {
             const eventMetadata = this.eventMetadata.get(eventID)
             if (!eventMetadata) {
@@ -225,7 +227,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             }
             eventMetadata.membersReceived.delete(memberCID)
             this.eventMetadata.set(eventID, eventMetadata)
-            await this.updateMemberReceivedTime(eventID)
+            await this.onMemberReceivedTime(eventID)
         }
         this.emit('peerRemoved', memberCID)
         return true
@@ -235,14 +237,15 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             memberCID: string,
             headerResult: VerificationResult | HeaderVerificationError | undefined,
             contentResult: ContentVerificationResult | undefined) {
-        
+
         if (headerResult !== undefined) {
-            
+            return false
         }
 
         if (contentResult !== undefined) {
-
+            return false
         }
+
         return true
     }
 
@@ -255,10 +258,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         throw new Error(`Duplicate event sync from peer (index: ${index}
              prevIndex: ${prevIndex} peer: ${memberCID} event: ${eventID})`)
 
-        return true
+        return false
     }
 
-    private async syncPeer(memberCID: string, initialSync: boolean) {
+    private async syncPeer(memberCID: string, initialSync: boolean): Promise<boolean> {
         const peer = this.peers.get(memberCID)
         if (!peer) {
             throw new Error("Unknown peer")
@@ -282,86 +285,110 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         for (let i = startFrom; i < feedCore.length; i++) {
-            const entryBuf: Buffer = await feedCore.get(i, {timeout: TIMEOUT})
-            const entry = deserializeFeedEntry(entryBuf)
-            const eventID = entry.eventID
-
-            let claimedTime: number | undefined
-            let result, contentResult
-            if (!(await this.drive.entry(`/events/${eventID}/header`))) {
-                // We never encountered this event before
-                const results = await this.syncEvent(memberCID, eventID)
-                result = results.headerResult
-                contentResult = results.contentResult
-                claimedTime = results.claimedTime
-                this.emit('eventSyncResult', memberCID, results.headerResult, results.contentResult)
-
-            } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
-                // In this case we have the header, but we are missing the content
-                // Probably from a previous peer not having it, or having an invalid version of it, etc
-                contentResult = await this.syncContent(memberCID, eventID)
-                this.emit('contentSyncResult', memberCID, contentResult)
-            }
-
-            let eventMetadata = this.eventMetadata.get(eventID)
-
-            if (!eventMetadata) { // Is a new event
-                if (result !== VerificationResult.VALID || contentResult !== ContentVerificationResult.VALID) {
-                    // Skip invalid events
-                    // As well as events we couldn't get a valid content buffer for
-                    peer.lastIndex = i
-                    this.peers.set(memberCID, peer)
-                    // Decides whether to continue syncing events from peer or not
-                    const shouldContinue = this.onInvalidInput(memberCID, result, contentResult)
-                    if (shouldContinue) {
-                        continue
-                    } else {
-                        // Interrupt initial sync
-                        return
-                    }
-                }
-                if (!claimedTime) {
-                    throw new Error("Invalid claimed time")
-                }
-                eventMetadata = {
-                    index: -1,
-                    received: -1,
-                    consensus: -1,
-                    claimed: claimedTime,
-                    membersReceived: new Map()
-                }
-
-                if (!initialSync) { // Event was received live, not from an initial peer sync
-                    const currentTime = getTimestampInSeconds()
-                    // If our peer's received time is close to our current time, use their time
-                    // This makes it harder to tell who first saw an event
-                    eventMetadata.received = (Math.abs(currentTime - entry.received) <= TOLERANCE)
-                                                    ? entry.received : currentTime
-                    const index = await this.publishReceived(eventID, eventMetadata.received)
-                    eventMetadata.index = index
-                    this.eventMetadata.set(eventID, eventMetadata)
-                }
-
-            } else if (eventMetadata.membersReceived.has(memberCID)) {
-                this.emit('duplicateEventSync', memberCID, eventID, i, peer.events.get(eventID))
-                this.onDuplicateInput(memberCID, eventID, i, peer.events.get(eventID))
-            }
-            // Add peer's received timestamp
-            this.emit('eventSyncTimestamp', memberCID, eventID, entry.received)
-            eventMetadata.membersReceived.set(memberCID, entry.received)
-            this.eventMetadata.set(eventID, eventMetadata)
-
-            peer.events.set(eventID, i)
-            peer.lastIndex = i
-            this.peers.set(memberCID, peer)
-
-            await this.updateMemberReceivedTime(eventID)
+            const shouldContinue = await this.syncEntry(memberCID, i, initialSync)
+            // Interrupt synchronization from this peer immediately
+            if (!shouldContinue) return false
         }
+
         peer.finishedInitialSync = true
         this.peers.set(memberCID, peer)
+        return true
     }
 
-    private async syncContent(memberCID: string, eventID: string, eventType?: string, contentHash?: string) {
+    private async syncEntry(memberCID: string, i: number, initialSync: boolean): Promise<boolean> {
+        const peer = this.peers.get(memberCID)
+        if (!peer) {
+            throw new Error("Unknown peer")
+        }
+
+        const entryBuf: Buffer = await peer.feedCore.get(i, {timeout: TIMEOUT})
+        const entry = deserializeFeedEntry(entryBuf)
+        const eventID = entry.eventID
+
+        let claimedTime: number | undefined
+        let headerResult: HeaderVerificationError | VerificationResult | undefined
+        let contentResult: ContentVerificationResult | undefined
+
+        if (!(await this.drive.entry(`/events/${eventID}/header`))) {
+            // We never encountered this event before
+            const results = await this.syncEvent(memberCID, eventID)
+            headerResult = results.headerResult
+            contentResult = results.contentResult
+            claimedTime = results.claimedTime
+            this.emit('eventSyncResult', memberCID, results.headerResult, results.contentResult)
+
+        } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
+            // In this case we have the header, but we are missing the content
+            // Probably from a previous peer not having it, or having an invalid version of it, etc
+            const results = await this.syncContent(memberCID, eventID)
+            claimedTime = results.claimedTime
+            contentResult = results.contentResult
+            // We already verified this header previously
+            headerResult = VerificationResult.VALID
+            this.emit('contentSyncResult', memberCID, results.contentResult)
+        }
+
+        let eventMetadata = this.eventMetadata.get(eventID)
+
+        if (!eventMetadata) { // Is a new event
+            if (headerResult !== VerificationResult.VALID || contentResult !== ContentVerificationResult.VALID) {
+                // Either the header or the content for this event did not validate.
+                // The event is invalid or the data is unavailable, and we have to skip it
+                peer.lastIndex = i
+                this.peers.set(memberCID, peer)
+                // Decides whether to continue syncing the next events from this peer or stop
+                const shouldContinue = this.onInvalidInput(memberCID, headerResult, contentResult)
+                return shouldContinue
+            }
+            if (!claimedTime) {
+                throw new Error("Invalid claimed time")
+            }
+            eventMetadata = {
+                index: -1,
+                received: -1,
+                consensus: -1,
+                claimed: claimedTime,
+                membersReceived: new Map()
+            }
+
+            if (!initialSync) { // Event was received live, not from an initial peer sync
+                const currentTime = getTimestampInSeconds()
+                // If our peer's received time is close to our current time, use their time
+                // This makes it harder to tell who first saw an event
+                eventMetadata.received = (Math.abs(currentTime - entry.received) <= TOLERANCE)
+                                                ? entry.received : currentTime
+                const index = await this.publishReceived(eventID, eventMetadata.received)
+                eventMetadata.index = index
+                this.eventMetadata.set(eventID, eventMetadata)
+            }
+
+        } else if (eventMetadata.membersReceived.has(memberCID)) {
+            this.emit('duplicateEventSync', memberCID, eventID, i, peer.events.get(eventID))
+            return this.onDuplicateInput(memberCID, eventID, i, peer.events.get(eventID))
+        }
+
+        // Add peer's received timestamp
+        this.emit('eventSyncTimestamp', memberCID, eventID, entry.received)
+        eventMetadata.membersReceived.set(memberCID, entry.received)
+        this.eventMetadata.set(eventID, eventMetadata)
+
+        peer.events.set(eventID, i)
+        peer.lastIndex = i
+        this.peers.set(memberCID, peer)
+        await this.onMemberReceivedTime(eventID)
+
+        return true
+    }
+
+    private async syncContent(
+            memberCID: string,
+            eventID: string,
+            eventType?: string,
+            contentHash?: string): Promise<{
+                contentResult: ContentVerificationResult,
+                claimedTime?: number
+            }> {
+        let claimedTime
         // Retrieve info from header if not provided
         if (!eventType || !contentHash) {
             const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
@@ -371,6 +398,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             const eventHeader = deserializeEvent(eventHeaderBuf)
             eventType = eventHeader.eventType
             contentHash = eventHeader.contentHash
+            claimedTime = eventHeader.claimed
         }
         const peer = this.peers.get(memberCID)
         if (!peer) {
@@ -378,28 +406,29 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         const entry = await peer.drive.entry(`/events/${eventID}/content`)
         if (!entry) {
-            return ContentVerificationResult.UNAVAILABLE
+            return { contentResult: ContentVerificationResult.UNAVAILABLE, claimedTime }
         }
         if (entry.value.blob.byteLength > this.maxContentSize.get(eventType)!) {
-            return ContentVerificationResult.SIZE
+            return { contentResult: ContentVerificationResult.SIZE, claimedTime }
         }
 
         const contentBuf = await peer.drive.get(`/events/${eventID}/content`)
         if (contentBuf.length > this.maxContentSize.get(eventType)!) {
-            return ContentVerificationResult.SIZE
+            return { contentResult: ContentVerificationResult.SIZE, claimedTime }
         }
         const hash = crypto.createHash('sha256').update(contentBuf).digest('hex')
         if (hash !== contentHash) {
-            return ContentVerificationResult.HASH_MISMATCH
+            return { contentResult: ContentVerificationResult.HASH_MISMATCH, claimedTime }
         }
 
         if (!(await this.validateContent(eventID, eventType, contentBuf))){
-            return ContentVerificationResult.INVALID
+            return { contentResult: ContentVerificationResult.INVALID, claimedTime }
         }
 
-        await this.drive.put(`/events/${eventID}/content`, contentBuf)
+        const res = await this.drive.put(`/events/${eventID}/content`, contentBuf)
+        console.log(res)
 
-        return ContentVerificationResult.VALID
+        return { contentResult: ContentVerificationResult.VALID, claimedTime}
     }
 
     private async syncEvent(
@@ -437,7 +466,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         // But we do not add the event anywhere else. We skip it later in the sync flow.
         // We will ignore the `received` for this event from this peer (and possibly ban the peer)
         // But if we find this event again on another peer we'll just try fetching the content again from them
-        const contentResult = await this.syncContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
+        const { contentResult } = await this.syncContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
 
         return { headerResult, contentResult, claimedTime: eventHeader.claimed }
     }
@@ -462,9 +491,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     /**
      * To be called whenever we add another peer's `received` time to an event
+     * It recalculates our consensus timestamp and then acts appropriately
      * @param eventID The event's ID
      */
-    private async updateMemberReceivedTime(eventID: string) {
+    private async onMemberReceivedTime(eventID: string) {
         const eventMetadata = this.eventMetadata.get(eventID)
         if (!eventMetadata) {
             throw new Error("Event not found")
