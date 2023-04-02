@@ -291,6 +291,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             if (!(await this.drive.entry(`/events/${eventID}/header`))) {
                 // We never encountered this event before
                 const results = await this.syncEvent(memberCID, eventID)
+                result = results.headerResult
+                contentResult = results.contentResult
+                claimedTime = results.claimedTime
                 this.emit('eventSyncResult', memberCID, results.headerResult, results.contentResult)
 
             } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
