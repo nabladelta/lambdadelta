@@ -244,10 +244,18 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             contentResult: ContentVerificationResult | undefined) {
 
         if (headerResult !== undefined) {
+            if (headerResult === HeaderVerificationError.UNAVAILABLE) {
+                return true
+            }
+            this.removePeer(memberCID)
             return false
         }
 
         if (contentResult !== undefined) {
+            if (contentResult === ContentVerificationResult.UNAVAILABLE) {
+                return true
+            }
+            this.removePeer(memberCID)
             return false
         }
 
