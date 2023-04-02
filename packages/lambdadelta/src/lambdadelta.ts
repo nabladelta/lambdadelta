@@ -53,7 +53,7 @@ interface TopicEvents {
     'peerRemoved': (memberCID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
     'eventSyncResult': (memberCID: string, 
-            result: boolean | VerificationResult,
+            headerResult: VerificationResult | HeaderVerificationError,
             contentResult: ContentVerificationResult | undefined) => void
     'contentSyncResult': (memberCID: string, contentResult: ContentVerificationResult) => void
     'duplicateEventSync': (memberCID: string, eventID: string, index: number, prevIndex: number | undefined) => void
@@ -87,6 +87,13 @@ enum ContentVerificationResult {
     SIZE,
     HASH_MISMATCH,
     INVALID
+}
+
+enum HeaderVerificationError {
+    HASH_MISMATCH = 16, // Make sure we don't overlap with other enums
+    UNEXPECTED_RLN_IDENTIFIER,
+    UNEXPECTED_MESSAGE_LIMIT,
+    UNEXPECTED_NULLIFIER
 }
 
 /**
@@ -219,11 +226,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             await this.updateMemberReceivedTime(eventID)
         }
         this.emit('peerRemoved', memberCID)
+        return true
     }
 
     protected onInvalidInput(
             memberCID: string,
-            headerResult: boolean | VerificationResult | undefined,
+            headerResult: VerificationResult | HeaderVerificationError | undefined,
             contentResult: ContentVerificationResult | undefined) {
         
         return true
@@ -501,7 +509,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private async verifyEvent(event: FeedEventHeader) {
         const proof = event.proof
         if (proof.rlnIdentifier !== this.topic) {
-            return false
+            return HeaderVerificationError.UNEXPECTED_RLN_IDENTIFIER
         }
         const specs = this.nullifierSpecs.get(event.eventType)
         if (!specs) {
@@ -510,12 +518,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         for (let i = 0; i < specs.length; i++) {
             if (proof.externalNullifiers[i].messageLimit
                 !== specs[i].messageLimit) {
-                return false
+                return HeaderVerificationError.UNEXPECTED_MESSAGE_LIMIT
             }
 
             if (proof.externalNullifiers[i].nullifier
                 !== `${getEpoch(specs[i].epoch, event.claimed)}|${event.eventType}`) {
-                return false
+                return HeaderVerificationError.UNEXPECTED_NULLIFIER
             }
         }
         return await this.rln.submitProof(proof, event.claimed)
@@ -527,7 +535,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         const eventID = this.getEventHash(event)
         if (event.proof.signal !== eventID) {
-            return false
+            return HeaderVerificationError.HASH_MISMATCH
         }
         const result = await this.verifyEvent(event)
         if (result !== VerificationResult.VALID) {
@@ -585,7 +593,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.nullifierSpecs.set(eventType, specs)
         this.maxContentSize.set(eventType, maxContentSize)
     }
-    
+
     public async newEvent(eventType: string, content: Buffer) {
         const [event, eventID] = await this.createEvent(eventType, this.createNullifier(eventType), content)
         await this.drive.put(`/events/${eventID}/content`, content)
