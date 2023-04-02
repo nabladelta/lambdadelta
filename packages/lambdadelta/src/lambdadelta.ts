@@ -457,8 +457,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return { contentResult: ContentVerificationResult.INVALID, claimedTime }
         }
 
-        const res = await this.drive.put(`/events/${eventID}/content`, contentBuf)
-        console.log(res)
+        await this.drive.put(`/events/${eventID}/content`, contentBuf)
 
         return { contentResult: ContentVerificationResult.VALID, claimedTime}
     }
