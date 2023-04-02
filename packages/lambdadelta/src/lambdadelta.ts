@@ -4,7 +4,9 @@ import Hyperdrive from 'hyperdrive'
 import crypto from 'crypto'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { RLN, RLNGFullProof, VerificationResult, nullifierInput } from 'bernkastel-rln'
-import { deserializeEvent, deserializeFeedEntry, getEpoch, getEpochRange, getMean, getStandardDeviation, getTimestampInSeconds, serializeEvent, serializeFeedEntry } from './utils'
+import { deserializeEvent, deserializeFeedEntry,
+    getEpoch, getMean, getStandardDeviation,
+    getTimestampInSeconds, serializeEvent, serializeFeedEntry } from './utils'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
@@ -56,7 +58,10 @@ interface TopicEvents {
             headerResult: VerificationResult | HeaderVerificationError,
             contentResult: ContentVerificationResult | undefined) => void
     'contentSyncResult': (memberCID: string, contentResult: ContentVerificationResult) => void
-    'duplicateEventSync': (memberCID: string, eventID: string, index: number, prevIndex: number | undefined) => void
+    'duplicateEventSync': (memberCID: string,
+            eventID: string,
+            index: number,
+            prevIndex: number | undefined) => void
     'eventSyncTimestamp': (memberCID: string, eventID: string, received: number) => void
     'eventTimelineAdd': (eventID: string, time: number, consensusTime: number) => void
     'eventTimelineRemove': (eventID: string, prevTime: number, consensusTime: number) => void
@@ -331,7 +336,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         let eventMetadata = this.eventMetadata.get(eventID)
 
         if (!eventMetadata) { // Is a new event
-            if (headerResult !== VerificationResult.VALID || contentResult !== ContentVerificationResult.VALID) {
+            if (headerResult !== VerificationResult.VALID
+                || contentResult !== ContentVerificationResult.VALID) {
                 // Either the header or the content for this event did not validate.
                 // The event is invalid or the data is unavailable, and we have to skip it
                 peer.lastIndex = i
@@ -466,7 +472,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         // But we do not add the event anywhere else. We skip it later in the sync flow.
         // We will ignore the `received` for this event from this peer (and possibly ban the peer)
         // But if we find this event again on another peer we'll just try fetching the content again from them
-        const { contentResult } = await this.syncContent(memberCID, eventID, eventHeader.eventType, eventHeader.contentHash)
+        const { contentResult } = await this.syncContent(
+                memberCID,
+                eventID,
+                eventHeader.eventType,
+                eventHeader.contentHash)
 
         return { headerResult, contentResult, claimedTime: eventHeader.claimed }
     }
