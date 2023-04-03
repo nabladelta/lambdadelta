@@ -400,6 +400,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 // This makes it harder to tell who first saw an event
                 eventMetadata.received = (Math.abs(currentTime - entry.received) <= TOLERANCE)
                                                 ? entry.received : currentTime
+
+                // Need to set this before awaiting
+                // Avoid concurrent addition of events
+                this.eventMetadata.set(eventID, eventMetadata)
                 const index = await this.publishReceived(eventID, eventMetadata.received)
                 eventMetadata.index = index
                 this.eventMetadata.set(eventID, eventMetadata)
@@ -426,7 +430,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             memberCID: string,
             eventID: string,
             eventType?: string,
-            contentHash?: string): Promise<{
+            contentHash?: string
+            ): Promise<{
                 contentResult: ContentVerificationResult,
                 claimedTime?: number
             }> {
