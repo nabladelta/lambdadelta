@@ -54,19 +54,23 @@ interface TopicEvents {
     'peerAdded': (memberCID: string) => void
     'peerRemoved': (memberCID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
-    'fatalSyncError': (memberCID: string, error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
-    'eventSyncResult': (memberCID: string, 
+    'syncFatalError': (
+            memberCID: string,
+            error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
+    'syncEventResult': (
+            memberCID: string, 
             headerResult: VerificationResult | HeaderVerificationError,
             contentResult: ContentVerificationResult | undefined) => void
-    'contentSyncResult': (memberCID: string, contentResult: ContentVerificationResult) => void
-    'duplicateEventSync': (memberCID: string,
+    'syncContentResult': (memberCID: string, contentResult: ContentVerificationResult) => void
+    'syncDuplicateEvent': (
+            memberCID: string,
             eventID: string,
             index: number,
             prevIndex: number | undefined) => void
-    'eventSyncTimestamp': (memberCID: string, eventID: string, received: number) => void
-    'eventTimelineAdd': (eventID: string, time: number, consensusTime: number) => void
-    'eventTimelineRemove': (eventID: string, prevTime: number, consensusTime: number) => void
-    'eventTimelineRejected': (eventID: string, claimedTime: number, consensusTime: number) => void
+    'syncEventReceivedTime': (memberCID: string, eventID: string, received: number) => void
+    'timelineAddEvent': (eventID: string, time: number, consensusTime: number) => void
+    'timelineRemoveEvent': (eventID: string, prevTime: number, consensusTime: number) => void
+    'timelineRejectedEvent': (eventID: string, claimedTime: number, consensusTime: number) => void
     'consensusTimeChanged': (eventID: string, prevTime: number, newTime: number) => void
 }
 
@@ -259,7 +263,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 return true
             }
             this.removePeer(memberCID)
-            this.emit('fatalSyncError', memberCID, headerResult)
+            this.emit('syncFatalError', memberCID, headerResult)
             return false
         }
 
@@ -268,7 +272,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 return true
             }
             this.removePeer(memberCID)
-            this.emit('fatalSyncError', memberCID, contentResult)
+            this.emit('syncFatalError', memberCID, contentResult)
             return false
         }
 
@@ -296,7 +300,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const entryB = deserializeFeedEntry(entryBufB)
 
         if (entryA.eventID == entryB.eventID) {
-            this.emit('duplicateEventSync', memberCID, eventID, index, prevIndex)
+            this.emit('syncDuplicateEvent', memberCID, eventID, index, prevIndex)
             await this.removePeer(memberCID)
         }
 
@@ -357,7 +361,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             headerResult = results.headerResult
             contentResult = results.contentResult
             claimedTime = results.claimedTime
-            this.emit('eventSyncResult', memberCID, results.headerResult, results.contentResult)
+            this.emit('syncEventResult', memberCID, results.headerResult, results.contentResult)
 
         } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
             // In this case we have the header, but we are missing the content
@@ -367,11 +371,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             contentResult = results.contentResult
             // We already verified this header previously
             headerResult = VerificationResult.VALID
-            this.emit('contentSyncResult', memberCID, results.contentResult)
+            this.emit('syncContentResult', memberCID, results.contentResult)
         }
 
         let eventMetadata = this.eventMetadata.get(eventID)
-
         if (!eventMetadata) { // Is a new event
             if (headerResult !== VerificationResult.VALID
                 || contentResult !== ContentVerificationResult.VALID) {
@@ -414,7 +417,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         // Add peer's received timestamp
-        this.emit('eventSyncTimestamp', memberCID, eventID, entry.received)
+        this.emit('syncEventReceivedTime', memberCID, eventID, entry.received)
         eventMetadata.membersReceived.set(memberCID, entry.received)
         this.eventMetadata.set(eventID, eventMetadata)
 
@@ -614,9 +617,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             const prevTime = this.unsetTime(eventID)
             if (prevTime) {
                 const roundedTime = Math.floor(prevTime / 1000)
-                this.emit('eventTimelineRemove', eventID, roundedTime, consensusTime)
+                this.emit('timelineRemoveEvent', eventID, roundedTime, consensusTime)
             } else {
-                this.emit('eventTimelineRejected', eventID, eventMetadata.claimed, consensusTime)
+                this.emit('timelineRejectedEvent', eventID, eventMetadata.claimed, consensusTime)
             }
             return
         }
@@ -625,7 +628,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         // Event is not in timeline yet
         if (!currentEventTime) {
             this.setTime(eventID, eventMetadata.claimed)
-            this.emit('eventTimelineAdd', eventID, eventMetadata.claimed, consensusTime)
+            this.emit('timelineAddEvent', eventID, eventMetadata.claimed, consensusTime)
         }
     }
 
