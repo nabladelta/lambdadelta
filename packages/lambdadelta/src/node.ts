@@ -24,6 +24,7 @@ interface NodePeerData {
         stream: NoiseSecretStream
         topicAnnouncer: any
         handshakeSender: any
+        coreAnnouncer: any
     }
     topics: Set<string>
     coresSent: Map<string, [string, string]>
@@ -92,23 +93,73 @@ export class LDNode {
 
         const peerID = stream.remotePublicKey.toString('hex')
 
-        const topicAnnouncer = channel.addMessage({
-            encoding: c.array(c.buffer),
-            async onmessage(topics: Buffer[], _: any) { await self.recvTopics(peerID, topics) }
-        })
-
         const handshakeSender = channel.addMessage({
             encoding: c.buffer,
             async onmessage(proof: Buffer, _: any) { await self.recvHandshake(peerID, proof) }
         })
 
+        const topicAnnouncer = channel.addMessage({
+            encoding: c.array(c.buffer),
+            async onmessage(topics: Buffer[], _: any) { await self.recvTopics(peerID, topics) }
+        })
+
+        const coreAnnouncer = channel.addMessage({
+            encoding: c.array(c.array(c.string)),
+            async onmessage(cores: string[][], _: any) { await self.recvCores(peerID, cores) }
+        })
+
         this.peers.set(peerID, {
                     topics: new Set(),
-                    connection: {stream, topicAnnouncer, handshakeSender},
+                    connection: {stream, topicAnnouncer, handshakeSender, coreAnnouncer},
                     coresSent: new Map(),
                     coresReceived: new Map()
                 })
         this.sendHandshake(peerID)
+    }
+
+    private async recvCores(peerID: string, cores: string[][]) {
+        const peer = this.peers.get(peerID)
+        if (!peer) {
+            throw new Error("Unknown peer")
+        }
+        if (!peer.memberCID) {
+            log.error(`Received cores from peer ${peerID} before handshake`)
+            throw new Error("Cannot received cores from peer without CID")
+        }
+        let added = 0
+        for (let [topic, feedCore, drive] of cores) {
+            if (!peer.topics.has(topic)) {
+                log.warn(`Received cores for unexpected topic ${topic} from peer ${peerID.slice(-8)}`)
+                continue
+            }
+            const previous = peer.coresReceived.get(topic)
+            peer.coresReceived.set(topic, [feedCore, drive])
+            const feed = this.topicFeeds.get(topic)
+            if (!previous && feed) { // Add peer if this is the first core we receive
+                await feed.addPeer(peer.memberCID, feedCore, drive)
+                added++
+            }
+        }
+        log.info(`Received cores for ${cores.length} topics from peer ${peerID.slice(-8)} (Added: ${added})`)
+    }
+
+    private async sendCores(peerID: string) {
+        const peer = this.peers.get(peerID)
+        if (!peer) {
+            throw new Error("Unknown peer")
+        }
+        if (!peer.memberCID) {
+            throw new Error("Cannot send cores to peer without CID")
+        }
+
+        const cores: string[][] = []
+        for (let topic of peer.topics) {
+            const feed = this.topicFeeds.get(topic)
+            if (!feed) continue
+            const [feedCore, drive] = feed.getCoreIDs()
+            cores.push([topic, feedCore, drive])
+        }
+        await peer.connection.coreAnnouncer.send(cores)
     }
 
     private async recvHandshake(peerID: string, proofBuf: Buffer) {
@@ -204,7 +255,8 @@ export class LDNode {
         if (newTopicsAmount > 0) {
             // If we got any new topics, we need to reannounce ours to the peer
             // Otherwise they will not know to attach us for them on the other side
-            this.announceTopics(peerID)
+            await this.announceTopics(peerID)
+            await this.sendCores(peerID)
         }
     }
 
