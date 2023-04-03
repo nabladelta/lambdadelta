@@ -99,8 +99,8 @@ export class LDNode {
         })
 
         const topicAnnouncer = channel.addMessage({
-            encoding: c.array(c.buffer),
-            async onmessage(topics: Buffer[], _: any) { await self.recvTopics(peerID, topics) }
+            encoding: c.array(c.string),
+            async onmessage(topics: string[], _: any) { await self.recvTopics(peerID, topics) }
         })
 
         const coreAnnouncer = channel.addMessage({
@@ -197,21 +197,7 @@ export class LDNode {
         await peer.connection.handshakeSender.send(proofBuf)
     }
 
-    private async getTopicCommitments(key: Buffer) {
-        const comms: Map<string, Lambdadelta> = new Map()
-        for (let [topic, board] of this.topicFeeds) {
-            // Hash of own pubkey + topic is our commitment
-            // Is used to verify that other node knows the topic without revealing it to them
-            const topicCommitment = crypto.createHash('sha256')
-                .update(key)
-                .update(topic)
-                .digest()
-            comms.set(topicCommitment.toString('hex'), board)
-        }
-        return comms
-    }
-
-    private async recvTopics(peerID: string, topicComms: Buffer[]) {
+    private async recvTopics(peerID: string, topicComms: string[]) {
         const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
@@ -221,12 +207,12 @@ export class LDNode {
             return
         }
 
-        const ownTopicCommitments = await this.getTopicCommitments(peer.connection.stream.publicKey)
+        const ownTopicCommitments = this.getTopicCommitments(peer.connection.stream.publicKey)
         let newTopicsAmount = 0
         const newTopicList: Set<string> = new Set()
         for (let tc of topicComms) {
             // We search for the topic corresponding to this commitment
-            const feed = ownTopicCommitments.get(tc.toString('hex'))
+            const feed = ownTopicCommitments.get(tc)
             if (!feed) continue
 
             newTopicList.add(feed.topic)
@@ -249,8 +235,7 @@ export class LDNode {
             }
         }
         this.peers.set(peerID, peer)
-        log.info(`Received ${topicComms.length} topic commitments from ${peerID.slice(-6)} \
-        (Added: ${newTopicsAmount} Removed: ${deletedTopicsAmount})`)
+        log.info(`Received ${topicComms.length} topic commitments from ${peerID.slice(-6)} (Added: ${newTopicsAmount} Removed: ${deletedTopicsAmount})`)
 
         if (newTopicsAmount > 0) {
             // If we got any new topics, we need to reannounce ours to the peer
@@ -260,23 +245,30 @@ export class LDNode {
         }
     }
 
+    private getTopicCommitments(key: Buffer) {
+        const comms: Map<string, Lambdadelta> = new Map()
+        for (let [topic, board] of this.topicFeeds) {
+            // Hash of own pubkey + topic is our commitment
+            // Is used to verify that other node knows the topic without revealing it to them
+            const topicCommitment = crypto.createHash('sha256')
+                .update(key)
+                .update(topic)
+                .digest()
+            comms.set(topicCommitment.toString('hex'), board)
+        }
+        return comms
+    }
+
     private async announceTopics(peerID: string) {
         const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
         }
-        const tComms: Buffer[] = []
-        for (let [topic, _] of this.topicFeeds) {
-            // We compute a hash of peerPubkey + topic to send to the peer
-            // We don't want to reveal our topics to peers unless they already know them
-            const topicCommitment = crypto.createHash('sha256')
-                .update(peer.connection.stream.remotePublicKey)
-                .update(topic)
-                .digest()
-            tComms.push(topicCommitment)
-        }
-        log.info(`Announcing all ${tComms.length} topic commitments to ${peerID.slice(-6)}`)
-        await peer.connection.topicAnnouncer.send(tComms)
+        const peerPubKey = peer.connection.stream.remotePublicKey
+        const comms = Array.from((this.getTopicCommitments(peerPubKey)).keys())
+
+        log.info(`Announcing all ${comms.length} topic commitments to ${peerID.slice(-6)}`)
+        await peer.connection.topicAnnouncer.send(comms)
     }
 
     private async announceTopicsToAll() {
