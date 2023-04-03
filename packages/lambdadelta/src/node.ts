@@ -158,6 +158,7 @@ export class LDNode {
             if (!feed) continue
             const [feedCore, drive] = feed.getCoreIDs()
             cores.push([topic, feedCore, drive])
+            peer.coresSent.set(topic, [feedCore, drive])
         }
         await peer.connection.coreAnnouncer.send(cores)
     }
