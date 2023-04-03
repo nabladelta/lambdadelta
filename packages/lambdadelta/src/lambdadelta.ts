@@ -39,7 +39,6 @@ export interface FeedEntry {
     eventID: string
 }
 
-
 /**
  * @typedef NullifierSpec Spec for a nullifier
  * @property {number} epoch Epoch length in seconds
@@ -187,6 +186,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     public getCoreIDs(): [string, string] {
         return [this.core.key.toString('hex'), this.drive.key.toString('hex')]
     }
+
     public async getCoreLength(): Promise<number> {
         await this.core.ready()
         return this.core.length
@@ -256,7 +256,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     protected onInvalidInput(
             memberCID: string,
             headerResult: VerificationResult | HeaderVerificationError | undefined,
-            contentResult: ContentVerificationResult | undefined) {
+            contentResult: ContentVerificationResult | undefined
+        ) {
 
         if (headerResult !== undefined) {
             if (headerResult === HeaderVerificationError.UNAVAILABLE) {
