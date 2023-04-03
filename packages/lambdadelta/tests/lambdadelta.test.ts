@@ -79,10 +79,10 @@ describe('Event feed', () => {
 
         expect(await feedA.getCoreLength()).toEqual(1)
         expect(await feedB.getCoreLength()).toEqual(1)
-        feedA.on('eventSyncTimestamp', async (cid, eventID, result) => {
+        feedA.on('syncEventReceivedTime', async (cid, eventID, result) => {
             console.log(`[A]: ${cid} ${eventID} ${result}`)
         })
-        feedB.on('eventSyncTimestamp', async (cid, eventID, result) => {
+        feedB.on('syncEventReceivedTime', async (cid, eventID, result) => {
             console.log(`[B]: ${cid} ${eventID} ${result}`)
         })
 
