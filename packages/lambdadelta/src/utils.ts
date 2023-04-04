@@ -1,3 +1,4 @@
+import { Logger } from "tslog"
 import { FeedEntry, FeedEventHeader } from "./lambdadelta"
 
 export function getTimestampInSeconds() {
@@ -95,4 +96,13 @@ export function mostCommonElement(array: number[]): [number, number] {
         }
     }
     return [mostCommon, maxOccurrences]
+}
+
+export async function errorHandler(promise: Promise<any>, log: Logger<any>) {
+    try {
+        await promise
+    } catch(e) {
+        log.error((e as any).message)
+        throw e
+    }
 }
