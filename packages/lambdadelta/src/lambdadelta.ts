@@ -6,7 +6,7 @@ import { TypedEmitter } from 'tiny-typed-emitter'
 import { RLN, RLNGFullProof, VerificationResult, nullifierInput } from 'bernkastel-rln'
 import { deserializeEvent, deserializeFeedEntry,
     getEpoch, getMean, getStandardDeviation,
-    getTimestampInSeconds, serializeEvent, serializeFeedEntry } from './utils'
+    getTimestampInSeconds, mostCommonElement, serializeEvent, serializeFeedEntry } from './utils'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
@@ -549,28 +549,19 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return -1
         }
         // Find the most common received time
-        const occurrences: Map<number, number> = new Map()
-        let maxOccurrences = 0
-        let mostCommon = 0
-        for (let received of timestamps) {
-            const newAmount = (occurrences.get(received) || 0) + 1
-            occurrences.set(received, newAmount)
-            if (newAmount > maxOccurrences) {
-                maxOccurrences = newAmount
-                mostCommon = received
-            }
-        }
+        const [mostCommon, occurences] = mostCommonElement(timestamps)
         // If we have a ~2/3rds majority for one timestamp, use it
-        if ((maxOccurrences / timestamps.length) >= QUORUM) {
+        if ((occurences / timestamps.length) >= QUORUM) {
             return mostCommon
         }
-        // Alternative: use mean timestamp
+        // Fallback method: use mean timestamp
 
         // Filter out the timestamps that are more than one std.dev away from the mean
         const stdDev = getStandardDeviation(timestamps)
         const rawMean = getMean(timestamps)
         const filteredTimes = timestamps.filter(n => Math.abs(rawMean - n) <= stdDev)
-        // Only use this if we still end up with more than one timestamp
+
+        // If we still have more than one timestamp left, use these for the mean
         if (filteredTimes.length > 1) {
             return getMean(filteredTimes)
         }

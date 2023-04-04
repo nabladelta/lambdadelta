@@ -76,3 +76,23 @@ export function getStandardDeviation(array: number[]) {
 export function getMean(array: number[]) {
     return array.reduce((a, b) => a + b) / array.length
 }
+
+/**
+ * Finds the most common element in an array
+ * @param {number[]} array An array of numbers 
+ * @returns {[number, number]} [Most common element, number of occurences]
+ */
+export function mostCommonElement(array: number[]): [number, number] {
+    const occurrences: Map<number, number> = new Map()
+    let maxOccurrences = 0
+    let mostCommon = 0
+    for (const element of array) {
+        const newAmount = (occurrences.get(element) || 0) + 1
+        occurrences.set(element, newAmount)
+        if (newAmount > maxOccurrences) {
+            maxOccurrences = newAmount
+            mostCommon = element
+        }
+    }
+    return [mostCommon, maxOccurrences]
+}
