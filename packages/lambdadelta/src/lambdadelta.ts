@@ -150,6 +150,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.drive = new Hyperdrive(this.corestore)
     }
 
+    public hasPeer(memberCID: string) {
+        return this.peers.has(memberCID)
+    }
+
     /**
      * Sets an event's timestamp in the internal timeline
      * @param time The event's timestamp in seconds
