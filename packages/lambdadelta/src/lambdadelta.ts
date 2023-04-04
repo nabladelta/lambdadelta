@@ -543,6 +543,41 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return length - 1
     }
 
+    private calculateConsensusTime(timestamps: number[], totalPeers: number): number {
+        if ((timestamps.length / totalPeers) < QUORUM) {
+            // We do not have a quorum to decide on the correct time yet
+            return -1
+        }
+        // Find the most common received time
+        const occurrences: Map<number, number> = new Map()
+        let maxOccurrences = 0
+        let mostCommon = 0
+        for (let received of timestamps) {
+            const newAmount = (occurrences.get(received) || 0) + 1
+            occurrences.set(received, newAmount)
+            if (newAmount > maxOccurrences) {
+                maxOccurrences = newAmount
+                mostCommon = received
+            }
+        }
+        // If we have a ~2/3rds majority for one timestamp, use it
+        if ((maxOccurrences / timestamps.length) >= QUORUM) {
+            return mostCommon
+        }
+        // Alternative: use mean timestamp
+
+        // Filter out the timestamps that are more than one std.dev away from the mean
+        const stdDev = getStandardDeviation(timestamps)
+        const rawMean = getMean(timestamps)
+        const filteredTimes = timestamps.filter(n => Math.abs(rawMean - n) <= stdDev)
+        // Only use this if we still end up with more than one timestamp
+        if (filteredTimes.length > 1) {
+            return getMean(filteredTimes)
+        }
+        // Otherwise just return the regular mean
+        return rawMean
+    }
+
     /**
      * To be called whenever we add another peer's `received` time to an event
      * It recalculates our consensus timestamp and then acts appropriately
@@ -553,50 +588,20 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (!eventMetadata) {
             throw new Error("Event not found")
         }
-        const peers = eventMetadata.membersReceived.size 
-            + (eventMetadata.index !== -1 ? 1 : 0) // Adding our own timestamp if it's been published
-        const totalPeers = this.peers.size
-            + (eventMetadata.index !== -1 ? 1 : 0) // Adding our own timestamp if it's been published
-
-        if ((peers / totalPeers) < QUORUM) {
-            // We do not have a quorum to decide on the correct time yet
-            return
-        }
-        const receivedTimes = Array.from(eventMetadata.membersReceived.values())
-
+        const collectedTimestamps = Array.from(eventMetadata.membersReceived.values())
         // If we have a received time of our own
         if (eventMetadata.index !== -1) {
             // Add our contribution
-            receivedTimes.push(eventMetadata.received)
+            collectedTimestamps.push(eventMetadata.received)
         }
-        // Find the most common received time
-        const occurrences: Map<number, number> = new Map()
-        let maxOccurrences = 0
-        let mostCommon = 0
-        for (let received of receivedTimes) {
-            const newAmount = (occurrences.get(received) || 0) + 1
-            occurrences.set(received, newAmount)
-            if (newAmount > maxOccurrences) {
-                maxOccurrences = newAmount
-                mostCommon = received
-            }
+        const totalPeers = this.peers.size
+            + (eventMetadata.index !== -1 ? 1 : 0) // Adding our own timestamp if it's been published
+        const consensusTime = this.calculateConsensusTime(collectedTimestamps, totalPeers)
+
+        if (consensusTime == -1) {
+            return
         }
-        let consensusTime
-        // If we have a ~2/3rds majority for one timestamp, use it
-        if ((maxOccurrences / peers) >= QUORUM) {
-            consensusTime = mostCommon
-        } else {
-            // We filter the timestamps that are more than one std.dev away from the mean
-            const stdDev = getStandardDeviation(receivedTimes)
-            const rawMean = getMean(receivedTimes)
-            const filteredTimes = receivedTimes.filter(n => Math.abs(rawMean - n) <= stdDev)
-            // Only do this if we still end up with more than one timestamp
-            if (filteredTimes.length > 1) {
-                consensusTime = getMean(filteredTimes)
-            } else {
-                consensusTime = rawMean
-            }
-        }
+
         if (eventMetadata.consensus !== consensusTime) {
             this.emit('consensusTimeChanged', eventID, eventMetadata.consensus, consensusTime)
             eventMetadata.consensus = consensusTime
