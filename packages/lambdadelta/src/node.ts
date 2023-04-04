@@ -68,15 +68,34 @@ export class LDNode {
         this.rln = await RLN.load(this.secret, GROUP_FILE)
 
         await this.corestore.ready()
-        this.swarm.on('connection', (socket: NoiseSecretStream, info: PeerInfo) => {
+        this.swarm.on('connection', (stream: NoiseSecretStream, info: PeerInfo) => {
             log.info('Found peer', info.publicKey.toString('hex').slice(-6))
 
-            this.handlePeer(socket)
+            this.handlePeer(stream)
 
-            socket.once('close', () => {
+            stream.once('close', async () => {
+                const peerID = stream.remotePublicKey.toString('hex')
                 log.info('Peer left', info.publicKey.toString('hex').slice(-6))
+                await this.removePeer(peerID)
             })
         })
+    }
+
+    private async removePeer(peerID: string) {
+        const peer = this.peers.get(peerID)
+        this.peers.delete(peerID)
+        if (!peer) {
+            throw new Error("Unknown peer")
+        }
+        const removePromises: Promise<boolean>[] = []
+        for (let topic of peer.topics) {
+            const feed = this.topicFeeds.get(topic)
+            if (!feed) {
+                continue
+            }
+            removePromises.push(feed.removePeer(peer.memberCID!))
+        }
+        await Promise.all(removePromises)
     }
 
     private async handlePeer(stream: NoiseSecretStream) {
@@ -225,19 +244,20 @@ export class LDNode {
         }
         let deletedTopicsAmount = 0
         // Check which topics are no longer relevant to this peer
+        const removePromises: Promise<boolean>[] = []
         for (let topic of peer.topics) {
             if (!newTopicList.has(topic)) { // Previously subscribed topic is no longer
                 peer.topics.delete(topic)
                 deletedTopicsAmount++
                 const feed = this.topicFeeds.get(topic)
                 if (feed) {
-                    await feed.removePeer(peer.memberCID)
+                    removePromises.push(feed.removePeer(peer.memberCID))
                 }
             }
         }
         this.peers.set(peerID, peer)
         log.info(`Received ${topicComms.length} topic commitments from ${peerID.slice(-6)} (Added: ${newTopicsAmount} Removed: ${deletedTopicsAmount})`)
-
+        await Promise.all(removePromises)
         if (newTopicsAmount > 0) {
             // If we got any new topics, we need to reannounce ours to the peer
             // Otherwise they will not know to attach us for them on the other side
@@ -304,6 +324,8 @@ export class LDNode {
         this.topicFeeds.delete(topic)
         for (let [_, peer] of this.peers) {
             peer.topics.delete(topic)
+            peer.coresReceived.delete(topic)
+            peer.coresSent.delete(topic)
         }
         await this.swarm.leave(this.topicHash(topic))
     }
