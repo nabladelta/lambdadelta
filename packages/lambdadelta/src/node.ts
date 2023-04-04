@@ -7,9 +7,10 @@ import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, deserializeProof, RLNGFullProof, serializeProof } from 'bernkastel-rln'
-import { Lambdadelta, generateMemberCID, verifyMemberCIDProof } from 'lambdadelta'
-import { getMemberCIDEpoch } from './utils'
+import { Lambdadelta } from './lambdadelta'
+import { errorHandler, getMemberCIDEpoch } from './utils'
 import { Logger } from "tslog"
+import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 
 export const mainLogger = new Logger({
     prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
@@ -30,11 +31,13 @@ interface NodePeerData {
     coresSent: Map<string, [string, string]>
     coresReceived: Map<string, [string, string]>
     memberCID?: string
+    localMemberCID?: string
 }
 
 export class LDNode {
     private secret: string
     public corestore: any
+    public peerId: string
     public topicFeeds: Map<string, Lambdadelta> // Topic => feed
     private peers: Map<string, NodePeerData>
     public swarm: Hyperswarm
@@ -44,7 +47,7 @@ export class LDNode {
         this.secret = secret
         this.topicFeeds = new Map()
         this.peers = new Map()
-
+        this.peerId = ''
         const secretDigest = crypto.createHash('sha256')
             .update('USR>' + secret)
             .digest('hex')
@@ -53,7 +56,8 @@ export class LDNode {
             {primaryKey: Buffer.from(this.secret)})
 
         const swarmKeySeed = crypto.createHash('sha256')
-            .update('DHTKEY' + secret)
+            .update('DHTKEY')
+            .update(secret)
             .update(getMemberCIDEpoch().toString())
             .digest()
         this.swarm = new Hyperswarm({ seed: swarmKeySeed, ...swarmOpts})
@@ -70,7 +74,7 @@ export class LDNode {
         await this.corestore.ready()
         this.swarm.on('connection', (stream: NoiseSecretStream, info: PeerInfo) => {
             log.info('Found peer', info.publicKey.toString('hex').slice(-6))
-
+            this.peerId = stream.publicKey.toString('hex')
             this.handlePeer(stream)
 
             stream.once('close', async () => {
@@ -79,6 +83,14 @@ export class LDNode {
                 await this.removePeer(peerID)
             })
         })
+    }
+
+    public getMemberCIDFor(peerID: string) {
+        const peer = this.peers.get(peerID)
+        if (!peer) {
+            return undefined
+        }
+        return peer.localMemberCID
     }
 
     private async removePeer(peerID: string) {
@@ -114,18 +126,15 @@ export class LDNode {
 
         const handshakeSender = channel.addMessage({
             encoding: c.buffer,
-            async onmessage(proof: Buffer, _: any) { await self.recvHandshake(peerID, proof) }
-        })
+            async onmessage(proof: Buffer, _: any) { await errorHandler(self.recvHandshake(peerID, proof), log) }})
 
         const topicAnnouncer = channel.addMessage({
             encoding: c.array(c.string),
-            async onmessage(topics: string[], _: any) { await self.recvTopics(peerID, topics) }
-        })
+            async onmessage(topics: string[], _: any) { await errorHandler(self.recvTopics(peerID, topics), log) }})
 
         const coreAnnouncer = channel.addMessage({
             encoding: c.array(c.array(c.string)),
-            async onmessage(cores: string[][], _: any) { await self.recvCores(peerID, cores) }
-        })
+            async onmessage(cores: string[][], _: any) { await errorHandler(self.recvCores(peerID, cores), log) }})
 
         this.peers.set(peerID, {
                     topics: new Set(),
@@ -213,6 +222,7 @@ export class LDNode {
         }
         log.info(`Sending MemberCID to ${peerID.slice(-8)}`)
         const proof = await generateMemberCID(this.secret, peer.connection.stream, this.rln!)
+        peer.localMemberCID = proof.signal
         const proofBuf = serializeProof(proof)
         await peer.connection.handshakeSender.send(proofBuf)
     }
@@ -284,6 +294,10 @@ export class LDNode {
         const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
+        }
+        if (!peer.memberCID) {
+            log.warn(`Not sending topics to peer before handshake is received`)
+            return
         }
         const peerPubKey = peer.connection.stream.remotePublicKey
         const comms = Array.from((this.getTopicCommitments(peerPubKey)).keys())
