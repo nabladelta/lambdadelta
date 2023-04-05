@@ -20,6 +20,11 @@ const DATA_FOLDER = 'data'
 const GROUP_FILE = 'testGroup.json'
 const PROTO_VERSION = '1'
 
+interface PeerTopicData {
+    receivedCores?: [string, string]
+    sentCores?: [string, string]
+}
+
 interface NodePeerData {
     connection: {
         stream: NoiseSecretStream
@@ -27,9 +32,7 @@ interface NodePeerData {
         handshakeSender: any
         coreAnnouncer: any
     }
-    topics: Set<string>
-    coresSent: Map<string, [string, string]>
-    coresReceived: Map<string, [string, string]>
+    topics: Map<string, PeerTopicData>
     memberCID?: string
     localMemberCID?: string
 }
@@ -100,7 +103,7 @@ export class LDNode {
             throw new Error("Unknown peer")
         }
         const removePromises: Promise<boolean>[] = []
-        for (let topic of peer.topics) {
+        for (let [topic, _] of peer.topics) {
             const feed = this.topicFeeds.get(topic)
             if (!feed) {
                 continue
@@ -137,10 +140,8 @@ export class LDNode {
             async onmessage(cores: string[][], _: any) { await errorHandler(self.recvCores(peerID, cores), log) }})
 
         this.peers.set(peerID, {
-                    topics: new Set(),
-                    connection: {stream, topicAnnouncer, handshakeSender, coreAnnouncer},
-                    coresSent: new Map(),
-                    coresReceived: new Map()
+                    topics: new Map(),
+                    connection: {stream, topicAnnouncer, handshakeSender, coreAnnouncer}
                 })
         this.sendHandshake(peerID)
     }
@@ -151,24 +152,24 @@ export class LDNode {
             throw new Error("Unknown peer")
         }
         if (!peer.memberCID) {
-            log.error(`Received cores from peer ${peerID} before handshake`)
-            throw new Error("Cannot received cores from peer without CID")
+            log.error(`Received cores from peer ${peerID.slice(-6)} before handshake`)
+            throw new Error("Cannot receive cores from peer without CID")
         }
         let added = 0
         for (let [topic, feedCore, drive] of cores) {
             if (!peer.topics.has(topic)) {
-                log.warn(`Received cores for unexpected topic ${topic} from peer ${peerID.slice(-8)}`)
+                log.warn(`Received cores for unexpected topic ${topic} from peer ${peerID.slice(-6)}`)
                 continue
             }
-            const previous = peer.coresReceived.get(topic)
-            peer.coresReceived.set(topic, [feedCore, drive])
+            const previous = peer.topics.get(topic)!
             const feed = this.topicFeeds.get(topic)
-            if (!previous && feed) { // Add peer if this is the first core we receive
+            if (!previous.receivedCores && feed) { // Add peer if this is the first core we receive
+                previous.receivedCores = [feedCore, drive]
                 await feed.addPeer(peer.memberCID, feedCore, drive)
                 added++
             }
         }
-        log.info(`Received cores for ${cores.length} topics from peer ${peerID.slice(-8)} (Added: ${added})`)
+        log.info(`Received cores for ${cores.length} topics from peer ${peerID.slice(-6)} (Added: ${added})`)
     }
 
     private async sendCores(peerID: string) {
@@ -181,12 +182,12 @@ export class LDNode {
         }
 
         const cores: string[][] = []
-        for (let topic of peer.topics) {
+        for (let [topic, topicData] of peer.topics) {
             const feed = this.topicFeeds.get(topic)
             if (!feed) continue
             const [feedCore, drive] = feed.getCoreIDs()
             cores.push([topic, feedCore, drive])
-            peer.coresSent.set(topic, [feedCore, drive])
+            topicData.sentCores = [feedCore, drive]
         }
         await peer.connection.coreAnnouncer.send(cores)
     }
@@ -204,11 +205,11 @@ export class LDNode {
         const proof = deserializeProof(proofBuf)
         const result = await verifyMemberCIDProof(proof, peer.connection.stream, this.rln!)
         if (!result) {
-            log.error(`Received invalid MemberCID from ${peerID.slice(-8)}`)
+            log.error(`Received invalid MemberCID from ${peerID.slice(-6)}`)
             throw new Error("Invalid handshake")
         }
 
-        log.info(`Received MemberCID from ${peerID.slice(-8)}`)
+        log.info(`Received MemberCID from ${peerID.slice(-6)}`)
         peer.memberCID = proof.signal
         this.peers.set(peerID, peer)
 
@@ -220,11 +221,11 @@ export class LDNode {
         if (!peer) {
             throw new Error("Unknown peer")
         }
-        log.info(`Sending MemberCID to ${peerID.slice(-8)}`)
+        log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
         const proof = await generateMemberCID(this.secret, peer.connection.stream, this.rln!)
-        peer.localMemberCID = proof.signal
         const proofBuf = serializeProof(proof)
         await peer.connection.handshakeSender.send(proofBuf)
+        peer.localMemberCID = proof.signal
     }
 
     private async recvTopics(peerID: string, topicComms: string[]) {
@@ -248,14 +249,14 @@ export class LDNode {
             newTopicList.add(feed.topic)
 
             if (!peer.topics.has(feed.topic)) {
-                peer.topics.add(feed.topic)
+                peer.topics.set(feed.topic, {})
                 newTopicsAmount++
             }
         }
         let deletedTopicsAmount = 0
         // Check which topics are no longer relevant to this peer
         const removePromises: Promise<boolean>[] = []
-        for (let topic of peer.topics) {
+        for (let [topic, data] of peer.topics) {
             if (!newTopicList.has(topic)) { // Previously subscribed topic is no longer
                 peer.topics.delete(topic)
                 deletedTopicsAmount++
@@ -295,10 +296,11 @@ export class LDNode {
         if (!peer) {
             throw new Error("Unknown peer")
         }
-        if (!peer.memberCID) {
+        if (!peer.memberCID || !peer.localMemberCID) {
             log.warn(`Not sending topics to peer before handshake is received`)
             return
         }
+
         const peerPubKey = peer.connection.stream.remotePublicKey
         const comms = Array.from((this.getTopicCommitments(peerPubKey)).keys())
 
@@ -338,8 +340,6 @@ export class LDNode {
         this.topicFeeds.delete(topic)
         for (let [_, peer] of this.peers) {
             peer.topics.delete(topic)
-            peer.coresReceived.delete(topic)
-            peer.coresSent.delete(topic)
         }
         await this.swarm.leave(this.topicHash(topic))
     }
