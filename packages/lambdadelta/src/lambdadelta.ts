@@ -6,7 +6,10 @@ import { TypedEmitter } from 'tiny-typed-emitter'
 import { RLN, RLNGFullProof, VerificationResult, nullifierInput } from 'bernkastel-rln'
 import { deserializeEvent, deserializeFeedEntry,
     getEpoch, getMean, getStandardDeviation,
-    getTimestampInSeconds, mostCommonElement, serializeEvent, serializeFeedEntry } from './utils'
+    getTimestampInSeconds,
+    mostCommonElement,
+    serializeEvent,
+    serializeFeedEntry } from './utils'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
