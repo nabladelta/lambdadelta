@@ -153,6 +153,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.drive = new Hyperdrive(this.corestore)
     }
 
+    public async ready() {
+        await this.core.ready()
+        await this.drive.ready()
+    }
+
     public hasPeer(memberCID: string) {
         return this.peers.has(memberCID)
     }

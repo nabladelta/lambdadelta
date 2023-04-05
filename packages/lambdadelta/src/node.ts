@@ -104,6 +104,10 @@ export class LDNode {
         return peer
     }
 
+    public getTopic(topic: string) {
+        return this.topicFeeds.get(this.topicHash(topic, 'index').toString('hex'))
+    }
+
     private async removePeer(peerID: string) {
         const peer = this.getPeer(peerID)
         this.peers.delete(peerID)
@@ -186,31 +190,31 @@ export class LDNode {
         for (const [topicHash, feed] of this.topicFeeds) {
             addPromises.push(this.syncTopicData(peerID, topicHash, feed))
         }
-        this.continuousTopicSync(peerID)
+        // this.continuousTopicSync(peerID)
         const nAdded = (await Promise.all(addPromises)).filter(r => r).length
         this.log.info(`Added ${nAdded} topic(s) from ${peerID.slice(-6)}`)
     }
 
-    private async continuousTopicSync(peerID: string) {
-        const peer = this.getPeer(peerID)
-        for await (const { key, type, value } of peer.topicsBee
-                .createHistoryStream({ gte: -1, live: true })) {
+    // private async continuousTopicSync(peerID: string) {
+    //     const peer = this.getPeer(peerID)
+    //     for await (const { key, type, value } of peer.topicsBee
+    //             .createHistoryStream({ gte: -1, live: true })) {
 
-            this.log.warn(`Update: ${type}: ${key} -> ${value}`)
+    //         this.log.warn(`Update: ${type}: ${key} -> ${value}`)
 
-            const feed = this.topicFeeds.get(key)
-            if (!feed) continue
+    //         const feed = this.topicFeeds.get(key)
+    //         if (!feed) continue
 
-            if (type === 'del') {
-                peer.topics.delete(key)
-                feed.removePeer(peerID)
-            }
+    //         if (type === 'del') {
+    //             peer.topics.delete(key)
+    //             feed.removePeer(peerID)
+    //         }
 
-            if (type === 'put') {
-                this.syncTopicData(peerID, key, feed)
-            }
-        }
-    }
+    //         if (type === 'put') {
+    //             this.syncTopicData(peerID, key, feed)
+    //         }
+    //     }
+    // }
 
     private async syncTopicData(peerID: string, topicHash: string, feed: Lambdadelta) {
         const peer = this.getPeer(peerID)
@@ -251,6 +255,8 @@ export class LDNode {
             this.corestore,
             this.rln!
         )
+        await feed.ready()
+
         const topicHash = this.topicHash(topic, 'index').toString('hex')
         this.topicFeeds.set(topicHash, feed)
         const [feedCore, drive] = feed.getCoreIDs()

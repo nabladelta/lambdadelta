@@ -37,11 +37,11 @@ describe('LDNode', () => {
         const logA = mainLogger.getSubLogger({name: 'nodeA'})
         const logB = mainLogger.getSubLogger({name: 'nodeB'})
         const logC = mainLogger.getSubLogger({name: 'nodeC'})
-
+        const gid = 'AAA'
         const testnet = await createTestnet(3)
-        anode = new LDNode(secretA, {logger: logA, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
-        bnode = new LDNode(secretB, {logger: logB, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
-        cnode = new LDNode(secretC, {logger: logC, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+        anode = new LDNode(secretA, gid, {logger: logA, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+        bnode = new LDNode(secretB, gid, {logger: logB, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+        cnode = new LDNode(secretC, gid, {logger: logC, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
         await anode.init()
         await bnode.init()
         await cnode.init()
@@ -63,10 +63,10 @@ describe('LDNode', () => {
     jest.setTimeout(120000)
 
     it('Joins topics', async () => {
-        const a = anode.topicFeeds.get(T)!
-        const b = bnode.topicFeeds.get(T)!
-        const c = cnode.topicFeeds.get(T)!
-        await sleep(5000)
+        const a = anode.getTopic(T)!
+        const b = bnode.getTopic(T)!
+        const c = cnode.getTopic(T)!
+        await sleep(10000)
         const aid = anode.peerId
         const bid = bnode.peerId
         const cid = bnode.peerId
