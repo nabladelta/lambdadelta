@@ -43,6 +43,7 @@ export class LDNode {
     public peerId: string
     public topicFeeds: Map<string, Lambdadelta> // Topic => feed
     private peers: Map<string, NodePeerData>
+    private memberCIDs: Map<string, string> // MCID => peerID
     public swarm: Hyperswarm
     private rln?: RLN
 
@@ -50,7 +51,9 @@ export class LDNode {
         this.secret = secret
         this.topicFeeds = new Map()
         this.peers = new Map()
+        this.memberCIDs = new Map()
         this.peerId = ''
+
         const secretDigest = crypto.createHash('sha256')
             .update('USR>' + secret)
             .digest('hex')
@@ -165,7 +168,7 @@ export class LDNode {
             const feed = this.topicFeeds.get(topic)
             if (!previous.receivedCores && feed) { // Add peer if this is the first core we receive
                 previous.receivedCores = [feedCore, drive]
-                await feed.addPeer(peer.memberCID, feedCore, drive)
+                await feed.addPeer(peerID, feedCore, drive)
                 added++
             }
         }
@@ -208,9 +211,13 @@ export class LDNode {
             log.error(`Received invalid MemberCID from ${peerID.slice(-6)}`)
             throw new Error("Invalid handshake")
         }
-
+        if (this.memberCIDs.has(proof.signal)) {
+            log.error(`Received duplicate MemberCID from ${peerID.slice(-6)}`)
+            throw new Error("Invalid handshake")
+        }
         log.info(`Received MemberCID from ${peerID.slice(-6)}`)
         peer.memberCID = proof.signal
+        this.memberCIDs.set(peer.memberCID, peerID)
         this.peers.set(peerID, peer)
 
         await this.announceTopics(peerID)
