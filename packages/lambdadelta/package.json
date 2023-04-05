@@ -31,6 +31,7 @@
     "chalk": "^5.2.0",
     "corestore": "^6.5.1",
     "dotenv": "^16.0.3",
+    "hyperbee": "^2.7.2",
     "hyperblobs": "^2.2.0",
     "hyperdrive": "^11.0.0-alpha.10",
     "hyperswarm": "^4.3.7",

@@ -10,7 +10,7 @@ declare module 'protomux'
 declare module 'compact-encoding'
 declare module 'hyperblobs'
 declare module 'hyperdrive'
-
+declare module 'hyperbee'
 
 declare module 'brittle'
 declare module 'multi-core-indexer'

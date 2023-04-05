@@ -11,30 +11,28 @@ import { Lambdadelta } from './lambdadelta'
 import { errorHandler, getMemberCIDEpoch } from './utils'
 import { Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
+import Hyperbee from 'hyperbee'
 
 const DATA_FOLDER = 'data'
 const GROUP_FILE = 'testGroup.json'
-const PROTO_VERSION = '1'
-
-interface PeerTopicData {
-    receivedCores?: [string, string]
-    sentCores?: [string, string]
-}
 
 interface NodePeerData {
     connection: {
         stream: NoiseSecretStream
-        topicAnnouncer: any
         handshakeSender: any
-        coreAnnouncer: any
     }
-    topics: Map<string, PeerTopicData>
+    topicsBee?: any,
+    topics: Set<string>
     memberCID?: string
     localMemberCID?: string
 }
 
 export class LDNode {
+    public static appID = "LDD"
+    public static protocolVersion = "1"
+
     private secret: string
+    private groupID: string
     public corestore: any
     public peerId: string
     private log: Logger<unknown>
@@ -43,15 +41,18 @@ export class LDNode {
     private memberCIDs: Map<string, string> // MCID => peerID
     public swarm: Hyperswarm
     private rln?: RLN
+    private topicsBee: any
 
-    constructor(secret: string, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
+    constructor(secret: string, groupID: string, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
         this.secret = secret
+        this.groupID = groupID
         this.topicFeeds = new Map()
         this.peers = new Map()
         this.memberCIDs = new Map()
         this.log = logger || new Logger({
             prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
         })
+
         this.peerId = ''
 
         const secretDigest = crypto.createHash('sha256')
@@ -60,6 +61,11 @@ export class LDNode {
         this.corestore = new Corestore(
             memstore ? ram : path.join(DATA_FOLDER, 'users', secretDigest),
             {primaryKey: Buffer.from(this.secret)})
+        
+        this.topicsBee = new Hyperbee(this.corestore.get({name: 'topics'}), {
+            valueEncoding: 'binary',
+            keyEncoding: 'string'
+        })
 
         const swarmKeySeed = crypto.createHash('sha256')
             .update('DHTKEY')
@@ -76,8 +82,8 @@ export class LDNode {
 
     async init() {
         this.rln = await RLN.load(this.secret, GROUP_FILE)
-
         await this.corestore.ready()
+        await this.topicsBee.ready()
         this.swarm.on('connection', (stream: NoiseSecretStream, info: PeerInfo) => {
             this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
             this.peerId = stream.publicKey.toString('hex')
@@ -90,27 +96,25 @@ export class LDNode {
             })
         })
     }
-
-    public getMemberCIDFor(peerID: string) {
+    private getPeer(peerID: string) {
         const peer = this.peers.get(peerID)
-        if (!peer) {
-            return undefined
-        }
-        return peer.localMemberCID
-    }
-
-    private async removePeer(peerID: string) {
-        const peer = this.peers.get(peerID)
-        this.peers.delete(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
         }
+        return peer
+    }
+
+    private async removePeer(peerID: string) {
+        const peer = this.getPeer(peerID)
+        this.peers.delete(peerID)
+
         const removePromises: Promise<boolean>[] = []
-        for (let [topic, _] of peer.topics) {
-            const feed = this.topicFeeds.get(topic)
+        for (const topicHash of peer.topics) {
+            const feed = this.topicFeeds.get(topicHash)
             if (!feed) {
                 continue
             }
+            peer.topicsBee.close()
             removePromises.push(feed.removePeer(peer.memberCID!))
         }
         await Promise.all(removePromises)
@@ -131,199 +135,111 @@ export class LDNode {
         const peerID = stream.remotePublicKey.toString('hex')
 
         const handshakeSender = channel.addMessage({
-            encoding: c.buffer,
-            async onmessage(proof: Buffer, _: any) { await errorHandler(self.recvHandshake(peerID, proof), self.log) }})
+            encoding: c.array(c.buffer),
+            async onmessage(proof: Buffer[], _: any) { await errorHandler(self.recvHandshake(peerID, proof), self.log) }})
 
-        const topicAnnouncer = channel.addMessage({
-            encoding: c.array(c.string),
-            async onmessage(topics: string[], _: any) { await errorHandler(self.recvTopics(peerID, topics), self.log) }})
-
-        const coreAnnouncer = channel.addMessage({
-            encoding: c.array(c.array(c.string)),
-            async onmessage(cores: string[][], _: any) { await errorHandler(self.recvCores(peerID, cores), self.log) }})
-
-        this.peers.set(peerID, {
-                    topics: new Map(),
-                    connection: {stream, topicAnnouncer, handshakeSender, coreAnnouncer}
-                })
+        this.peers.set(peerID, { topics: new Set(), connection: {stream, handshakeSender} })
         this.sendHandshake(peerID)
     }
 
-    private async recvCores(peerID: string, cores: string[][]) {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unknown peer")
-        }
-        if (!peer.memberCID) {
-            this.log.error(`Received cores from peer ${peerID.slice(-6)} before handshake`)
-            throw new Error("Cannot receive cores from peer without CID")
-        }
-        let added = 0
-        for (let [topic, feedCore, drive] of cores) {
-            if (!peer.topics.has(topic)) {
-                this.log.warn(`Received cores for unexpected topic ${topic} from peer ${peerID.slice(-6)}`)
-                continue
-            }
-            const previous = peer.topics.get(topic)!
-            const feed = this.topicFeeds.get(topic)
-            if (!previous.receivedCores && feed) { // Add peer if this is the first core we receive
-                previous.receivedCores = [feedCore, drive]
-                await feed.addPeer(peerID, feedCore, drive)
-                added++
-            }
-        }
-        this.log.info(`Received cores for ${cores.length} topics from peer ${peerID.slice(-6)} (Added: ${added})`)
-    }
+    private async recvHandshake(peerID: string, proofBuf: Buffer[]) {
+        const peer = this.getPeer(peerID)
 
-    private async sendCores(peerID: string) {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unknown peer")
-        }
-        if (!peer.memberCID) {
-            throw new Error("Cannot send cores to peer without CID")
-        }
-
-        const cores: string[][] = []
-        for (let [topic, topicData] of peer.topics) {
-            const feed = this.topicFeeds.get(topic)
-            if (!feed) continue
-            const [feedCore, drive] = feed.getCoreIDs()
-            cores.push([topic, feedCore, drive])
-            topicData.sentCores = [feedCore, drive]
-        }
-        await peer.connection.coreAnnouncer.send(cores)
-    }
-
-    private async recvHandshake(peerID: string, proofBuf: Buffer) {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            this.log.error(`Received handshake from unknown peer ${peerID.slice(-6)}`)
-            throw new Error("Unknown peer")
-        }
         if (peer.memberCID) {
             this.log.error(`Received duplicate handshake from ${peerID.slice(-6)}`)
             throw new Error("Duplicate handshake")
         }
-        const proof = deserializeProof(proofBuf)
+        const proof = deserializeProof(proofBuf[0])
+        if (this.memberCIDs.has(proof.signal)) {
+            this.log.error(`Received duplicate MemberCID from ${peerID.slice(-6)}`)
+            throw new Error("Invalid handshake")
+        }
         const result = await verifyMemberCIDProof(proof, peer.connection.stream, this.rln!)
         if (!result) {
             this.log.error(`Received invalid MemberCID from ${peerID.slice(-6)}`)
             throw new Error("Invalid handshake")
         }
-        if (this.memberCIDs.has(proof.signal)) {
-            this.log.error(`Received duplicate MemberCID from ${peerID.slice(-6)}`)
-            throw new Error("Invalid handshake")
-        }
-        this.log.info(`Received MemberCID from ${peerID.slice(-6)}`)
-        peer.memberCID = proof.signal
-        this.memberCIDs.set(peer.memberCID, peerID)
-        this.peers.set(peerID, peer)
 
-        await this.announceTopics(peerID)
+        this.log.info(`Received MemberCID from ${peerID.slice(-6)}`)
+
+        peer.memberCID = proof.signal
+        peer.topicsBee = this.corestore.get(proofBuf[1])
+        this.memberCIDs.set(peer.memberCID, peerID)
+
+        await this.syncTopics(peerID)
     }
 
     private async sendHandshake(peerID: string) {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unknown peer")
-        }
+        const peer = this.getPeer(peerID)
         this.log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
+
         const proof = await generateMemberCID(this.secret, peer.connection.stream, this.rln!)
         const proofBuf = serializeProof(proof)
-        await peer.connection.handshakeSender.send(proofBuf)
+        const topicsCoreKey: Buffer = this.topicsBee.core.key
         peer.localMemberCID = proof.signal
+
+        await peer.connection.handshakeSender.send([proofBuf, topicsCoreKey])
     }
 
-    private async recvTopics(peerID: string, topicComms: string[]) {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unknown peer")
+    private async syncTopics(peerID: string) {
+        const addPromises: Promise<boolean>[] = []
+        for (const [topicHash, feed] of this.topicFeeds) {
+            addPromises.push(this.syncTopicData(peerID, topicHash, feed))
         }
-        if (!peer.memberCID) {
-            this.log.error(`Received topics from peer ${peerID.slice(-6)} before handshake`)
-            return
-        }
+        this.continuousTopicSync(peerID)
+        const nAdded = (await Promise.all(addPromises)).filter(r => r).length
+        this.log.info(`Added ${nAdded} topic(s) from ${peerID.slice(-6)}`)
+    }
 
-        const ownTopicCommitments = this.getTopicCommitments(peer.connection.stream.publicKey)
-        let newTopicsAmount = 0
-        const newTopicList: Set<string> = new Set()
-        for (let tc of topicComms) {
-            // We search for the topic corresponding to this commitment
-            const feed = ownTopicCommitments.get(tc)
+    private async continuousTopicSync(peerID: string) {
+        const peer = this.getPeer(peerID)
+        for await (const { key, type, value } of peer.topicsBee
+                .createHistoryStream({ gte: -1, live: true })) {
+
+            this.log.warn(`Update: ${type}: ${key} -> ${value}`)
+
+            const feed = this.topicFeeds.get(key)
             if (!feed) continue
 
-            newTopicList.add(feed.topic)
+            if (type === 'del') {
+                peer.topics.delete(key)
+                feed.removePeer(peerID)
+            }
 
-            if (!peer.topics.has(feed.topic)) {
-                peer.topics.set(feed.topic, {})
-                newTopicsAmount++
+            if (type === 'put') {
+                this.syncTopicData(peerID, key, feed)
             }
         }
-        let deletedTopicsAmount = 0
-        // Check which topics are no longer relevant to this peer
-        const removePromises: Promise<boolean>[] = []
-        for (let [topic, data] of peer.topics) {
-            if (!newTopicList.has(topic)) { // Previously subscribed topic is no longer
-                peer.topics.delete(topic)
-                deletedTopicsAmount++
-                const feed = this.topicFeeds.get(topic)
-                if (feed) {
-                    removePromises.push(feed.removePeer(peer.memberCID))
-                }
-            }
-        }
-        this.peers.set(peerID, peer)
-        this.log.info(`Received ${topicComms.length} topic commitments from ${peerID.slice(-6)} (Added: ${newTopicsAmount} Removed: ${deletedTopicsAmount})`)
-        await Promise.all(removePromises)
-        if (newTopicsAmount > 0) {
-            // If we got any new topics, we need to reannounce ours to the peer
-            // Otherwise they will not know to attach us for them on the other side
-            await this.announceTopics(peerID)
-            await this.sendCores(peerID)
-        }
     }
 
-    private getTopicCommitments(key: Buffer) {
-        const comms: Map<string, Lambdadelta> = new Map()
-        for (let [topic, board] of this.topicFeeds) {
-            // Hash of own pubkey + topic is our commitment
-            // Is used to verify that other node knows the topic without revealing it to them
-            const topicCommitment = crypto.createHash('sha256')
-                .update(key)
-                .update(topic)
-                .digest()
-            comms.set(topicCommitment.toString('hex'), board)
+    private async syncTopicData(peerID: string, topicHash: string, feed: Lambdadelta) {
+        const peer = this.getPeer(peerID)
+        const coreDataBuf: Buffer | null = await peer.topicsBee?.get(topicHash)
+        if (!coreDataBuf) {
+            return false
         }
-        return comms
+        peer.topics.add(topicHash)
+        const { feedCore, drive } = JSON.parse(coreDataBuf.toString())
+        return feed.addPeer(peerID, feedCore, drive)
     }
 
-    private async announceTopics(peerID: string) {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unknown peer")
+    private async addTopicFromPeers(topicHash: string, feed: Lambdadelta) {
+        const addPromises: Promise<boolean>[] = []
+        for (const [peerID, peer] of this.peers) {
+            this.syncTopicData(peerID, topicHash, feed)
         }
-        if (!peer.memberCID || !peer.localMemberCID) {
-            this.log.warn(`Not sending topics to peer before handshake is received`)
-            return
-        }
-
-        const peerPubKey = peer.connection.stream.remotePublicKey
-        const comms = Array.from((this.getTopicCommitments(peerPubKey)).keys())
-
-        this.log.info(`Announcing all ${comms.length} topic commitments to ${peerID.slice(-6)}`)
-        await peer.connection.topicAnnouncer.send(comms)
+        const nAdded = (await Promise.all(addPromises)).filter(r => r).length
+        this.log.info(`Added a topic from ${nAdded} peers`)
     }
 
-    private async announceTopicsToAll() {
-        await Promise.all(Array.from(this.peers.keys()).map(peerID => this.announceTopics(peerID)))
-    }
-
-    private topicHash(topic: string) {
+    private topicHash(topic: string, namespace: string) {
         return crypto
             .createHash('sha256')
-            .update(PROTO_VERSION)
-            .update("LDD>"+topic).digest()
+            .update(LDNode.appID)
+            .update(LDNode.protocolVersion)
+            .update(this.groupID)
+            .update(namespace)
+            .update(topic).digest()
     }
 
     private async _join(topic: string) {
@@ -335,8 +251,16 @@ export class LDNode {
             this.corestore,
             this.rln!
         )
-        this.topicFeeds.set(topic, feed)
-        this.swarm.join(this.topicHash(topic))
+        const topicHash = this.topicHash(topic, 'index').toString('hex')
+        this.topicFeeds.set(topicHash, feed)
+        const [feedCore, drive] = feed.getCoreIDs()
+        const topicData = {feedCore, drive}
+        await this.topicsBee.put(
+            topicHash,
+            Buffer.from(JSON.stringify(topicData))
+        )
+        await this.addTopicFromPeers(topicHash, feed)
+        this.swarm.join(this.topicHash(topic, "DHT"))
     }
 
     private async _leave(topic: string) {
@@ -348,18 +272,17 @@ export class LDNode {
         for (let [_, peer] of this.peers) {
             peer.topics.delete(topic)
         }
-        await this.swarm.leave(this.topicHash(topic))
+        await this.topicsBee.del(this.topicHash(topic, 'index').toString('hex'))
+        await this.swarm.leave(this.topicHash(topic, "DHT"))
     }
 
     public async join(topics: string[]) {
         await Promise.all(topics.map(topic => this._join(topic)))
         await this.swarm.flush()
-        await this.announceTopicsToAll()
     }
 
     public async leave(topics: string[]) {
         await Promise.all(topics.map(topic => this._leave(topic)))
         await this.swarm.flush()
-        await this.announceTopicsToAll()
     }
 }
