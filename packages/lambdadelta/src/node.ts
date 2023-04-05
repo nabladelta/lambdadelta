@@ -198,11 +198,11 @@ export class LDNode {
     private async recvHandshake(peerID: string, proofBuf: Buffer) {
         const peer = this.peers.get(peerID)
         if (!peer) {
-            this.log.error(`Received handshake from unknown peer ${peerID}`)
+            this.log.error(`Received handshake from unknown peer ${peerID.slice(-6)}`)
             throw new Error("Unknown peer")
         }
         if (peer.memberCID) {
-            this.log.error(`Received duplicate handshake from ${peerID}`)
+            this.log.error(`Received duplicate handshake from ${peerID.slice(-6)}`)
             throw new Error("Duplicate handshake")
         }
         const proof = deserializeProof(proofBuf)
@@ -241,7 +241,7 @@ export class LDNode {
             throw new Error("Unknown peer")
         }
         if (!peer.memberCID) {
-            this.log.error(`Received topics from peer ${peerID} before handshake`)
+            this.log.error(`Received topics from peer ${peerID.slice(-6)} before handshake`)
             return
         }
 
