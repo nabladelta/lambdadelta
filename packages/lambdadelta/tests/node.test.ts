@@ -49,8 +49,6 @@ describe('LDNode', () => {
         await anode.join([T])
         await bnode.join([T])
         await cnode.join([T])
-
-        console.log('Initialized')
         
         destroy = async() => {
             if (existsSync(GROUP_FILE)) rmSync(GROUP_FILE, {force: true})
@@ -68,14 +66,10 @@ describe('LDNode', () => {
         const a = anode.topicFeeds.get(T)!
         const b = bnode.topicFeeds.get(T)!
         const c = cnode.topicFeeds.get(T)!
-        a.on('peerAdded', (peerID) => {
-            console.log('added', peerID.slice(-6))
-        })
         await sleep(5000)
         const aid = anode.peerId
         const bid = bnode.peerId
         const cid = bnode.peerId
-        console.log('b', bid.slice(-6))
         expect(a.hasPeer(bid)).toBe(true)
         expect(a.hasPeer(cid)).toBe(true)
         expect(b.hasPeer(aid)).toBe(true)
