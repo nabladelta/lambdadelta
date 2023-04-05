@@ -12,10 +12,6 @@ import { errorHandler, getMemberCIDEpoch } from './utils'
 import { Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 
-export const mainLogger = new Logger({
-    prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
-})
-const log = mainLogger.getSubLogger({name: 'node'})
 const DATA_FOLDER = 'data'
 const GROUP_FILE = 'testGroup.json'
 const PROTO_VERSION = '1'
@@ -41,17 +37,21 @@ export class LDNode {
     private secret: string
     public corestore: any
     public peerId: string
+    private log: Logger<unknown>
     public topicFeeds: Map<string, Lambdadelta> // Topic => feed
     private peers: Map<string, NodePeerData>
     private memberCIDs: Map<string, string> // MCID => peerID
     public swarm: Hyperswarm
     private rln?: RLN
 
-    constructor(secret: string, memstore?: boolean, swarmOpts?: any) {
+    constructor(secret: string, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
         this.secret = secret
         this.topicFeeds = new Map()
         this.peers = new Map()
         this.memberCIDs = new Map()
+        this.log = logger || new Logger({
+            prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
+        })
         this.peerId = ''
 
         const secretDigest = crypto.createHash('sha256')
@@ -79,13 +79,13 @@ export class LDNode {
 
         await this.corestore.ready()
         this.swarm.on('connection', (stream: NoiseSecretStream, info: PeerInfo) => {
-            log.info('Found peer', info.publicKey.toString('hex').slice(-6))
+            this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
             this.peerId = stream.publicKey.toString('hex')
             this.handlePeer(stream)
 
             stream.once('close', async () => {
                 const peerID = stream.remotePublicKey.toString('hex')
-                log.info('Peer left', info.publicKey.toString('hex').slice(-6))
+                this.log.info('Peer left', info.publicKey.toString('hex').slice(-6))
                 await this.removePeer(peerID)
             })
         })
@@ -132,15 +132,15 @@ export class LDNode {
 
         const handshakeSender = channel.addMessage({
             encoding: c.buffer,
-            async onmessage(proof: Buffer, _: any) { await errorHandler(self.recvHandshake(peerID, proof), log) }})
+            async onmessage(proof: Buffer, _: any) { await errorHandler(self.recvHandshake(peerID, proof), self.log) }})
 
         const topicAnnouncer = channel.addMessage({
             encoding: c.array(c.string),
-            async onmessage(topics: string[], _: any) { await errorHandler(self.recvTopics(peerID, topics), log) }})
+            async onmessage(topics: string[], _: any) { await errorHandler(self.recvTopics(peerID, topics), self.log) }})
 
         const coreAnnouncer = channel.addMessage({
             encoding: c.array(c.array(c.string)),
-            async onmessage(cores: string[][], _: any) { await errorHandler(self.recvCores(peerID, cores), log) }})
+            async onmessage(cores: string[][], _: any) { await errorHandler(self.recvCores(peerID, cores), self.log) }})
 
         this.peers.set(peerID, {
                     topics: new Map(),
@@ -155,13 +155,13 @@ export class LDNode {
             throw new Error("Unknown peer")
         }
         if (!peer.memberCID) {
-            log.error(`Received cores from peer ${peerID.slice(-6)} before handshake`)
+            this.log.error(`Received cores from peer ${peerID.slice(-6)} before handshake`)
             throw new Error("Cannot receive cores from peer without CID")
         }
         let added = 0
         for (let [topic, feedCore, drive] of cores) {
             if (!peer.topics.has(topic)) {
-                log.warn(`Received cores for unexpected topic ${topic} from peer ${peerID.slice(-6)}`)
+                this.log.warn(`Received cores for unexpected topic ${topic} from peer ${peerID.slice(-6)}`)
                 continue
             }
             const previous = peer.topics.get(topic)!
@@ -172,7 +172,7 @@ export class LDNode {
                 added++
             }
         }
-        log.info(`Received cores for ${cores.length} topics from peer ${peerID.slice(-6)} (Added: ${added})`)
+        this.log.info(`Received cores for ${cores.length} topics from peer ${peerID.slice(-6)} (Added: ${added})`)
     }
 
     private async sendCores(peerID: string) {
@@ -198,24 +198,24 @@ export class LDNode {
     private async recvHandshake(peerID: string, proofBuf: Buffer) {
         const peer = this.peers.get(peerID)
         if (!peer) {
-            log.error(`Received handshake from unknown peer ${peerID}`)
+            this.log.error(`Received handshake from unknown peer ${peerID}`)
             throw new Error("Unknown peer")
         }
         if (peer.memberCID) {
-            log.error(`Received duplicate handshake from ${peerID}`)
+            this.log.error(`Received duplicate handshake from ${peerID}`)
             throw new Error("Duplicate handshake")
         }
         const proof = deserializeProof(proofBuf)
         const result = await verifyMemberCIDProof(proof, peer.connection.stream, this.rln!)
         if (!result) {
-            log.error(`Received invalid MemberCID from ${peerID.slice(-6)}`)
+            this.log.error(`Received invalid MemberCID from ${peerID.slice(-6)}`)
             throw new Error("Invalid handshake")
         }
         if (this.memberCIDs.has(proof.signal)) {
-            log.error(`Received duplicate MemberCID from ${peerID.slice(-6)}`)
+            this.log.error(`Received duplicate MemberCID from ${peerID.slice(-6)}`)
             throw new Error("Invalid handshake")
         }
-        log.info(`Received MemberCID from ${peerID.slice(-6)}`)
+        this.log.info(`Received MemberCID from ${peerID.slice(-6)}`)
         peer.memberCID = proof.signal
         this.memberCIDs.set(peer.memberCID, peerID)
         this.peers.set(peerID, peer)
@@ -228,7 +228,7 @@ export class LDNode {
         if (!peer) {
             throw new Error("Unknown peer")
         }
-        log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
+        this.log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
         const proof = await generateMemberCID(this.secret, peer.connection.stream, this.rln!)
         const proofBuf = serializeProof(proof)
         await peer.connection.handshakeSender.send(proofBuf)
@@ -241,7 +241,7 @@ export class LDNode {
             throw new Error("Unknown peer")
         }
         if (!peer.memberCID) {
-            log.error(`Received topics from peer ${peerID} before handshake`)
+            this.log.error(`Received topics from peer ${peerID} before handshake`)
             return
         }
 
@@ -274,7 +274,7 @@ export class LDNode {
             }
         }
         this.peers.set(peerID, peer)
-        log.info(`Received ${topicComms.length} topic commitments from ${peerID.slice(-6)} (Added: ${newTopicsAmount} Removed: ${deletedTopicsAmount})`)
+        this.log.info(`Received ${topicComms.length} topic commitments from ${peerID.slice(-6)} (Added: ${newTopicsAmount} Removed: ${deletedTopicsAmount})`)
         await Promise.all(removePromises)
         if (newTopicsAmount > 0) {
             // If we got any new topics, we need to reannounce ours to the peer
@@ -304,14 +304,14 @@ export class LDNode {
             throw new Error("Unknown peer")
         }
         if (!peer.memberCID || !peer.localMemberCID) {
-            log.warn(`Not sending topics to peer before handshake is received`)
+            this.log.warn(`Not sending topics to peer before handshake is received`)
             return
         }
 
         const peerPubKey = peer.connection.stream.remotePublicKey
         const comms = Array.from((this.getTopicCommitments(peerPubKey)).keys())
 
-        log.info(`Announcing all ${comms.length} topic commitments to ${peerID.slice(-6)}`)
+        this.log.info(`Announcing all ${comms.length} topic commitments to ${peerID.slice(-6)}`)
         await peer.connection.topicAnnouncer.send(comms)
     }
 
