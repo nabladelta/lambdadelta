@@ -64,7 +64,7 @@ export class LDNode {
         
         this.topicsBee = new Hyperbee(this.corestore.get({name: 'topics'}), {
             valueEncoding: 'binary',
-            keyEncoding: 'string'
+            keyEncoding: 'utf-8'
         })
 
         const swarmKeySeed = crypto.createHash('sha256')
@@ -96,12 +96,17 @@ export class LDNode {
             })
         })
     }
+
     private getPeer(peerID: string) {
         const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
         }
         return peer
+    }
+
+    public peerHasTopic(peerID: string, topic: string) {
+        return this.peers.get(peerID)?.topics.has(this.topicHash(topic, 'index').toString('hex'))
     }
 
     public getTopic(topic: string) {
@@ -146,6 +151,18 @@ export class LDNode {
         this.sendHandshake(peerID)
     }
 
+    private async sendHandshake(peerID: string) {
+        const peer = this.getPeer(peerID)
+        this.log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
+
+        const proof = await generateMemberCID(this.secret, peer.connection.stream, this.rln!)
+        const proofBuf = serializeProof(proof)
+        const topicsCoreKey: Buffer = this.topicsBee.core.key
+        peer.localMemberCID = proof.signal
+
+        await peer.connection.handshakeSender.send([proofBuf, topicsCoreKey])
+    }
+
     private async recvHandshake(peerID: string, proofBuf: Buffer[]) {
         const peer = this.getPeer(peerID)
 
@@ -167,22 +184,13 @@ export class LDNode {
         this.log.info(`Received MemberCID from ${peerID.slice(-6)}`)
 
         peer.memberCID = proof.signal
-        peer.topicsBee = this.corestore.get(proofBuf[1])
+        peer.topicsBee = new Hyperbee(this.corestore.get(proofBuf[1]), {
+            valueEncoding: 'binary',
+            keyEncoding: 'utf-8'
+        })
         this.memberCIDs.set(peer.memberCID, peerID)
 
         await this.syncTopics(peerID)
-    }
-
-    private async sendHandshake(peerID: string) {
-        const peer = this.getPeer(peerID)
-        this.log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
-
-        const proof = await generateMemberCID(this.secret, peer.connection.stream, this.rln!)
-        const proofBuf = serializeProof(proof)
-        const topicsCoreKey: Buffer = this.topicsBee.core.key
-        peer.localMemberCID = proof.signal
-
-        await peer.connection.handshakeSender.send([proofBuf, topicsCoreKey])
     }
 
     private async syncTopics(peerID: string) {
@@ -195,29 +203,30 @@ export class LDNode {
         this.log.info(`Added ${nAdded} topic(s) from ${peerID.slice(-6)}`)
     }
 
-    // private async continuousTopicSync(peerID: string) {
-    //     const peer = this.getPeer(peerID)
-    //     for await (const { key, type, value } of peer.topicsBee
-    //             .createHistoryStream({ gte: -1, live: true })) {
+    private async continuousTopicSync(peerID: string) {
+        const peer = this.getPeer(peerID)
+        for await (const { key, type, value } of peer.topicsBee
+                .createHistoryStream({ gte: -1, live: true })) {
 
-    //         this.log.warn(`Update: ${type}: ${key} -> ${value}`)
+            this.log.warn(`Update: ${type}: ${key} -> ${value}`)
 
-    //         const feed = this.topicFeeds.get(key)
-    //         if (!feed) continue
+            const feed = this.topicFeeds.get(key)
+            if (!feed) continue
 
-    //         if (type === 'del') {
-    //             peer.topics.delete(key)
-    //             feed.removePeer(peerID)
-    //         }
+            if (type === 'del') {
+                peer.topics.delete(key)
+                feed.removePeer(peerID)
+            }
 
-    //         if (type === 'put') {
-    //             this.syncTopicData(peerID, key, feed)
-    //         }
-    //     }
-    // }
+            if (type === 'put') {
+                this.syncTopicData(peerID, key, feed)
+            }
+        }
+    }
 
     private async syncTopicData(peerID: string, topicHash: string, feed: Lambdadelta) {
         const peer = this.getPeer(peerID)
+
         const coreDataBuf: Buffer | null = await peer.topicsBee?.get(topicHash)
         if (!coreDataBuf) {
             return false
@@ -234,16 +243,6 @@ export class LDNode {
         }
         const nAdded = (await Promise.all(addPromises)).filter(r => r).length
         this.log.info(`Added a topic from ${nAdded} peers`)
-    }
-
-    private topicHash(topic: string, namespace: string) {
-        return crypto
-            .createHash('sha256')
-            .update(LDNode.appID)
-            .update(LDNode.protocolVersion)
-            .update(this.groupID)
-            .update(namespace)
-            .update(topic).digest()
     }
 
     private async _join(topic: string) {
@@ -290,5 +289,15 @@ export class LDNode {
     public async leave(topics: string[]) {
         await Promise.all(topics.map(topic => this._leave(topic)))
         await this.swarm.flush()
+    }
+
+    private topicHash(topic: string, namespace: string) {
+        return crypto
+            .createHash('sha256')
+            .update(LDNode.appID)
+            .update(LDNode.protocolVersion)
+            .update(this.groupID)
+            .update(namespace)
+            .update(topic).digest()
     }
 }
