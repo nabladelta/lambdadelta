@@ -192,7 +192,7 @@ export class LDNode {
             valueEncoding: 'binary',
             keyEncoding: 'utf-8'
         })
-        
+
         this.memberCIDs.set(peer.memberCID, peerID)
         await this.syncTopics(peerID)
     }
@@ -242,7 +242,7 @@ export class LDNode {
     private async addTopicFromPeers(topicHash: string, feed: Lambdadelta) {
         const addPromises: Promise<boolean>[] = []
         for (const [peerID, peer] of this.peers) {
-            this.syncTopicData(peerID, topicHash, feed)
+            addPromises.push(this.syncTopicData(peerID, topicHash, feed))
         }
         const nAdded = (await Promise.all(addPromises)).filter(r => r).length
         this.log.info(`Added a topic from ${nAdded} peers`)
