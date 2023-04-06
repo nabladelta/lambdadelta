@@ -6,6 +6,7 @@ import { Identity } from '@semaphore-protocol/identity'
 import { existsSync, rmSync } from 'fs'
 import { LDNode } from '../src/node'
 import { Logger } from 'tslog'
+jest.mock("../src/lambdadelta.ts")
 
 const GROUP_FILE = 'testData.json'
 
@@ -49,7 +50,7 @@ describe('LDNode', () => {
         await anode.join([T])
         await bnode.join([T])
         await cnode.join([T])
-        
+
         destroy = async() => {
             if (existsSync(GROUP_FILE)) rmSync(GROUP_FILE, {force: true})
             await Promise.all([testnet.destroy(), anode.destroy(), bnode.destroy(), cnode.destroy()])
@@ -66,10 +67,11 @@ describe('LDNode', () => {
         const a = anode.getTopic(T)!
         const b = bnode.getTopic(T)!
         const c = cnode.getTopic(T)!
-        await sleep(10000)
+        await sleep(20000)
         const aid = anode.peerId
         const bid = bnode.peerId
         const cid = bnode.peerId
+        console.log("hastopic", anode.peerHasTopic(bid, T))
         expect(a.hasPeer(bid)).toBe(true)
         expect(a.hasPeer(cid)).toBe(true)
         expect(b.hasPeer(aid)).toBe(true)
