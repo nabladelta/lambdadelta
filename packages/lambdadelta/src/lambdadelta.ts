@@ -113,7 +113,7 @@ enum HeaderVerificationError {
 }
 
 /**
- * Decentralized Multi-writer event feed on a `topic`
+ * Decentralized Multi-writer event feed for a `topic`
  * with timestamps based on local consensus
  * and rate limiting through RLN
  */
