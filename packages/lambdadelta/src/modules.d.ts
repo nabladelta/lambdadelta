@@ -3,20 +3,328 @@
 // The following are defined in lib/types.js:
 // - KeyPair
 // - DhtNode
-declare module 'corestore'
-declare module 'hypercore'
 declare module 'autobase'
 declare module 'protomux'
 declare module 'compact-encoding'
 declare module 'hyperblobs'
 declare module 'hyperdrive'
-declare module 'hyperbee'
 
 declare module 'brittle'
 declare module 'multi-core-indexer'
 declare module '@mapeo/sqlite-indexer'
 declare module 'sodium-universal'
 declare module 'base32.js'
+
+declare module 'hypercore' {
+  import { TypedEmitter } from 'tiny-typed-emitter'
+  import { NoiseSecretStream } from '@hyperswarm/secret-stream'
+  import RandomAccessStorage from 'random-access-storage'
+  import { Writable, Readable } from 'streamx'
+
+  export interface KeyPair {
+    publicKey: Buffer | Uint8Array
+    secretKey: Buffer | Uint8Array
+    auth: {
+      sign: (msg: Buffer) => Buffer | Uint8Array
+      verify: (signable: Buffer, signature: Buffer) => boolean
+    }
+  }
+  export interface HypercoreOpts {
+    createIfMissing?: boolean,
+    overwrite?: boolean,
+    sparse?: boolean
+    valueEncoding?: 'json' | 'utf-8' | 'binary'
+    encodeBatch?: (batch: any) => any
+    keyPair?: KeyPair
+    encryptionKey?: string,
+    onwait?: () => void
+    timeout?: number
+
+    cache?: boolean | Xache
+    crypto?: any
+    storage?: any
+    snapshot?: boolean
+    auth?: any
+    autoClose?: boolean
+    wait?: boolean
+  }
+  export interface GetOpts {
+    wait?: boolean
+    onwait?: () => void
+    timeout?: number
+    valueEncoding?: 'json' | 'utf-8' | 'binary'
+    decrypt?: true
+  }
+
+  export interface SessionOpts {
+    wait?: boolean
+    onwait?: () => void
+    sparse?: boolean
+    class?: any
+  }
+
+
+  export interface StreamOpts {
+    start?: number
+    end?: number
+    live?: boolean
+    snapshot?: boolean
+  }
+
+  export interface RangeOpts {
+    start?: number,
+    end?: number,
+    blocks?: number[],
+    linear?: boolean
+  }
+
+  export interface Info {
+    key: Buffer
+    discoveryKey: Buffer
+    length: number
+    contiguousLength: number
+    byteLength: number
+    fork: number
+    padding: number
+    storage: {
+      oplog: number
+      tree: number
+      blocks: number
+      bitfield: number
+    }
+  }
+
+  interface HypercoreEvents {
+    'append': () => void,
+    'truncate': (ancestors: any, forkId: number) => void
+    'ready': () => void,
+    'close': () => void,
+  }
+
+  export default class Hypercore extends TypedEmitter<HypercoreEvents> {
+    public readable: boolean | null
+    public id: string | null
+    public key: Buffer | null
+    public keyPair: KeyPair | null
+    public discoveryKey: Buffer | null
+    public encryptionKey: Buffer | null
+    public writable: boolean
+
+    public length: number
+    public contiguousLength: number
+    public fork: number
+
+    public padding: number
+  
+    constructor(
+      storage?: string | ((filename: string) => RandomAccessStorage) | HypercoreOpts,
+      key?: Buffer | string | HypercoreOpts,
+      opts?: HypercoreOpts
+    )
+  
+    public append(block: Buffer | Buffer[] | string | string[]): Promise<{length: number, byteLength: number}>
+
+    public get(index: number, opts?: GetOpts): Promise<Buffer>
+
+    public has(start: number, end?: number): Promise<boolean>
+    
+    public update(opts?: { wait: boolean }): Promise<boolean>
+
+    public seek(
+      byteOffset?: number,
+      opts?: { wait?: number, timeout?: number }
+    ): Promise<{index: number, relativeOffset: number}>
+
+    public createReadStream(opts?: StreamOpts): Readable<Buffer>
+
+    public createWriteStream(): Writable<Buffer>
+
+    public clear(start: number, end?: number): Promise<void>
+
+    public truncate(newLength: number, forkId?: number): Promise<void>
+
+    public treeHash(length?: number): Promise<Buffer>
+    
+    public download(range?: RangeOpts): Promise<{
+      done: () => Promise<void>,
+      destroy: () => void
+    }>
+
+    public info(opts?: { storage: boolean }): Promise<Info>
+
+    public close(): Promise<void>
+
+    public ready(): Promise<void>
+
+    public replicate(isInitiator: boolean | NoiseSecretStream, opts?: any): NoiseSecretStream
+
+    public findingPeers(): () => void
+
+    public session(opts?: SessionOpts): Hypercore
+
+    public snapshot(opts?: SessionOpts): Hypercore
+        
+    public registerExtension(name: string, handlers?: { encoding?: any, onmessage: (m: any, peer: any) => void }): any  
+    
+    public setUserData(key: any, value: any): Promise<any>
+
+    public getUserData(key: any): Promise<any>
+      
+    static createProtocolStream(...args: any[]): void
+    
+    static defaultStorage(storage: any, opts?: any): any
+      
+    static getProtocolMuxer(stream: NoiseSecretStream): Protomux
+  }
+}
+
+declare module 'corestore' {
+  import Hypercore, { KeyPair } from 'hypercore'
+  import { TypedEmitter } from 'tiny-typed-emitter'
+  import { NoiseSecretStream } from '@hyperswarm/secret-stream'
+
+  export interface CorestoreOpts {
+    primaryKey?: Buffer | Uint8Array
+    namespace?: Buffer | Uint8Array
+    cache?: boolean
+    overwrite?: boolean
+    poolSize?: number
+  }
+
+  export interface GetOpts {
+    name?: string,
+    publicKey?: Buffer | Uint8Array,
+    secretKey?: Buffer | Uint8Array
+    cache?: boolean | Xache
+  }
+
+  export default class Corestore extends TypedEmitter<any> {
+    constructor(
+      storage: string | RandomAccessStorage | ((filename: string) => RandomAccessStorage),
+      opts?: CorestoreOpts
+    )
+    
+    public ready(): Promise<void>
+
+    public findingPeers(): () => void
+
+    public createKeyPair(name: any, namespace?: Buffer | Uint8Array): Promise<KeyPair>
+
+    public namespace(name: any): Corestore
+
+    public session(opts?: CorestoreOpts): Corestore
+
+    public close(): Promise<void>
+
+    public replicate(isInitiator: boolean | NoiseSecretStream, opts?: any): NoiseSecretStream
+  
+    public get(opts: Buffer | Uint8Array | GetOpts): Hypercore
+  }
+}
+
+declare module 'hyperbee' {
+  import Hypercore, {GetOpts} from 'hypercore'
+  import { Writable, Readable } from 'streamx'
+
+  export interface HyperbeeOpts {
+    keyEncoding?: 'ascii' | 'utf-8' | 'binary',
+    valueEncoding?: 'json' | 'utf-8' | 'binary'
+    extension?: any,
+    metadata?: any,
+    lock?: any,
+    sep?: Buffer | Uint8Array
+    readonly?: boolean
+    prefix?: any
+    checkout?: number
+  }
+  export interface SnapshotOptions {
+    keyEncoding?: 'ascii' | 'utf-8' | 'binary',
+    valueEncoding?: 'json' | 'utf-8' | 'binary'
+  }
+
+  export interface SubOptions {
+    sep?: Buffer
+    keyEncoding?: 'ascii' | 'utf-8' | 'binary',
+    valueEncoding?: 'json' | 'utf-8' | 'binary'
+  }
+
+  export type Cas<K,V> = { 
+    cas: (prev: V, next: V) => boolean 
+  }
+  export class Batch<K,V> {
+    public put(key: K, value?: V, opts?: Cas<K, V>): Promise<void>
+    public get(key: K): Promise<{ seq: number, key: K, value: V }>
+    public del(key: K, opts?: Cas<K, V>): Promise<void>
+    public flush(): Promise<void>
+    public destroy(): Promise<void>
+  }
+
+  export interface StreamOpts {
+    gt?: number,
+    gte?: number,
+    lt?: number,
+    lte?: number,
+    reverse?: boolean,
+    limit?: number
+  }
+
+  export interface HistoryStreamOpts {
+    gt?: number,
+    gte?: number,
+    lt?: number,
+    lte?: number,
+    reverse?: boolean,
+    limit?: number,
+    live?: boolean
+  }
+  export default class Hyperbee<K, V> {
+    public version: number
+
+    constructor(feed: Hypercore, opts?: HyperbeeOpts)
+
+    public ready(): Promise<void>
+
+    public close(): Promise<void>
+
+    public update(): Promise<boolean>
+
+    public get(key: K): Promise<{ seq: number, key: K, value: V }>
+
+    public put(key: K, value?: V, opts?: Cas<K, V>): Promise<void>
+
+    public del(key: K, opts?: Cas<K, V>): Promise<void>
+
+    public sub(prefix: K, opts?: SubOptions): Hyperbee<K, V>
+
+    public batch(): Promise<Batch<K, V>>
+
+    public checkout(version: number, opts?: SnapshotOptions): Hyperbee<K, V>
+
+    public snapshot(opts?: SnapshotOptions): Hyperbee<K, V>
+
+    public peek(opts?: StreamOpts): Promise<{ seq: number, key: K, value: V }>
+
+    public getHeader(opts?: GetOpts): Promise<any>
+
+    public createReadStream(opts?: StreamOpts): Readable<{ key: K, value: V }>
+
+    public createDiffStream(
+        otherVersion: number,
+        opts?: StreamOpts
+    ): Readable<{
+      left: { key: K, value: V },
+      right: { key: K, value: V }
+    }>
+
+    public createHistoryStream(opts?: HistoryStreamOpts): Readable<{ type: 'put' | 'del', key: K, value: V }>
+
+    public createRangeIterator(opts?: StreamOpts): any
+
+    public watch(range?: StreamOpts, onchange: (newVersion, oldVersion) => void): any
+
+    static async isHyperbee(core: Hypercore, opts?: GetOpts): Promise<boolean>
+  }
+}
 
 declare module 'kademlia-routing-table' {
   import { TypedEmitter } from 'tiny-typed-emitter'
