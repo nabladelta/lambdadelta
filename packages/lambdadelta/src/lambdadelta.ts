@@ -10,6 +10,7 @@ import { deserializeEvent, deserializeFeedEntry,
     mostCommonElement,
     serializeEvent,
     serializeFeedEntry } from './utils'
+import Corestore from 'corestore'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
@@ -116,7 +117,7 @@ enum HeaderVerificationError {
  * and rate limiting through RLN
  */
 export class Lambdadelta extends TypedEmitter<TopicEvents> {
-    private corestore: any
+    private corestore: Corestore
     public topic: string
 
     // RLN
@@ -135,7 +136,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
     private peers: Map<string, PeerData> // MemberCID => Hypercore
 
-    constructor(topic: string, corestore: any, rln: RLN) {
+    constructor(topic: string, corestore: Corestore, rln: RLN) {
         super()
         this.topic = topic
         this.rln = rln

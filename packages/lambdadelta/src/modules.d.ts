@@ -378,6 +378,7 @@ declare module 'hyperbee' {
   }
   export default class Hyperbee<K, V> {
     version: number
+    core: Hypercore
 
     constructor(feed: Hypercore, opts?: HyperbeeOpts)
 
@@ -387,7 +388,7 @@ declare module 'hyperbee' {
 
     update(): Promise<boolean>
 
-    get(key: K): Promise<{ seq: number, key: K, value: V }>
+    get(key: K): Promise<{ seq: number, key: K, value: V } | null>
 
     put(key: K, value?: V, opts?: Cas<K, V>): Promise<void>
 

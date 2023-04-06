@@ -21,7 +21,7 @@ interface NodePeerData {
         stream: NoiseSecretStream
         handshakeSender: any
     }
-    topicsBee?: any,
+    topicsBee?: Hyperbee<string, Buffer>,
     topics: Set<string>
     memberCID?: string
     localMemberCID?: string
@@ -33,7 +33,7 @@ export class LDNode {
 
     private secret: string
     private groupID: string
-    public corestore: any
+    public corestore: Corestore
     public peerId: string
     private log: Logger<unknown>
     public topicFeeds: Map<string, Lambdadelta> // Topic => feed
@@ -41,7 +41,7 @@ export class LDNode {
     private memberCIDs: Map<string, string> // MCID => peerID
     public swarm: Hyperswarm
     private rln?: RLN
-    private topicsBee: any
+    private topicsBee: Hyperbee<string, Buffer>
 
     constructor(secret: string, groupID: string, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
         this.secret = secret
@@ -123,7 +123,7 @@ export class LDNode {
             if (!feed) {
                 continue
             }
-            peer.topicsBee.close()
+            peer.topicsBee?.close()
             removePromises.push(feed.removePeer(peer.memberCID!))
         }
         await Promise.all(removePromises)
@@ -157,7 +157,7 @@ export class LDNode {
 
         const proof = await generateMemberCID(this.secret, peer.connection.stream, this.rln!)
         const proofBuf = serializeProof(proof)
-        const topicsCoreKey: Buffer = this.topicsBee.core.key
+        const topicsCoreKey: Buffer = this.topicsBee.core.key!
         peer.localMemberCID = proof.signal
 
         await peer.connection.handshakeSender.send([proofBuf, topicsCoreKey])
@@ -184,12 +184,16 @@ export class LDNode {
         this.log.info(`Received MemberCID from ${peerID.slice(-6)}`)
 
         peer.memberCID = proof.signal
-        peer.topicsBee = new Hyperbee(this.corestore.get(proofBuf[1]), {
+        const beeCore = this.corestore.get(proofBuf[1])
+        if (!await Hyperbee.isHyperbee(beeCore)) {
+            throw new Error("Invalid hyperbee")
+        }
+        peer.topicsBee = new Hyperbee(beeCore, {
             valueEncoding: 'binary',
             keyEncoding: 'utf-8'
         })
+        
         this.memberCIDs.set(peer.memberCID, peerID)
-
         await this.syncTopics(peerID)
     }
 
@@ -205,7 +209,7 @@ export class LDNode {
 
     private async continuousTopicSync(peerID: string) {
         const peer = this.getPeer(peerID)
-        for await (const { key, type, value } of peer.topicsBee
+        for await (const { key, type, value } of peer.topicsBee!
                 .createHistoryStream({ gte: -1, live: true })) {
 
             this.log.warn(`Update: ${type}: ${key} -> ${value}`)
@@ -226,13 +230,12 @@ export class LDNode {
 
     private async syncTopicData(peerID: string, topicHash: string, feed: Lambdadelta) {
         const peer = this.getPeer(peerID)
-
-        const coreDataBuf: Buffer | null = await peer.topicsBee?.get(topicHash)
-        if (!coreDataBuf) {
+        const result = await peer.topicsBee?.get(topicHash)
+        if (!result) {
             return false
         }
         peer.topics.add(topicHash)
-        const { feedCore, drive } = JSON.parse(coreDataBuf.toString())
+        const { feedCore, drive } = JSON.parse(result.value.toString())
         return feed.addPeer(peerID, feedCore, drive)
     }
 
