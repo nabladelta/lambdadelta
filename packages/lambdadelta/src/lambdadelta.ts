@@ -11,6 +11,7 @@ import { deserializeEvent, deserializeFeedEntry,
     serializeEvent,
     serializeFeedEntry } from './utils'
 import Corestore from 'corestore'
+import Hypercore from 'hypercore'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
@@ -88,8 +89,8 @@ interface EventMetadata {
 interface PeerData {
     lastIndex: number // Last index we scanned
     events: Map<string, number> // All events we obtained from this peer => index on core
-    feedCore: any
-    drive: any
+    feedCore: Hypercore
+    drive: Hyperdrive
     finishedInitialSync: boolean,
     _onappend: () => Promise<void>
 }
@@ -306,6 +307,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (index === prevIndex && index !== undefined && prevIndex !== undefined) {
             throw new Error("Scanned same index entry twice")
         }
+        if (prevIndex === undefined) {
+            throw new Error("Index confusion")
+        }
 
         const entryBufA: Buffer = await peer.feedCore.get(prevIndex, {timeout: TIMEOUT})
         const entryA = deserializeFeedEntry(entryBufA)
@@ -477,6 +481,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         const contentBuf = await peer.drive.get(`/events/${eventID}/content`)
+        if (!contentBuf) {
+            return { contentResult: ContentVerificationResult.UNAVAILABLE, claimedTime }
+        }
         if (contentBuf.length > this.maxContentSize.get(eventType)!) {
             return { contentResult: ContentVerificationResult.SIZE, claimedTime }
         }
@@ -513,7 +520,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return { headerResult: HeaderVerificationError.UNAVAILABLE }
         }
         // TODO: Check header size before retrieving
-        const eventHeaderBuf: Buffer = await peer.drive.get(`/events/${eventID}/header`)
+        const eventHeaderBuf = await peer.drive.get(`/events/${eventID}/header`)
         if (!(eventHeaderBuf)) {
             return { headerResult: HeaderVerificationError.UNAVAILABLE }
         }

@@ -20,16 +20,16 @@ declare module 'hyperdrive' {
   import Hyperbee, { StreamOpts, Batch } from 'hyperbee'
   import { Writable, Readable } from 'streamx'
   export interface PathEntry {
-    seq: Number,
-    key: String,
+    seq: number,
+    key: string,
     value: {
-      executable: Boolean, // whether the blob at the path is an executable
+      executable: boolean, // whether the blob at the path is an executable
       linkname: null // if entry is not symlink, otherwise a string to the entry this links to
       blob: { // a Hyperblob id that can be used to fetch the blob associated with this entry
-        blockOffset: Number,
-        blockLength: Number,
-        byteOffset: Number,
-        byteLength: Number
+        blockOffset: number,
+        blockLength: number,
+        byteOffset: number,
+        byteLength: number
       },
       metadata: null
     }
