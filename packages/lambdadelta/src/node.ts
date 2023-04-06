@@ -239,7 +239,7 @@ export class LDNode {
         return feed.addPeer(peerID, feedCore, drive)
     }
 
-    private async addTopicFromPeers(topicHash: string, feed: Lambdadelta) {
+    private async addPeersToTopic(topicHash: string, feed: Lambdadelta) {
         const addPromises: Promise<boolean>[] = []
         for (const [peerID, peer] of this.peers) {
             addPromises.push(this.syncTopicData(peerID, topicHash, feed))
@@ -262,7 +262,7 @@ export class LDNode {
         const topicHash = this.topicHash(topic, 'index').toString('hex')
         this.topicFeeds.set(topicHash, feed)
         this.swarm.join(this.topicHash(topic, "DHT"))
-        await this.addTopicFromPeers(topicHash, feed)
+        await this.addPeersToTopic(topicHash, feed)
         const [feedCore, drive] = feed.getCoreIDs()
         const topicData = {feedCore, drive}
         await this.topicsBee.put(
