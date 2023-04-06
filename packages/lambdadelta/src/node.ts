@@ -129,7 +129,7 @@ export class LDNode {
         await Promise.all(removePromises)
     }
 
-    private async handlePeer(stream: NoiseSecretStream) {
+    private handlePeer(stream: NoiseSecretStream) {
         // Always replicate corestore
         this.corestore.replicate(stream)
 
