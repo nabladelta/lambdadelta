@@ -261,14 +261,14 @@ export class LDNode {
 
         const topicHash = this.topicHash(topic, 'index').toString('hex')
         this.topicFeeds.set(topicHash, feed)
+        this.swarm.join(this.topicHash(topic, "DHT"))
+        await this.addTopicFromPeers(topicHash, feed)
         const [feedCore, drive] = feed.getCoreIDs()
         const topicData = {feedCore, drive}
         await this.topicsBee.put(
             topicHash,
             Buffer.from(JSON.stringify(topicData))
         )
-        await this.addTopicFromPeers(topicHash, feed)
-        this.swarm.join(this.topicHash(topic, "DHT"))
     }
 
     private async _leave(topic: string) {
