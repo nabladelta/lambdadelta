@@ -262,7 +262,16 @@ export class LDNode {
         const topicHash = this.topicHash(topic, 'index').toString('hex')
         this.topicFeeds.set(topicHash, feed)
         this.swarm.join(this.topicHash(topic, "DHT"))
+    }
+
+    private async publishTopic(topic: string) {
+        const feed = this.getTopic(topic)
+        if (!feed) throw new Error("Publishing inexistent topic")
+        const topicHash = this.topicHash(topic, 'index').toString('hex')
+
+        // Make sure we are synced with all peers before publishing our topic cores
         await this.addPeersToTopic(topicHash, feed)
+
         const [feedCore, drive] = feed.getCoreIDs()
         const topicData = {feedCore, drive}
         await this.topicsBee.put(
@@ -287,6 +296,7 @@ export class LDNode {
     public async join(topics: string[]) {
         await Promise.all(topics.map(topic => this._join(topic)))
         await this.swarm.flush()
+        await Promise.all(topics.map(topic => this.publishTopic(topic)))
     }
 
     public async leave(topics: string[]) {
