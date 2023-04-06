@@ -7,13 +7,112 @@ declare module 'autobase'
 declare module 'protomux'
 declare module 'compact-encoding'
 declare module 'hyperblobs'
-declare module 'hyperdrive'
 
 declare module 'brittle'
 declare module 'multi-core-indexer'
 declare module '@mapeo/sqlite-indexer'
 declare module 'sodium-universal'
 declare module 'base32.js'
+
+declare module 'hyperdrive' {
+  import Corestore from 'corestore'
+  import Hypercore, { RangeOpts } from 'hypercore'
+  import Hyperbee, { StreamOpts, Batch } from 'hyperbee'
+  import { Writable, Readable } from 'streamx'
+  export interface PathEntry {
+    seq: Number,
+    key: String,
+    value: {
+      executable: Boolean, // whether the blob at the path is an executable
+      linkname: null // if entry is not symlink, otherwise a string to the entry this links to
+      blob: { // a Hyperblob id that can be used to fetch the blob associated with this entry
+        blockOffset: Number,
+        blockLength: Number,
+        byteOffset: Number,
+        byteLength: Number
+      },
+      metadata: null
+    }
+  }
+
+  export interface MirrorDiff {
+    op: 'add' | string,
+    key: string,
+    bytesRemoved: number,
+    bytesAdded: number
+  }
+  export class MirrorDrive {
+    count: {files: number, add: number, remove: number, change: number}
+
+    done(): Promise<void>
+
+    [Symbol.asyncIterator] (): Readable<MirrorDiff>
+  }
+  export default class Hyperdrive {
+    core: Hypercore
+    key: Buffer
+    discoveryKey: Buffer
+    contentKey: Buffer
+    version: number
+
+    constructor(corestore: Corestore, key?: Buffer)
+
+    [Symbol.asyncIterator] (): Readable<PathEntry>
+
+    ready(): Promise<void>
+
+    update(): Promise<void>
+
+    close(): Promise<void>
+
+    get(path: string): Promise<Buffer | null>
+
+    entry(path: string): Promise<PathEntry>
+
+    symlink(path: string, linkname: string): Promise<void>
+
+    getBlobs(): Promise<Hyperblobs>
+
+    entries(opts?: StreamOpts): Readable<PathEntry>
+
+    put(path: string, blob: Buffer, opts?: {executable?: boolean}): Promise<void>
+
+    createWriteStream(path: string, opts?: {executable?: boolean}): Writable<Buffer>
+
+    del(path: string): Promise<void>
+
+    checkout(version: number): Hyperdrive
+
+    diff(
+      version: number,
+      folder: string,
+      opts?: any
+    ): Readable<{
+      left: PathEntry | null,
+      right: PathEntry | null
+    }>
+
+    downloadDiff(version: number, folder: string, opts?: any): Promise<void>
+
+    list(folder: string, opts?: {recursive?: boolean}): Readable<PathEntry>
+
+    download(folder: string, opts?: {recursive?: boolean}): Promise<void>
+
+    readdir(folder: string): Readable<string>
+
+    downloadRange(dbRanges: RangeOpts, blobRanges: RangeOpts): Promise<void>
+
+    batch(): Batch<string, Buffer>
+
+    findingPeers(): () => void
+
+    createReadStream(path: string, opts?: StreamOpts): Readable<Buffer>
+
+    flush(): Promise<void>
+
+    mirror(out: Hyperdrive, opts?: any): MirrorDrive
+  }
+}
 
 declare module 'hypercore' {
   import { TypedEmitter } from 'tiny-typed-emitter'
@@ -145,10 +244,10 @@ declare module 'hypercore' {
 
     treeHash(length?: number): Promise<Buffer>
     
-    download(range?: RangeOpts): Promise<{
+    download(range?: RangeOpts): {
       done: () => Promise<void>,
       destroy: () => void
-    }>
+    }
 
     info(opts?: { storage: boolean }): Promise<Info>
 
@@ -296,7 +395,7 @@ declare module 'hyperbee' {
 
     sub(prefix: K, opts?: SubOptions): Hyperbee<K, V>
 
-    batch(): Promise<Batch<K, V>>
+    batch(): Batch<K, V>
 
     checkout(version: number, opts?: SnapshotOptions): Hyperbee<K, V>
 
