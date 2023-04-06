@@ -336,9 +336,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         await peer.feedCore.ready()
-        // if (peer.feedCore.length < 1) {
-        //     throw new Error("Peer core is empty")
-        // }
+        if (peer.feedCore.length < 1) {
+            peer.finishedInitialSync = true
+            return true
+        }
         let startFrom = peer.lastIndex + 1
 
         if (initialSync && peer.lastIndex == 0) {
