@@ -177,7 +177,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     /**
      * Sets an event's timestamp in the internal timeline
      * @param time The event's timestamp in seconds
-     * @param eventID The event's ID
+     * @param eventID ID of the event
      * @returns The previously saved timestamp (ms), or undefined
      */
     private setTime(eventID: string, time: number) {
@@ -195,7 +195,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.eidTime.set(eventID, newTime)
         return prevTime
     }
-
+    /**
+     * Removes an event from the timeline
+     * @param eventID ID of the event
+     * @returns The previously set time or undefined
+     */
     private unsetTime(eventID: string) {
         const prevTime = this.eidTime.get(eventID)
         if (prevTime) { // Already existing key
@@ -207,6 +211,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return prevTime
     }
 
+    /**
+     * Get the IDs of the cores backing this instance
+     * @returns [feedCore, driveCore]
+     */
     public getCoreIDs(): [string, string] {
         return [this.core.key!.toString('hex'), this.drive.key.toString('hex')]
     }
@@ -280,6 +288,15 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return true
     }
 
+    /**
+     * Called whenever an event fetched from a peer fails to validate.
+     * Should decide what course of action to take, up to and including
+     * removing and banning the peer responsible.
+     * @param memberCID The peer responsible for sending us this event
+     * @param headerResult The result of the event header verification process
+     * @param contentResult The result of the event content verification process
+     * @returns True if we should skip this event and continue, false if we are to stop altogether.
+     */
     protected onInvalidInput(
             memberCID: string,
             headerResult: VerificationResult | HeaderVerificationError | undefined,
@@ -306,17 +323,23 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         return true
     }
-
+    /**
+     * Called whenever we find the same event twice in a peer's event feed.
+     * It verifies whether the event is actually stored twice in the peer's feed,
+     * then takes appropriate action.
+     * @param memberCID The peer responsible
+     * @param eventID The ID of the event
+     * @param index The last index we found this event at
+     * @param prevIndex The previous index we found this event at
+     * @returns false if the verification succeeds, to stop syncing events from this peer
+     */
     protected async onDuplicateInput(
             memberCID: string,
             eventID: string,
             index: number,
             prevIndex: number | undefined) {
         
-        const peer = this.peers.get(memberCID)
-        if (!peer) {
-            throw new Error("Unknown peer")
-        }
+        const peer = this.getPeer(memberCID)
         if (index === prevIndex && index !== undefined && prevIndex !== undefined) {
             throw new Error("Scanned same index entry twice")
         }
@@ -333,6 +356,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (entryA.eventID == entryB.eventID) {
             this.emit('syncDuplicateEvent', memberCID, eventID, index, prevIndex)
             await this.removePeer(memberCID)
+            return false
         }
 
         return false
@@ -354,6 +378,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         peer.knownLength = peer.feedCore.length
     }
 
+    /**
+     * Synchronizes all events from a peer,
+     * starting from the oldest entry we haven't scanned yet
+     * @param memberCID ID of the peer
+     * @param initialSync Whether this is the initial sync for this peer or we are reacting to newly added events
+     * @returns boolean indicating whether the synchronization completed successfully
+     */
     private async syncPeer(memberCID: string, initialSync: boolean): Promise<boolean> {
         const peer = this.peers.get(memberCID)
         if (!peer) {
@@ -389,6 +420,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return true
     }
 
+    /**
+     * Synchronizes an individual entry from a peer's feed hypercore
+     * @param memberCID ID of the peer
+     * @param i index of this entry on the hypercore
+     * @param initialSync Whether this is the initial sync or a new event
+     * @returns boolean indicating whether we should continue synchronizing events from this peer or stop
+     */
     private async syncEntry(memberCID: string, i: number, initialSync: boolean): Promise<boolean> {
         const peer = this.peers.get(memberCID)
         if (!peer) {
@@ -444,13 +482,15 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 claimed: claimedTime,
                 membersReceived: new Map()
             }
-
-            if (!initialSync) { // Event was received live, not from an initial peer sync
-                // We use the time we actually received this update from our peer
-                const currentTime = peer.indexReceived.get(i)
-                if (!currentTime) {
-                    throw new Error("No recorded received time for index")
-                }
+            // We use the time we actually received this update from our peer
+            const currentTime = peer.indexReceived.get(i)
+            if (!initialSync && !currentTime) {
+                // Every event past initial sync should have a recorded time
+                throw new Error("No recorded received time for index")
+            }
+            // If event was received live, not from an initial peer sync
+            if (!initialSync && currentTime) {
+                
                 // If our peer's received time is close to our current time, use their time
                 // This makes it harder to tell who first saw an event
                 eventMetadata.received = (Math.abs(currentTime - entry.received) <= TOLERANCE)
@@ -482,7 +522,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         return true
     }
-
+    /**
+     * Download and verify the content attached to a particular event
+     * @param memberCID The peer we received this event from
+     * @param eventID ID of the event
+     * @param eventType Type of the event
+     * @param contentHash Expected hash of the content
+     * @returns Result of the verification process
+     */
     private async syncContent(
             memberCID: string,
             eventID: string,
@@ -537,6 +584,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return { contentResult: ContentVerificationResult.VALID, claimedTime}
     }
 
+    /**
+     * Download and verify an event, including the header and content
+     * @param memberCID Peer we received this event from
+     * @param eventID ID of the event
+     * @returns Result of the verification process for content and header, 
+     * as well as the event's internal timestamp
+     */
     private async syncEvent(
         memberCID: string,
         eventID: string
@@ -581,10 +635,24 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return { headerResult, contentResult, claimedTime: eventHeader.claimed }
     }
 
+    /**
+     * Validates the data inside an event's attached content Buffer
+     * (To be overridden by an application using this library).
+     * @param eventID ID of the event
+     * @param eventType Type of the event
+     * @param buf Content buffer
+     * @returns boolean indicating the result of the verification process
+     */
     protected async validateContent(eventID: string, eventType: string, buf: Buffer) {
         return true
     }
 
+    /**
+     * Publish our `received` time for an event
+     * @param eventID ID of the event
+     * @param received The time we claim to have received said event
+     * @returns The index of the resulting feed entry for this event
+     */
     private async publishReceived(eventID: string, received: number) {
         const eventMetadata = this.eventMetadata.get(eventID)
         if (eventMetadata && eventMetadata.index !== -1) {
@@ -599,6 +667,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return length - 1
     }
 
+    /**
+     * Calculates the consensus timestamp for an event,
+     * taking all the `received` timestamps published by our peers as input.
+     * @param timestamps peer contributed timestamps for an event
+     * @param totalPeers total number of peers connected to this instance
+     * @returns The time the event was created according to the peer consensus
+     */
     private calculateConsensusTime(timestamps: number[], totalPeers: number): number {
         if ((timestamps.length / totalPeers) < QUORUM) {
             // We do not have a quorum to decide on the correct time yet
@@ -684,7 +759,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             this.emit('timelineAddEvent', eventID, eventMetadata.claimed, consensusTime)
         }
     }
-
+    /**
+     * Calculates the hash for an event header.
+     * This is used as the ID for events.
+     * @param event Header for this event
+     * @returns The `eventID`
+     */
     private getEventHash(event: FeedEventHeader) {
         return crypto.createHash('sha256')
             .update(event.eventType)
@@ -693,6 +773,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             .digest('hex')
     }
 
+    /**
+     * Verifies an event header, including the validity of its RLN zkProof
+     * @param event Header for an event
+     * @returns Enum indicating the verification result
+     */
     private async verifyEvent(event: FeedEventHeader) {
         const proof = event.proof
         if (proof.rlnIdentifier !== this.topic) {
@@ -716,6 +801,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return await this.rln.submitProof(proof, event.claimed)
     }
 
+    /**
+     * Verifies an event header; if valid, it is added to our store. 
+     * @param event Header of an event
+     * @returns Enum indicating the verification result
+     */
     private async addEvent(event: FeedEventHeader) {
         if (await this.drive.entry(`/events/${event.proof.signal}/header`)) {
             throw new Error("Event already added")
@@ -734,6 +824,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return result
     }
 
+    /**
+     * Creates a set of valid nullifiers for a given event type.
+     * @param eventType Type for an event
+     * @returns Valid nullifiers for this event type
+     */
     private createNullifier(eventType: string): nullifierInput[] {
         const specs = this.nullifierSpecs.get(eventType)
         if (!specs) {
@@ -750,6 +845,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return nulls
     }
 
+    /**
+     * Creates a new event from input values, including proof generation,
+     * and returns it without storing it anywhere.
+     * @param eventType Type for this event
+     * @param nullifiers Nullifiers for the RLN proof
+     * @param content Event content buffer
+     * @returns [EventHeader, EventID]
+     */
     private async createEvent(
             eventType: string,
             nullifiers: nullifierInput[],
@@ -776,11 +879,23 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         eventID]
     }
 
+    /**
+     * Register a new event type for this feed 
+     * @param eventType Name for this type
+     * @param specs Specifications for the nullifiers used in this event
+     * @param maxContentSize Maximum size for the attached content buffer
+     */
     public addEventType(eventType: string, specs: NullifierSpec[], maxContentSize: number) {
         this.nullifierSpecs.set(eventType, specs)
         this.maxContentSize.set(eventType, maxContentSize)
     }
 
+    /**
+     * Public API for the creation and publication of a new event.
+     * @param eventType Type for this event
+     * @param content Buffer containing the event's payload content
+     * @returns Enum indicating the result of the process.
+     */
     public async newEvent(eventType: string, content: Buffer) {
         const [event, eventID] = await this.createEvent(eventType, this.createNullifier(eventType), content)
         await this.drive.put(`/events/${eventID}/content`, content)
@@ -807,6 +922,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return result
     }
 
+    /**
+     * Fetch a particular event by its `eventID`
+     * @param eventID ID of the event
+     * @returns Event data or `null` if the event is not available
+     */
     public async getEventByID(eventID: string) {
         const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
         const contentBuf = await this.drive.get(`/events/${eventID}/content`)
@@ -815,6 +935,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return {header: eventHeader, content: contentBuf}
     }
 
+    /**
+     * Get events from the timeline dated between `startTime` and `endTime`
+     * @param startTime Events with this timestamp or newer will be included
+     * @param endTime Events with this timestamp or older will be included
+     * @param maxLength Maximum number of results
+     * @returns list of event data
+     */
     public async getEvents(
         startTime: number = 0,
         endTime?: number,
