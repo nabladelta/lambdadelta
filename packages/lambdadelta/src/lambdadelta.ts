@@ -55,23 +55,23 @@ export interface NullifierSpec {
 }
 
 interface TopicEvents {
-    'peerAdded': (memberCID: string) => void
-    'peerRemoved': (memberCID: string) => void
+    'peerAdded': (peerID: string) => void
+    'peerRemoved': (peerID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
     'syncFatalError': (
-            memberCID: string,
+            peerID: string,
             error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
     'syncEventResult': (
-            memberCID: string, 
+            peerID: string, 
             headerResult: VerificationResult | HeaderVerificationError,
             contentResult: ContentVerificationResult | undefined) => void
-    'syncContentResult': (memberCID: string, contentResult: ContentVerificationResult) => void
+    'syncContentResult': (peerID: string, contentResult: ContentVerificationResult) => void
     'syncDuplicateEvent': (
-            memberCID: string,
+            peerID: string,
             eventID: string,
             index: number,
             prevIndex: number | undefined) => void
-    'syncEventReceivedTime': (memberCID: string, eventID: string, received: number) => void
+    'syncEventReceivedTime': (peerID: string, eventID: string, received: number) => void
     'timelineAddEvent': (eventID: string, time: number, consensusTime: number) => void
     'timelineRemoveEvent': (eventID: string, prevTime: number, consensusTime: number) => void
     'timelineRejectedEvent': (eventID: string, claimedTime: number, consensusTime: number) => void
@@ -83,7 +83,7 @@ interface EventMetadata {
     received: number // Time received for us
     claimed: number // Time the event was supposedly produced
     consensus: number
-    membersReceived: Map<string, number> // MemberCID => time received
+    membersReceived: Map<string, number> // peerID => time received
 }
 
 interface PeerData {
@@ -137,7 +137,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     protected maxContentSize: Map<string, number>
 
     private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
-    private peers: Map<string, PeerData> // MemberCID => Hypercore
+    private peers: Map<string, PeerData> // peerID => Hypercore
 
     constructor(topic: string, corestore: Corestore, rln: RLN) {
         super()
@@ -162,12 +162,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         await this.drive.ready()
     }
 
-    public hasPeer(memberCID: string) {
-        return this.peers.has(memberCID)
+    public hasPeer(peerID: string) {
+        return this.peers.has(peerID)
     }
 
-    private getPeer(memberCID: string) {
-        const peer = this.peers.get(memberCID)
+    private getPeer(peerID: string) {
+        const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
         }
@@ -234,8 +234,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
     }
 
-    public async addPeer(memberCID: string, feedCoreID: string, driveID: string) {
-        if (this.peers.has(memberCID)) {
+    public async addPeer(peerID: string, feedCoreID: string, driveID: string) {
+        if (this.peers.has(peerID)) {
             // Peer already added
             return false
         }
@@ -252,26 +252,26 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             knownLength: feedCore.length,
             indexReceived: new Map(),
             _onappend: async () => {
-                this.updateIndexReceivedTime(memberCID)
-                await this.syncPeer(memberCID, false)
+                this.updateIndexReceivedTime(peerID)
+                await this.syncPeer(peerID, false)
             }
         }
         feedCore.on('append', peer._onappend)
-        this.peers.set(memberCID, peer)
-        this.emit('peerAdded', memberCID)
-        const completed = await this.syncPeer(memberCID, true)
+        this.peers.set(peerID, peer)
+        this.emit('peerAdded', peerID)
+        const completed = await this.syncPeer(peerID, true)
         if (!completed) return false // Sync did not complete successfully
         return true
     }
 
-    public async removePeer(memberCID: string) {
-        const peer = this.peers.get(memberCID)
+    public async removePeer(peerID: string) {
+        const peer = this.peers.get(peerID)
         if (!peer) {
             // Peer does not exist
             return false
         }
         peer.feedCore.removeListener('append', peer._onappend)
-        this.peers.delete(memberCID)
+        this.peers.delete(peerID)
         await peer.drive.close()
         await peer.feedCore.close()
         // Remove peer's received timestamps contributions
@@ -280,11 +280,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             if (!eventMetadata) {
                 continue
             }
-            eventMetadata.membersReceived.delete(memberCID)
+            eventMetadata.membersReceived.delete(peerID)
             this.eventMetadata.set(eventID, eventMetadata)
             await this.onMemberReceivedTime(eventID)
         }
-        this.emit('peerRemoved', memberCID)
+        this.emit('peerRemoved', peerID)
         return true
     }
 
@@ -292,13 +292,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * Called whenever an event fetched from a peer fails to validate.
      * Should decide what course of action to take, up to and including
      * removing and banning the peer responsible.
-     * @param memberCID The peer responsible for sending us this event
+     * @param peerID The peer responsible for sending us this event
      * @param headerResult The result of the event header verification process
      * @param contentResult The result of the event content verification process
      * @returns True if we should skip this event and continue, false if we are to stop altogether.
      */
     protected onInvalidInput(
-            memberCID: string,
+            peerID: string,
             headerResult: VerificationResult | HeaderVerificationError | undefined,
             contentResult: ContentVerificationResult | undefined
         ) {
@@ -307,8 +307,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             if (headerResult === HeaderVerificationError.UNAVAILABLE) {
                 return true
             }
-            this.removePeer(memberCID)
-            this.emit('syncFatalError', memberCID, headerResult)
+            this.removePeer(peerID)
+            this.emit('syncFatalError', peerID, headerResult)
             return false
         }
 
@@ -316,8 +316,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             if (contentResult === ContentVerificationResult.UNAVAILABLE) {
                 return true
             }
-            this.removePeer(memberCID)
-            this.emit('syncFatalError', memberCID, contentResult)
+            this.removePeer(peerID)
+            this.emit('syncFatalError', peerID, contentResult)
             return false
         }
 
@@ -327,19 +327,19 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * Called whenever we find the same event twice in a peer's event feed.
      * It verifies whether the event is actually stored twice in the peer's feed,
      * then takes appropriate action.
-     * @param memberCID The peer responsible
+     * @param peerID The peer responsible
      * @param eventID The ID of the event
      * @param index The last index we found this event at
      * @param prevIndex The previous index we found this event at
      * @returns false if the verification succeeds, to stop syncing events from this peer
      */
     protected async onDuplicateInput(
-            memberCID: string,
+            peerID: string,
             eventID: string,
             index: number,
             prevIndex: number | undefined) {
         
-        const peer = this.getPeer(memberCID)
+        const peer = this.getPeer(peerID)
         if (index === prevIndex && index !== undefined && prevIndex !== undefined) {
             throw new Error("Scanned same index entry twice")
         }
@@ -354,8 +354,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const entryB = deserializeFeedEntry(entryBufB)
 
         if (entryA.eventID == entryB.eventID) {
-            this.emit('syncDuplicateEvent', memberCID, eventID, index, prevIndex)
-            await this.removePeer(memberCID)
+            this.emit('syncDuplicateEvent', peerID, eventID, index, prevIndex)
+            await this.removePeer(peerID)
             return false
         }
 
@@ -367,10 +367,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * This records when the new feed entries were added immediately,
      * ensuring we don't wait until we get to synchronize that event.
      * This allows us to establish reliable `received` times.
-     * @param memberCID The peer we received an update from
+     * @param peerID The peer we received an update from
      */
-    private updateIndexReceivedTime(memberCID: string) {
-        const peer = this.getPeer(memberCID)
+    private updateIndexReceivedTime(peerID: string) {
+        const peer = this.getPeer(peerID)
         const currentTime = getTimestampInSeconds()
         for (let i = peer.knownLength; i < peer.feedCore.length; i++) {
             peer.indexReceived.set(i, currentTime)
@@ -381,12 +381,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     /**
      * Synchronizes all events from a peer,
      * starting from the oldest entry we haven't scanned yet
-     * @param memberCID ID of the peer
+     * @param peerID ID of the peer
      * @param initialSync Whether this is the initial sync for this peer or we are reacting to newly added events
      * @returns boolean indicating whether the synchronization completed successfully
      */
-    private async syncPeer(memberCID: string, initialSync: boolean): Promise<boolean> {
-        const peer = this.peers.get(memberCID)
+    private async syncPeer(peerID: string, initialSync: boolean): Promise<boolean> {
+        const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
         }
@@ -410,25 +410,25 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         for (let i = startFrom; i < peer.feedCore.length; i++) {
-            const shouldContinue = await this.syncEntry(memberCID, i, initialSync)
+            const shouldContinue = await this.syncEntry(peerID, i, initialSync)
             // Interrupt synchronization from this peer immediately
             if (!shouldContinue) return false
         }
 
         peer.finishedInitialSync = true
-        this.peers.set(memberCID, peer)
+        this.peers.set(peerID, peer)
         return true
     }
 
     /**
      * Synchronizes an individual entry from a peer's feed hypercore
-     * @param memberCID ID of the peer
+     * @param peerID ID of the peer
      * @param i index of this entry on the hypercore
      * @param initialSync Whether this is the initial sync or a new event
      * @returns boolean indicating whether we should continue synchronizing events from this peer or stop
      */
-    private async syncEntry(memberCID: string, i: number, initialSync: boolean): Promise<boolean> {
-        const peer = this.peers.get(memberCID)
+    private async syncEntry(peerID: string, i: number, initialSync: boolean): Promise<boolean> {
+        const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
         }
@@ -443,21 +443,21 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         if (!(await this.drive.entry(`/events/${eventID}/header`))) {
             // We never encountered this event before
-            const results = await this.syncEvent(memberCID, eventID)
+            const results = await this.syncEvent(peerID, eventID)
             headerResult = results.headerResult
             contentResult = results.contentResult
             claimedTime = results.claimedTime
-            this.emit('syncEventResult', memberCID, results.headerResult, results.contentResult)
+            this.emit('syncEventResult', peerID, results.headerResult, results.contentResult)
 
         } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
             // In this case we have the header, but we are missing the content
             // Probably from a previous peer not having it, or having an invalid version of it, etc
-            const results = await this.syncContent(memberCID, eventID)
+            const results = await this.syncContent(peerID, eventID)
             claimedTime = results.claimedTime
             contentResult = results.contentResult
             // We already verified this header previously
             headerResult = VerificationResult.VALID
-            this.emit('syncContentResult', memberCID, results.contentResult)
+            this.emit('syncContentResult', peerID, results.contentResult)
         }
 
         let eventMetadata = this.eventMetadata.get(eventID)
@@ -467,9 +467,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 // Either the header or the content for this event did not validate.
                 // The event is invalid or the data is unavailable, and we have to skip it
                 peer.lastIndex = i
-                this.peers.set(memberCID, peer)
+                this.peers.set(peerID, peer)
                 // Decides whether to continue syncing the next events from this peer or stop
-                const shouldContinue = this.onInvalidInput(memberCID, headerResult, contentResult)
+                const shouldContinue = this.onInvalidInput(peerID, headerResult, contentResult)
                 return shouldContinue
             }
             if (!claimedTime) {
@@ -504,18 +504,18 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 this.eventMetadata.set(eventID, eventMetadata)
             }
 
-        } else if (eventMetadata.membersReceived.has(memberCID)) {
-            return await this.onDuplicateInput(memberCID, eventID, i, peer.events.get(eventID))
+        } else if (eventMetadata.membersReceived.has(peerID)) {
+            return await this.onDuplicateInput(peerID, eventID, i, peer.events.get(eventID))
         }
 
         // Add peer's received timestamp
-        this.emit('syncEventReceivedTime', memberCID, eventID, entry.received)
-        eventMetadata.membersReceived.set(memberCID, entry.received)
+        this.emit('syncEventReceivedTime', peerID, eventID, entry.received)
+        eventMetadata.membersReceived.set(peerID, entry.received)
         this.eventMetadata.set(eventID, eventMetadata)
 
         peer.events.set(eventID, i)
         peer.lastIndex = i
-        this.peers.set(memberCID, peer)
+        this.peers.set(peerID, peer)
         // No longer needed
         peer.indexReceived.delete(i)
         await this.onMemberReceivedTime(eventID)
@@ -524,14 +524,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
     /**
      * Download and verify the content attached to a particular event
-     * @param memberCID The peer we received this event from
+     * @param peerID The peer we received this event from
      * @param eventID ID of the event
      * @param eventType Type of the event
      * @param contentHash Expected hash of the content
      * @returns Result of the verification process
      */
     private async syncContent(
-            memberCID: string,
+            peerID: string,
             eventID: string,
             eventType?: string,
             contentHash?: string
@@ -551,7 +551,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             contentHash = eventHeader.contentHash
             claimedTime = eventHeader.claimed
         }
-        const peer = this.peers.get(memberCID)
+        const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unkown peer")
         }
@@ -586,13 +586,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     /**
      * Download and verify an event, including the header and content
-     * @param memberCID Peer we received this event from
+     * @param peerID Peer we received this event from
      * @param eventID ID of the event
      * @returns Result of the verification process for content and header, 
      * as well as the event's internal timestamp
      */
     private async syncEvent(
-        memberCID: string,
+        peerID: string,
         eventID: string
         ): Promise<{
             headerResult: HeaderVerificationError | VerificationResult,
@@ -600,7 +600,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             claimedTime?: number
         }> {
 
-        const peer = this.peers.get(memberCID)
+        const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unkown peer")
         }
@@ -627,7 +627,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         // We will ignore the `received` for this event from this peer (and possibly ban the peer)
         // But if we find this event again on another peer we'll just try fetching the content again from them
         const { contentResult } = await this.syncContent(
-                memberCID,
+                peerID,
                 eventID,
                 eventHeader.eventType,
                 eventHeader.contentHash)
