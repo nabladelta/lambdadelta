@@ -89,6 +89,8 @@ interface EventMetadata {
 interface PeerData {
     lastIndex: number // Last index we scanned
     events: Map<string, number> // All events we obtained from this peer => index on core
+    knownLength: number // Current length of feed core
+    indexReceived: Map<number, number> // index => time received
     feedCore: Hypercore
     drive: Hyperdrive
     finishedInitialSync: boolean,
@@ -164,6 +166,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return this.peers.has(memberCID)
     }
 
+    private getPeer(memberCID: string) {
+        const peer = this.peers.get(memberCID)
+        if (!peer) {
+            throw new Error("Unknown peer")
+        }
+        return peer
+    }
+
     /**
      * Sets an event's timestamp in the internal timeline
      * @param time The event's timestamp in seconds
@@ -231,15 +241,18 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             lastIndex: 0,
             events: new Map(),
             finishedInitialSync: false,
+            knownLength: feedCore.length,
+            indexReceived: new Map(),
             _onappend: async () => {
+                this.updateIndexReceivedTime(memberCID)
                 await this.syncPeer(memberCID, false)
             }
         }
+        feedCore.on('append', peer._onappend)
         this.peers.set(memberCID, peer)
         this.emit('peerAdded', memberCID)
         const completed = await this.syncPeer(memberCID, true)
         if (!completed) return false // Sync did not complete successfully
-        feedCore.on('append', peer._onappend)
         return true
     }
 
@@ -325,6 +338,22 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return false
     }
 
+    /**
+     * Called on an `append` event from a peer's feed.
+     * This records when the new feed entries were added immediately,
+     * ensuring we don't wait until we get to synchronize that event.
+     * This allows us to establish reliable `received` times.
+     * @param memberCID The peer we received an update from
+     */
+    private updateIndexReceivedTime(memberCID: string) {
+        const peer = this.getPeer(memberCID)
+        const currentTime = getTimestampInSeconds()
+        for (let i = peer.knownLength; i < peer.feedCore.length; i++) {
+            peer.indexReceived.set(i, currentTime)
+        }
+        peer.knownLength = peer.feedCore.length
+    }
+
     private async syncPeer(memberCID: string, initialSync: boolean): Promise<boolean> {
         const peer = this.peers.get(memberCID)
         if (!peer) {
@@ -332,7 +361,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         if (!initialSync && !peer.finishedInitialSync) {
-            throw new Error("Trying to sync new events before finishing initial sync")
+            return false
         }
 
         await peer.feedCore.ready()
@@ -417,7 +446,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             }
 
             if (!initialSync) { // Event was received live, not from an initial peer sync
-                const currentTime = getTimestampInSeconds()
+                // We use the time we actually received this update from our peer
+                const currentTime = peer.indexReceived.get(i)
+                if (!currentTime) {
+                    throw new Error("No recorded received time for index")
+                }
                 // If our peer's received time is close to our current time, use their time
                 // This makes it harder to tell who first saw an event
                 eventMetadata.received = (Math.abs(currentTime - entry.received) <= TOLERANCE)
@@ -443,6 +476,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         peer.events.set(eventID, i)
         peer.lastIndex = i
         this.peers.set(memberCID, peer)
+        // No longer needed
+        peer.indexReceived.delete(i)
         await this.onMemberReceivedTime(eventID)
 
         return true
