@@ -42,7 +42,7 @@ export class LDNode {
     public swarm: Hyperswarm
     private rln?: RLN
     private topicsBee: Hyperbee<string, Buffer>
-    private currentHandshakes: Map<string, Promise<boolean>>
+    private pendingHandshakes: Map<string, Promise<boolean>>
 
     constructor(secret: string, groupID: string, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
         this.secret = secret
@@ -50,7 +50,7 @@ export class LDNode {
         this.topicFeeds = new Map()
         this.peers = new Map()
         this.memberCIDs = new Map()
-        this.currentHandshakes = new Map()
+        this.pendingHandshakes = new Map()
 
         this.log = logger || new Logger({
             prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
@@ -167,12 +167,12 @@ export class LDNode {
     }
 
     private async recvHandshake(peerID: string, proofBuf: Buffer[]) {
-        if (this.currentHandshakes.has(peerID)) throw new Error("Send double handshake")
+        if (this.pendingHandshakes.has(peerID)) throw new Error("Send double handshake")
 
         const handshakePromise = this.handleHandshake(peerID, proofBuf)
-        this.currentHandshakes.set(peerID, handshakePromise)
+        this.pendingHandshakes.set(peerID, handshakePromise)
         await handshakePromise
-        this.currentHandshakes.delete(peerID)
+        this.pendingHandshakes.delete(peerID)
     }
 
     private async handleHandshake(peerID: string, proofBuf: Buffer[]) {
@@ -309,6 +309,7 @@ export class LDNode {
     public async join(topics: string[]) {
         await Promise.all(topics.map(topic => this._join(topic)))
         await this.swarm.flush()
+
         await Promise.all(topics.map(topic => this.publishTopic(topic)))
     }
 
