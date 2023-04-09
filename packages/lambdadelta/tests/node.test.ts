@@ -39,6 +39,7 @@ function findMissingPeersInFeed(peers: LDNode[], topics: string[]) {
 
             for (const peer of peers) {
                 if (peer.peerId === node.peerId) continue
+
                 if (!feed.hasPeer(peer.peerId)) {
                     missing.push({node, peer, topic})
                 }
@@ -106,8 +107,6 @@ describe('LDNode', () => {
         expect(missing.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
 
         const missing2 = findMissingPeersInFeed([anode, bnode, cnode], [T])
-        console.log(missing2.map(m => [m.node.peerId, m.peer.peerId, m.topic]))
         expect(missing2.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
-
     })
 })
