@@ -25,6 +25,7 @@ interface NodePeerData {
     topics: Set<string>
     memberCID?: string
     localMemberCID?: string
+    info: PeerInfo
 }
 
 export class LDNode {
@@ -174,7 +175,7 @@ export class LDNode {
             encoding: c.array(c.buffer),
             async onmessage(proof: Buffer[], _: any) { await errorHandler(self.recvHandshake(peerID, proof), self.log) }})
 
-        this.peers.set(peerID, { topics: new Set(), connection: {stream, handshakeSender} })
+        this.peers.set(peerID, { info, topics: new Set(), connection: {stream, handshakeSender} })
         this.sendHandshake(peerID)
     }
 
