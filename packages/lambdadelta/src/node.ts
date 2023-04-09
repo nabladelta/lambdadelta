@@ -309,7 +309,7 @@ export class LDNode {
     public async join(topics: string[]) {
         await Promise.all(topics.map(topic => this._join(topic)))
         await this.swarm.flush()
-
+        await Promise.all(this.pendingHandshakes.values())
         await Promise.all(topics.map(topic => this.publishTopic(topic)))
     }
 
