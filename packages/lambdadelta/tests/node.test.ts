@@ -117,14 +117,10 @@ describe('LDNode', () => {
         }
 
         await sleep(10000)
-        const missingPeers = findMissingPeers(nodes)
-        expect(missingPeers.map(m => [m.node.peerId, m.peer.peerId]).length).toBe(0)
 
-        const missing = findMissingTopics(nodes, [T])
-        expect(missing.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
-
-        const missing2 = findMissingPeersInFeed(nodes, [T])
-        expect(missing2.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
+        expect(findMissingPeers(nodes).length).toBe(0)
+        expect(findMissingTopics(nodes, [T]).length).toBe(0)
+        expect(findMissingPeersInFeed(nodes, [T]).length).toBe(0)
     })
 
     it('Join many topics', async () => {
@@ -133,10 +129,9 @@ describe('LDNode', () => {
         }
 
         await sleep(10000)
-        const missing = findMissingTopics(nodes, TOPICS)
-        expect(missing.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
 
-        const missing2 = findMissingPeersInFeed(nodes, TOPICS)
-        expect(missing2.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
+        expect(findMissingPeers(nodes).length).toBe(0)
+        expect(findMissingTopics(nodes, TOPICS).length).toBe(0)
+        expect(findMissingPeersInFeed(nodes, TOPICS).length).toBe(0)
     })
 })
