@@ -197,7 +197,6 @@ export class LDNode {
     }
 
     private async handleHandshake(peerID: string, proofBuf: Buffer[]) {
-        console.error("HANDLE HANDSHAKE")
         const peer = this.getPeer(peerID)
 
         if (peer.memberCID) {
