@@ -92,18 +92,6 @@ export class LDNode {
         await this.topicsBee.ready()
     }
 
-    async onConnection(stream: NoiseSecretStream, info: PeerInfo) {
-        this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
-        this.peerId = stream.publicKey.toString('hex')
-        this.handlePeer(stream)
-
-        stream.once('close', async () => {
-            const peerID = stream.remotePublicKey.toString('hex')
-            this.log.info('Peer left', info.publicKey.toString('hex').slice(-6))
-            await this.removePeer(peerID)
-        })
-    }
-
     private getPeer(peerID: string) {
         const peer = this.peers.get(peerID)
         if (!peer) {
@@ -130,20 +118,16 @@ export class LDNode {
         return this.topicFeeds.get(this.topicHash(topic, 'index').toString('hex'))
     }
 
-    private async removePeer(peerID: string) {
-        const peer = this.getPeer(peerID)
-        this.peers.delete(peerID)
+    async onConnection(stream: NoiseSecretStream, info: PeerInfo) {
+        this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
+        this.peerId = stream.publicKey.toString('hex')
+        this.handlePeer(stream)
 
-        const removePromises: Promise<boolean>[] = []
-        for (const topicHash of peer.topics) {
-            const feed = this.topicFeeds.get(topicHash)
-            if (!feed) {
-                continue
-            }
-            peer.topicsBee?.close()
-            removePromises.push(feed.removePeer(peer.memberCID!))
-        }
-        await Promise.all(removePromises)
+        stream.once('close', async () => {
+            const peerID = stream.remotePublicKey.toString('hex')
+            this.log.info('Peer left', info.publicKey.toString('hex').slice(-6))
+            await this.removePeer(peerID)
+        })
     }
 
     private handlePeer(stream: NoiseSecretStream) {
@@ -166,6 +150,22 @@ export class LDNode {
 
         this.peers.set(peerID, { topics: new Set(), connection: {stream, handshakeSender} })
         this.sendHandshake(peerID)
+    }
+
+    private async removePeer(peerID: string) {
+        const peer = this.getPeer(peerID)
+        this.peers.delete(peerID)
+
+        const removePromises: Promise<boolean>[] = []
+        for (const topicHash of peer.topics) {
+            const feed = this.topicFeeds.get(topicHash)
+            if (!feed) {
+                continue
+            }
+            peer.topicsBee?.close()
+            removePromises.push(feed.removePeer(peer.memberCID!))
+        }
+        await Promise.all(removePromises)
     }
 
     private async sendHandshake(peerID: string) {
