@@ -31,19 +31,25 @@ export class LDNode {
     public static appID = "LDD"
     public static protocolVersion = "1"
 
-    private secret: string
-    private groupID: string
-    public corestore: Corestore
     public peerId: string
+    public groupID: string
+
+    private secret: string
+
     private log: Logger<unknown>
-    public topicFeeds: Map<string, Lambdadelta> // Topic => feed
+    private swarm: Hyperswarm
+    public corestore: Corestore
+    private rln?: RLN
+
     private peers: Map<string, NodePeerData>
     private memberCIDs: Map<string, string> // MCID => peerID
-    public swarm: Hyperswarm
-    private rln?: RLN
+
     private topicsBee: Hyperbee<string, Buffer>
+    public topicFeeds: Map<string, Lambdadelta> // Topic => feed
+
     private pendingHandshakes: Map<string, Promise<boolean>>
     private _ready: Promise<void>
+
     constructor(secret: string, groupID: string, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
         this.secret = secret
         this.groupID = groupID
