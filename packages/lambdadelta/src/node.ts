@@ -63,8 +63,6 @@ export class LDNode {
             prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
         })
 
-        this.peerId = ''
-
         const secretDigest = crypto.createHash('sha256')
             .update('USR>' + secret)
             .digest('hex')
@@ -84,6 +82,7 @@ export class LDNode {
             .digest()
         this.swarm = new Hyperswarm({ seed: swarmKeySeed, ...swarmOpts})
         this.swarm.on('connection', this.handlePeer.bind(this))
+        this.peerId = this.swarm.keyPair.publicKey.toString('hex')
         const rln = RLN.load(this.secret, GROUP_FILE)
         this._ready = (async () => { this.rln = await rln })()
     }
@@ -150,7 +149,6 @@ export class LDNode {
 
     private handlePeer(stream: NoiseSecretStream, info: PeerInfo) {
         this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
-        this.peerId = stream.publicKey.toString('hex')
         const peerID = stream.remotePublicKey.toString('hex')
 
         stream.once('close', async () => {
@@ -332,6 +330,7 @@ export class LDNode {
     }
 
     public async join(topics: string[]) {
+        this.log.info(`Joining topics: ${topics.join(',')}`)
         await Promise.all(topics.map(topic => this._join(topic)))
         await this.swarm.flush()
         await Promise.all(this.pendingHandshakes.values())

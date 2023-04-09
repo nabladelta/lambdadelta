@@ -496,7 +496,7 @@ declare module 'hyperswarm' {
   import { TypedEmitter } from 'tiny-typed-emitter'
   import Dht, { RelayAddress } from '@hyperswarm/dht'
   import NoiseSecretStream from '@hyperswarm/secret-stream'
-
+  import { KeyPair } from 'hypercore'
   interface PeerDiscoveryOpts {
     wait?: number | null
     onpeer?: () => void
@@ -577,6 +577,8 @@ declare module 'hyperswarm' {
     readonly peers: Map<string, PeerInfo>
     readonly explicitPeers: Set<PeerInfo>
     readonly dht: Dht
+
+    readonly keyPair: KeyPair
 
     constructor(opts?: {
       seed?: Buffer
