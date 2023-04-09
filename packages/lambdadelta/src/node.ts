@@ -125,6 +125,22 @@ export class LDNode {
         return this.topicFeeds.get(this.topicHash(topic, 'index').toString('hex'))
     }
 
+    private async removePeer(peerID: string) {
+        const peer = this.getPeer(peerID)
+        this.peers.delete(peerID)
+
+        const removePromises: Promise<boolean>[] = []
+        for (const topicHash of peer.topics) {
+            const feed = this.topicFeeds.get(topicHash)
+            if (!feed) {
+                continue
+            }
+            peer.topicsBee?.close()
+            removePromises.push(feed.removePeer(peer.memberCID!))
+        }
+        await Promise.all(removePromises)
+    }
+
     private handlePeer(stream: NoiseSecretStream, info: PeerInfo) {
         this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
         this.peerId = stream.publicKey.toString('hex')
@@ -156,22 +172,6 @@ export class LDNode {
         this.sendHandshake(peerID)
     }
 
-    private async removePeer(peerID: string) {
-        const peer = this.getPeer(peerID)
-        this.peers.delete(peerID)
-
-        const removePromises: Promise<boolean>[] = []
-        for (const topicHash of peer.topics) {
-            const feed = this.topicFeeds.get(topicHash)
-            if (!feed) {
-                continue
-            }
-            peer.topicsBee?.close()
-            removePromises.push(feed.removePeer(peer.memberCID!))
-        }
-        await Promise.all(removePromises)
-    }
-
     private async sendHandshake(peerID: string) {
         const peer = this.getPeer(peerID)
         this.log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
@@ -185,7 +185,7 @@ export class LDNode {
     }
 
     private async recvHandshake(peerID: string, proofBuf: Buffer[]) {
-        if (this.pendingHandshakes.has(peerID)) throw new Error("Send double handshake")
+        if (this.pendingHandshakes.has(peerID)) throw new Error("Received double handshake")
 
         const handshakePromise = this.handleHandshake(peerID, proofBuf)
         this.pendingHandshakes.set(peerID, handshakePromise)
