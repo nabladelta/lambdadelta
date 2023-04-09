@@ -76,7 +76,7 @@ export class LDNode {
             .update(getMemberCIDEpoch().toString())
             .digest()
         this.swarm = new Hyperswarm({ seed: swarmKeySeed, ...swarmOpts})
-        this.swarm.on('connection', this.onConnection.bind(this))
+        this.swarm.on('connection', this.handlePeer.bind(this))
         const rln = RLN.load(this.secret, GROUP_FILE)
         this._ready = (async () => { this.rln = await rln })()
     }
@@ -125,19 +125,17 @@ export class LDNode {
         return this.topicFeeds.get(this.topicHash(topic, 'index').toString('hex'))
     }
 
-    async onConnection(stream: NoiseSecretStream, info: PeerInfo) {
+    private handlePeer(stream: NoiseSecretStream, info: PeerInfo) {
         this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
         this.peerId = stream.publicKey.toString('hex')
-        this.handlePeer(stream)
+        const peerID = stream.remotePublicKey.toString('hex')
 
         stream.once('close', async () => {
             const peerID = stream.remotePublicKey.toString('hex')
             this.log.info('Peer left', info.publicKey.toString('hex').slice(-6))
             await this.removePeer(peerID)
         })
-    }
 
-    private handlePeer(stream: NoiseSecretStream) {
         // Always replicate corestore
         this.corestore.replicate(stream)
 
@@ -149,7 +147,6 @@ export class LDNode {
         })
         channel.open()
 
-        const peerID = stream.remotePublicKey.toString('hex')
 
         const handshakeSender = channel.addMessage({
             encoding: c.array(c.buffer),
