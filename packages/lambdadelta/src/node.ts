@@ -85,6 +85,12 @@ export class LDNode {
         await this.swarm.destroy()
         await this.corestore.close()
         await this.topicsBee.close()
+        for (const [_, peer] of this.peers) {
+            await peer.topicsBee?.close()
+        }
+        for (const [_, feed] of this.topicFeeds) {
+            await feed.close()
+        }
     }
 
     async ready() {
