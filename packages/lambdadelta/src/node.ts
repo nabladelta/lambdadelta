@@ -43,7 +43,7 @@ export class LDNode {
     private rln?: RLN
     private topicsBee: Hyperbee<string, Buffer>
     private pendingHandshakes: Map<string, Promise<boolean>>
-
+    private _ready: Promise<void>
     constructor(secret: string, groupID: string, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
         this.secret = secret
         this.groupID = groupID
@@ -76,27 +76,31 @@ export class LDNode {
             .update(getMemberCIDEpoch().toString())
             .digest()
         this.swarm = new Hyperswarm({ seed: swarmKeySeed, ...swarmOpts})
+        this.swarm.on('connection', this.onConnection.bind(this))
+        const rln = RLN.load(this.secret, GROUP_FILE)
+        this._ready = (async () => { this.rln = await rln })()
     }
 
     async destroy() {
         await this.swarm.destroy()
         await this.corestore.close()
+        await this.topicsBee.close()
     }
-
-    async init() {
-        this.rln = await RLN.load(this.secret, GROUP_FILE)
+    async ready() {
+        await this._ready
         await this.corestore.ready()
         await this.topicsBee.ready()
-        this.swarm.on('connection', (stream: NoiseSecretStream, info: PeerInfo) => {
-            this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
-            this.peerId = stream.publicKey.toString('hex')
-            this.handlePeer(stream)
+    }
 
-            stream.once('close', async () => {
-                const peerID = stream.remotePublicKey.toString('hex')
-                this.log.info('Peer left', info.publicKey.toString('hex').slice(-6))
-                await this.removePeer(peerID)
-            })
+    async onConnection(stream: NoiseSecretStream, info: PeerInfo) {
+        this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
+        this.peerId = stream.publicKey.toString('hex')
+        this.handlePeer(stream)
+
+        stream.once('close', async () => {
+            const peerID = stream.remotePublicKey.toString('hex')
+            this.log.info('Peer left', info.publicKey.toString('hex').slice(-6))
+            await this.removePeer(peerID)
         })
     }
 
@@ -186,6 +190,7 @@ export class LDNode {
     }
 
     private async handleHandshake(peerID: string, proofBuf: Buffer[]) {
+        console.error("HANDLE HANDSHAKE")
         const peer = this.getPeer(peerID)
 
         if (peer.memberCID) {

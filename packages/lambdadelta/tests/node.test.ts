@@ -15,6 +15,8 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const T = 'a'
 
+const TOPICS = ['a', 'b', 'c', 'd']
+
 function findMissingTopics(peers: LDNode[], topics: string[]) {
     const missing: {node: LDNode, peer: LDNode, topic: string}[] = []
     for (const node of peers) {
@@ -78,14 +80,7 @@ describe('LDNode', () => {
         anode = new LDNode(secretA, gid, {logger: logA, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
         bnode = new LDNode(secretB, gid, {logger: logB, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
         cnode = new LDNode(secretC, gid, {logger: logC, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
-        await anode.init()
-        await bnode.init()
-        await cnode.init()
-
-        await anode.join([T])
-        await bnode.join([T])
-        await cnode.join([T])
-
+        await Promise.all([anode.ready(), bnode.ready(), cnode.ready()])
         destroy = async() => {
             if (existsSync(GROUP_FILE)) rmSync(GROUP_FILE, {force: true})
             await Promise.all([testnet.destroy(), anode.destroy(), bnode.destroy(), cnode.destroy()])
@@ -98,15 +93,30 @@ describe('LDNode', () => {
 
     jest.setTimeout(120000)
 
-    it('Joins topics', async () => {
-        const a = anode.getTopic(T)!
-        const b = bnode.getTopic(T)!
-        const c = cnode.getTopic(T)!
+    it('Join a topic', async () => {
+        await anode.join([T])
+        await bnode.join([T])
+        await cnode.join([T])
+
         await sleep(10000)
+        console.log(anode.getPeerList(), bnode.getPeerList(), cnode.getPeerList())
+
         const missing = findMissingTopics([anode, bnode, cnode], [T])
         expect(missing.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
 
         const missing2 = findMissingPeersInFeed([anode, bnode, cnode], [T])
         expect(missing2.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
     })
+
+    // it('Join many topics', async () => {
+    //     await Promise.all([anode.init(), bnode.init(), cnode.init()])
+    //     await Promise.all([anode.join(TOPICS), bnode.join(TOPICS), cnode.join(TOPICS)])
+    //     console.log('awaited')
+    //     await sleep(10000)
+    //     const missing = findMissingTopics([anode, bnode, cnode], TOPICS)
+    //     expect(missing.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
+
+    //     const missing2 = findMissingPeersInFeed([anode, bnode, cnode], TOPICS)
+    //     expect(missing2.map(m => [m.node.peerId, m.peer.peerId, m.topic]).length).toBe(0)
+    // })
 })
