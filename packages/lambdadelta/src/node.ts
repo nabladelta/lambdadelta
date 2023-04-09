@@ -108,6 +108,16 @@ export class LDNode {
         return peer
     }
 
+    public getPeerList() {
+        const peers = []
+        for (const [peerID, peer] of this.peers) {
+            if (peer.memberCID) {
+                peers.push(peerID)
+            }
+        }
+        return peers
+    }
+
     public peerHasTopic(peerID: string, topic: string) {
         return this.peers.get(peerID)?.topics.has(this.topicHash(topic, 'index').toString('hex'))
     }
