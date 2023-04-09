@@ -86,6 +86,7 @@ export class LDNode {
         await this.corestore.close()
         await this.topicsBee.close()
     }
+
     async ready() {
         await this._ready
         await this.corestore.ready()
