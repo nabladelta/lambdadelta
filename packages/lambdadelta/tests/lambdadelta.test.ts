@@ -46,12 +46,6 @@ describe('Event feed', () => {
         const s2 = corestoreB.replicate(false)
 
         s1.pipe(s2).pipe(s1)
-        const core = corestoreA.get({name: 'test'})
-        await core.ready()
-        core.append(Buffer.from('0'))
-        const core2 = corestoreB.get(core.key)
-        await core2.ready()
-        await core2.update()
         peerA = {rln, mcid: proofA.signal, corestore: corestoreA}
         peerB = {rln: rlnB, mcid: proofB.signal, corestore: corestoreA.namespace('b')}
     })
