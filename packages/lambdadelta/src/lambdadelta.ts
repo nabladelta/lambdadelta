@@ -767,6 +767,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      */
     private getEventHash(event: FeedEventHeader) {
         return crypto.createHash('sha256')
+            .update(this.topic)
             .update(event.eventType)
             .update(event.claimed.toString())
             .update(event.contentHash)
@@ -864,6 +865,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             .digest('hex')
 
         const eventID = crypto.createHash('sha256')
+            .update(this.topic)
             .update(eventType)
             .update(claimed.toString())
             .update(contentHash)
