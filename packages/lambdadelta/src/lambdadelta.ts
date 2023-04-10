@@ -87,7 +87,7 @@ interface EventMetadata {
 }
 
 interface PeerData {
-    lastIndex: number // Last index we scanned
+    nextIndex: number // Last index we scanned
     events: Map<string, number> // All events we obtained from this peer => index on core
     knownLength: number // Current length of feed core
     indexReceived: Map<number, number> // index => time received
@@ -152,9 +152,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.eventMetadata = new Map()
         this.maxContentSize = new Map()
 
-        this.corestore = corestore.namespace('lambdadelta')
-        this.core = this.corestore.get({ name: topic })
-        this.drive = new Hyperdrive(this.corestore)
+        this.corestore = corestore.namespace('lambdadelta').namespace(topic)
+        this.core = this.corestore.get({ name: `${topic}-received` })
+        this.core.on('close', () => {console.error("closed core")})
+        this.drive = new Hyperdrive(this.corestore.namespace('drive'))
         this.registerTypes()
     }
 
@@ -238,10 +239,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     public async close() {
-        for (let [id, peer] of this.peers) {
+        for (let [_, peer] of this.peers) {
             peer.feedCore.removeListener('append', peer._onappend)
         }
-        for (let [id, peer] of this.peers) {
+        for (let [_, peer] of this.peers) {
             await peer.drive.close()
             await peer.feedCore.close()
         }
@@ -259,7 +260,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const peer = {
             feedCore,
             drive,
-            lastIndex: 0,
+            nextIndex: 0,
             events: new Map(),
             finishedInitialSync: false,
             knownLength: feedCore.length,
@@ -413,9 +414,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             peer.finishedInitialSync = true
             return true
         }
-        let startFrom = peer.lastIndex + 1
+        let startFrom = peer.nextIndex
 
-        if (initialSync && peer.lastIndex == 0) {
+        if (initialSync && peer.nextIndex == 0) {
             // Find the first valid entry
             const lastEntryBuf: Buffer = await peer.feedCore.get(peer.feedCore.length - 1, {timeout: TIMEOUT})
             const lastEntry = deserializeFeedEntry(lastEntryBuf)
@@ -479,7 +480,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 || contentResult !== ContentVerificationResult.VALID) {
                 // Either the header or the content for this event did not validate.
                 // The event is invalid or the data is unavailable, and we have to skip it
-                peer.lastIndex = i
+                peer.nextIndex = i + 1
                 this.peers.set(peerID, peer)
                 // Decides whether to continue syncing the next events from this peer or stop
                 const shouldContinue = this.onInvalidInput(peerID, headerResult, contentResult)
@@ -527,7 +528,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.eventMetadata.set(eventID, eventMetadata)
 
         peer.events.set(eventID, i)
-        peer.lastIndex = i
+        peer.nextIndex = i + 1
         this.peers.set(peerID, peer)
         // No longer needed
         peer.indexReceived.delete(i)
@@ -671,13 +672,20 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (eventMetadata && eventMetadata.index !== -1) {
             throw new Error("Trying to publish received time twice")
         }
-        const {length, byteLength} = await this.core.append(serializeFeedEntry({
-            eventID,
-            received: received,
-            oldestIndex: this.oldestIndex
-        }))
-        this.emit('publishReceivedTime', eventID, received)
-        return length - 1
+        try {
+            await this.core.ready()
+            console.log(this.core)
+            const {length, byteLength} = await this.core.append(serializeFeedEntry({
+                eventID,
+                received: received,
+                oldestIndex: this.oldestIndex
+            }))
+            this.emit('publishReceivedTime', eventID, received)
+            return length - 1
+        } catch (e) {
+            console.error("ERROR", e)
+            throw e
+        }
     }
 
     /**
@@ -920,7 +928,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             if (eventMetadata) {
                 throw new Error("Event already exists")
             }
-            
+
             eventMetadata = {
                 index: -1,
                 received: event.claimed,
