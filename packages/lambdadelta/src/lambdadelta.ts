@@ -166,6 +166,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return this.peers.has(peerID)
     }
 
+    public getPeerList() {
+        return Array.from(this.peers.keys())
+    }
+
     private getPeer(peerID: string) {
         const peer = this.peers.get(peerID)
         if (!peer) {
