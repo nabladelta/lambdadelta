@@ -87,7 +87,7 @@ export class LDNode {
         this._ready = (async () => { this.rln = await rln })()
     }
 
-    async destroy() {
+    public async destroy() {
         await this.swarm.destroy()
         await this.corestore.close()
         await this.topicsBee.close()
@@ -99,10 +99,14 @@ export class LDNode {
         }
     }
 
-    async ready() {
+    public async ready() {
         await this._ready
         await this.corestore.ready()
         await this.topicsBee.ready()
+    }
+
+    public async awaitPending() {
+        await Promise.all(this.pendingHandshakes.values())
     }
 
     private getPeer(peerID: string) {
@@ -229,6 +233,7 @@ export class LDNode {
         })
 
         this.memberCIDs.set(peer.memberCID, peerID)
+        this.log.info(`Accepted MemberCID from ${peerID.slice(-6)}`)
         await this.syncTopics(peerID)
         return true
     }
@@ -333,7 +338,7 @@ export class LDNode {
         this.log.info(`Joining topics: ${topics.join(',')}`)
         await Promise.all(topics.map(topic => this._join(topic)))
         await this.swarm.flush()
-        await Promise.all(this.pendingHandshakes.values())
+        await this.awaitPending()
         await Promise.all(topics.map(topic => this.publishTopic(topic)))
     }
 
