@@ -157,7 +157,7 @@ export class LDNode {
 
         stream.once('close', async () => {
             const peerID = stream.remotePublicKey.toString('hex')
-            this.log.info(`Found peer ${info.publicKey.toString('hex').slice(-6)}`)
+            this.log.info(`Peer ${info.publicKey.toString('hex').slice(-6)} left`)
             await this.removePeer(peerID)
         })
 
@@ -250,23 +250,31 @@ export class LDNode {
 
     private async continuousTopicSync(peerID: string) {
         const peer = this.getPeer(peerID)
-        for await (const { key, type, value } of peer.topicsBee!
-                .createHistoryStream({ gte: -1, live: true })) {
-            const feed = this.topicFeeds.get(key)
+        try {
+            for await (const { key, type, value } of peer.topicsBee!
+                    .createHistoryStream({ gte: -1, live: true })) {
+                const feed = this.topicFeeds.get(key)
 
-            this.log.warn(`Update from ${peerID.slice(-6)}: ${type}: ${feed ? feed.topic : key.slice(-6)} -> ${value}`)
+                this.log.warn(`Update from ${peerID.slice(-6)}: ${type}: ${feed ? feed.topic : key.slice(-6)} -> ${value}`)
 
-            if (!feed) continue
+                if (!feed) continue
 
-            if (type === 'del') {
-                peer.topics.delete(key)
-                feed.removePeer(peerID)
-            }
-
-            if (type === 'put') {
-                if (await this.syncTopicData(peerID, key, feed)) {
-                    this.log.info(`Added topic "${feed.topic}" from peer ${peerID.slice(-6)}`)
+                if (type === 'del') {
+                    peer.topics.delete(key)
+                    feed.removePeer(peerID)
                 }
+
+                if (type === 'put') {
+                    if (await this.syncTopicData(peerID, key, feed)) {
+                        this.log.info(`Added topic "${feed.topic}" from peer ${peerID.slice(-6)}`)
+                    }
+                }
+            }
+        } catch (e) {
+            if ((e as any).code === "REQUEST_CANCELLED") {
+                this.log.warn(`Closed topic stream for ${peerID.slice(-6)}`)
+            } else {
+                this.log.error(e)
             }
         }
     }
