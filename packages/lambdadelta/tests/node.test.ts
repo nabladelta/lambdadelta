@@ -66,6 +66,63 @@ function findMissingPeers(peers: LDNode[]) {
     return missing
 }
 
+export async function nodeSetup() {let anode: LDNode
+    let bnode: LDNode
+    let cnode: LDNode
+
+    let nodes: LDNode[]
+
+    let destroy: () => Promise<void>
+
+    const secretA = 'secret1secret1secret1'
+    const secretB = 'secret1secret1secret2'
+    const secretC = 'secret1secret1secret3'
+    await FileProvider.write(
+    [
+        GroupDataProvider.createEvent(new Identity(secretA).commitment, 2),
+        GroupDataProvider.createEvent(new Identity(secretB).commitment),
+        GroupDataProvider.createEvent(new Identity(secretC).commitment, 5)
+    ],
+    GROUP_FILE)
+    let mapping: Map<string, string> = new Map()
+    const mainLogger = new Logger({
+        prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
+        overwrite: {
+            formatLogObj(maskedArgs, settings) {
+                for (let i = 0; i < maskedArgs.length; i++) {
+                    if (typeof maskedArgs[i] !== "string") {
+                        continue
+                    }
+                    for (const [str, repl] of mapping) {
+                        maskedArgs[i] = (maskedArgs[i] as string).replace(str, repl)
+                    }
+                }
+                return { args: maskedArgs, errors: []}
+            },
+        }
+    })
+    const logA = mainLogger.getSubLogger({name: 'node A'})
+    const logB = mainLogger.getSubLogger({name: 'node B'})
+    const logC = mainLogger.getSubLogger({name: 'node C'})
+    const gid = 'AAA'
+    const testnet = await createTestnet(3)
+    anode = new LDNode(secretA, gid, {logger: logA, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+    bnode = new LDNode(secretB, gid, {logger: logB, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+    cnode = new LDNode(secretC, gid, {logger: logC, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+
+    mapping.set(anode.peerId.slice(-6), "A")
+    mapping.set(bnode.peerId.slice(-6), "B")
+    mapping.set(cnode.peerId.slice(-6), "C")
+
+    await Promise.all([anode.ready(), bnode.ready(), cnode.ready()])
+    nodes = [anode, bnode, cnode]
+    destroy = async() => {
+        if (existsSync(GROUP_FILE)) rmSync(GROUP_FILE, {force: true})
+        await Promise.all([testnet.destroy(), anode.destroy(), bnode.destroy(), cnode.destroy()])
+    }
+    return {anode, bnode, cnode, nodes, destroy}
+}
+
 describe('LDNode', () => {
     let anode: LDNode
     let bnode: LDNode
@@ -76,52 +133,12 @@ describe('LDNode', () => {
     let destroy: () => Promise<void>
 
     beforeEach(async () => {
-        const secretA = 'secret1secret1secret1'
-        const secretB = 'secret1secret1secret2'
-        const secretC = 'secret1secret1secret3'
-        await FileProvider.write(
-        [
-            GroupDataProvider.createEvent(new Identity(secretA).commitment, 2),
-            GroupDataProvider.createEvent(new Identity(secretB).commitment),
-            GroupDataProvider.createEvent(new Identity(secretC).commitment, 5)
-        ],
-        GROUP_FILE)
-        let mapping: Map<string, string> = new Map()
-        const mainLogger = new Logger({
-            prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
-            overwrite: {
-                formatLogObj(maskedArgs, settings) {
-                    for (let i = 0; i < maskedArgs.length; i++) {
-                        if (typeof maskedArgs[i] !== "string") {
-                            continue
-                        }
-                        for (const [str, repl] of mapping) {
-                            maskedArgs[i] = (maskedArgs[i] as string).replace(str, repl)
-                        }
-                    }
-                    return { args: maskedArgs, errors: []}
-                },
-            }
-        })
-        const logA = mainLogger.getSubLogger({name: 'node A'})
-        const logB = mainLogger.getSubLogger({name: 'node B'})
-        const logC = mainLogger.getSubLogger({name: 'node C'})
-        const gid = 'AAA'
-        const testnet = await createTestnet(3)
-        anode = new LDNode(secretA, gid, {logger: logA, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
-        bnode = new LDNode(secretB, gid, {logger: logB, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
-        cnode = new LDNode(secretC, gid, {logger: logC, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
-
-        mapping.set(anode.peerId.slice(-6), "A")
-        mapping.set(bnode.peerId.slice(-6), "B")
-        mapping.set(cnode.peerId.slice(-6), "C")
-
-        await Promise.all([anode.ready(), bnode.ready(), cnode.ready()])
-        nodes = [anode, bnode, cnode]
-        destroy = async() => {
-            if (existsSync(GROUP_FILE)) rmSync(GROUP_FILE, {force: true})
-            await Promise.all([testnet.destroy(), anode.destroy(), bnode.destroy(), cnode.destroy()])
-        }
+        const data = await nodeSetup()
+        anode = data.anode
+        bnode = data.bnode
+        cnode = data.cnode
+        nodes = data.nodes
+        destroy = data.destroy
     })
 
     afterEach(async () => {
