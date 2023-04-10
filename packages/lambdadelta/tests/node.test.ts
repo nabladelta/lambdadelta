@@ -79,7 +79,7 @@ describe('LDNode', () => {
         await bnode.join([TOPICS[2]])
         await bnode.leave([TOPICS[2]])
         await bnode.join([TOPICS[1]])
-        await bnode.join([T]) 
+        await bnode.join([T])
         expect(bnode.getTopicList().length).toBe(2)
         await sleep(10000)
         expect(findMissingTopics([anode, bnode], [T]).length).toBe(0)
