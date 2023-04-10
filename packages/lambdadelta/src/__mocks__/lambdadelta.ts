@@ -17,6 +17,9 @@ export class Lambdadelta {
     public async getCoreLength() { return 0 }
 
     public async addPeer(memberCID: string, feedCoreID: string, driveID: string) {
+        if (this.peers.has(memberCID)) {
+            return false
+        }
         this.peers.add(memberCID)
         return true
     }
