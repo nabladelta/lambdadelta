@@ -148,12 +148,12 @@ export class LDNode {
     }
 
     private handlePeer(stream: NoiseSecretStream, info: PeerInfo) {
-        this.log.info('Found peer', info.publicKey.toString('hex').slice(-6))
+        this.log.info(`Found peer ${info.publicKey.toString('hex').slice(-6)}`)
         const peerID = stream.remotePublicKey.toString('hex')
 
         stream.once('close', async () => {
             const peerID = stream.remotePublicKey.toString('hex')
-            this.log.info('Peer left', info.publicKey.toString('hex').slice(-6))
+            this.log.info(`Found peer ${info.publicKey.toString('hex').slice(-6)}`)
             await this.removePeer(peerID)
         })
 

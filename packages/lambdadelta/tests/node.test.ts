@@ -86,17 +86,32 @@ describe('LDNode', () => {
             GroupDataProvider.createEvent(new Identity(secretC).commitment, 5)
         ],
         GROUP_FILE)
+        let mapping: Map<string, string> = new Map()
         const mainLogger = new Logger({
             prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
+            overwrite: {
+                formatLogObj(maskedArgs, settings) {
+                    const args = maskedArgs as string[]
+                    for (const [str, repl] of mapping) {
+                        args[0] = args[0].replace(str, repl)
+                    }
+                    return { args, errors: []}
+                },
+            }
         })
-        const logA = mainLogger.getSubLogger({name: 'nodeA'})
-        const logB = mainLogger.getSubLogger({name: 'nodeB'})
-        const logC = mainLogger.getSubLogger({name: 'nodeC'})
+        const logA = mainLogger.getSubLogger({name: 'node A'})
+        const logB = mainLogger.getSubLogger({name: 'node B'})
+        const logC = mainLogger.getSubLogger({name: 'node C'})
         const gid = 'AAA'
         const testnet = await createTestnet(3)
         anode = new LDNode(secretA, gid, {logger: logA, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
         bnode = new LDNode(secretB, gid, {logger: logB, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
         cnode = new LDNode(secretC, gid, {logger: logC, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+
+        mapping.set(anode.peerId.slice(-6), "A")
+        mapping.set(bnode.peerId.slice(-6), "B")
+        mapping.set(cnode.peerId.slice(-6), "C")
+
         await Promise.all([anode.ready(), bnode.ready(), cnode.ready()])
         nodes = [anode, bnode, cnode]
         destroy = async() => {
@@ -126,6 +141,32 @@ describe('LDNode', () => {
     it('Join many topics', async () => {
         for (const node of nodes) {
             await node.join(TOPICS)
+        }
+
+        await sleep(10000)
+
+        expect(findMissingPeers(nodes).length).toBe(0)
+        expect(findMissingTopics(nodes, TOPICS).length).toBe(0)
+        expect(findMissingPeersInFeed(nodes, TOPICS).length).toBe(0)
+    })
+
+    it('Join many topics', async () => {
+        for (const node of nodes) {
+            await node.join(TOPICS)
+        }
+
+        await sleep(10000)
+
+        expect(findMissingPeers(nodes).length).toBe(0)
+        expect(findMissingTopics(nodes, TOPICS).length).toBe(0)
+        expect(findMissingPeersInFeed(nodes, TOPICS).length).toBe(0)
+    })
+
+    it.only('Join topics one by one', async () => {
+        for (const topic of TOPICS) {
+            for (const node of nodes) {
+                await node.join([topic])
+            }
         }
 
         await sleep(10000)
