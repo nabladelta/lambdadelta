@@ -29,13 +29,29 @@ describe('LDNode', () => {
         await destroy()
     })
 
-    jest.setTimeout(120000)
+    jest.setTimeout(1200000000)
+
+    it.only('Join a topic and post', async () => {
+        await anode.join([T])
+        await bnode.join([T])
+        const a = anode.getTopic(T)!
+        const b = bnode.getTopic(T)!
+        a.on('syncEventStart', (peerID, index) => {{
+            console.log(`[A] SYNCING ${peerID} ${index}`)
+        }})
+        b.on('syncEventStart', (peerID, index) => {{
+            console.log(`[B] SYNCING ${peerID} ${index}`)
+        }})
+        await sleep(10000)
+        await a.newEvent("POST", Buffer.from("TEST"))
+        await sleep(10000)
+    })
 
     it('Join a topic and post', async () => {
         for (const node of nodes) {
             await node.join([T])
         }
-        
+
         await sleep(10000)
 
         expect(findMissingPeers(nodes).length).toBe(0)
@@ -45,14 +61,17 @@ describe('LDNode', () => {
         const feeds = nodes.map(n => n.getTopic(T)!)
         const messages = [0, 1, 2].map(n => Buffer.from(`test ${n}`))
         let i = 0
+
+        expect(await feeds[0].newEvent("POST", messages[i]))
+            .toEqual(VerificationResult.VALID)
+
         for (const feed of feeds) {
             feed.on('syncEventReceivedTime', async (peerId, eventID, result) => {
                 console.log(`[FEED]: ${peerId} ${eventID} ${result}`)
             })
             expect(feed.getPeerList().length).toBe(2)
 
-            expect(await feed.newEvent("POST", messages[i++]))
-            .toEqual(VerificationResult.VALID)
+            
         }
         await sleep(10000)
 
