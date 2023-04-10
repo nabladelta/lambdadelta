@@ -155,9 +155,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
         this.core = this.corestore.get({ name: `${topic}-received` })
-        this.core.on('close', () => {
-            console.trace()
-        })
         this.drive = new Hyperdrive(this.corestore.namespace('drive'))
         this.registerTypes()
     }
@@ -679,7 +676,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         try {
             await this.core.ready()
-            console.log(this.core)
             const {length, byteLength} = await this.core.append(serializeFeedEntry({
                 eventID,
                 received: received,

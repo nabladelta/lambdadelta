@@ -31,7 +31,7 @@ describe('LDNode', () => {
 
     jest.setTimeout(1200000000)
 
-    it.only('Join a topic and post', async () => {
+    it('Join a topic and post', async () => {
         await anode.join([T])
         await bnode.join([T])
         const a = anode.getTopic(T)!
@@ -45,9 +45,17 @@ describe('LDNode', () => {
         await sleep(10000)
         await a.newEvent("POST", Buffer.from("TEST"))
         await sleep(10000)
+        const events = 
+        (await b.getEvents())
+                .map(e => e.content.toString())
+
+        const events2 = 
+        (await a.getEvents())
+                .map(e => e.content.toString())
+        expect(events[0]).toEqual(events2[0])
     })
 
-    it('Join a topic and post', async () => {
+    it('Join a topic and post multiple', async () => {
         for (const node of nodes) {
             await node.join([T])
         }
@@ -62,23 +70,23 @@ describe('LDNode', () => {
         const messages = [0, 1, 2].map(n => Buffer.from(`test ${n}`))
         let i = 0
 
-        expect(await feeds[0].newEvent("POST", messages[i]))
-            .toEqual(VerificationResult.VALID)
-
         for (const feed of feeds) {
-            feed.on('syncEventReceivedTime', async (peerId, eventID, result) => {
-                console.log(`[FEED]: ${peerId} ${eventID} ${result}`)
-            })
+            expect(await feeds[0].newEvent("POST", messages[i++]))
+                .toEqual(VerificationResult.VALID)
             expect(feed.getPeerList().length).toBe(2)
-
-            
         }
-        await sleep(10000)
 
+        await sleep(10000)
+        const messageLists = []
         for (const feed of feeds) {
-            console.log(
-                (await feed.getEvents())
-                .map(e => e.content.toString()))
+            const messages = (await feed.getEvents())
+                                .map(e => e.content.toString())
+            messageLists.push(messages)
+        }
+
+        for (let i = 0; i < messageLists[0].length; i++) {
+            expect(messageLists[0][i]).toEqual(messageLists[1][i])
+            expect(messageLists[0][i]).toEqual(messageLists[2][i])
         }
     })
 })
