@@ -169,12 +169,14 @@ describe('LDNode', () => {
             for (const node of nodes) {
                 await node.join([topic])
             }
+            for (const node of nodes) {
+                await node.awaitPending()
+            }
+            await sleep(10000)
+            expect(findMissingPeers(nodes).length).toBe(0)
         }
-
-        await sleep(10000)
-
-        expect(findMissingPeers(nodes).length).toBe(0)
         expect(findMissingTopics(nodes, TOPICS).length).toBe(0)
         expect(findMissingPeersInFeed(nodes, TOPICS).length).toBe(0)
+        console.log("END")
     })
 })

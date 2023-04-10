@@ -264,7 +264,9 @@ export class LDNode {
             }
 
             if (type === 'put') {
-                this.syncTopicData(peerID, key, feed)
+                if (await this.syncTopicData(peerID, key, feed)) {
+                    this.log.info(`Added topic "${feed.topic}" from peer ${peerID.slice(-6)}`)
+                }
             }
         }
     }
