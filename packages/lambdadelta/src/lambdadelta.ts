@@ -154,7 +154,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
         this.core = this.corestore.get({ name: `${topic}-received` })
-        this.core.on('close', () => {console.error("closed core")})
+        this.core.on('close', () => {
+            console.trace()
+        })
         this.drive = new Hyperdrive(this.corestore.namespace('drive'))
         this.registerTypes()
     }
@@ -267,7 +269,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             indexReceived: new Map(),
             _onappend: async () => {
                 this.updateIndexReceivedTime(peerID)
-                await this.syncPeer(peerID, false)
+                try {
+                    await this.syncPeer(peerID, false)
+                } catch (e) {
+                    console.error(e)
+                }
             }
         }
         feedCore.on('append', peer._onappend)
@@ -977,7 +983,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         endTime = endTime || this.timeline.maxKey()
         if (!endTime) return []
         let returns = []
-        for (let [time, eventID] of this.timeline.getRange(startTime, endTime, true, maxLength)) {
+        for (let [_, eventID] of this.timeline.getRange(startTime, endTime, true, maxLength)) {
             const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
             const eventHeader: FeedEventHeader = deserializeEvent(eventHeaderBuf!)
             const contentBuf = await this.drive.get(`/events/${eventID}/content`)
