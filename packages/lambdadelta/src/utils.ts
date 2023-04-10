@@ -1,5 +1,6 @@
 import { Logger } from "tslog"
 import { FeedEntry, FeedEventHeader } from "./lambdadelta"
+import crypto from 'crypto'
 
 export function getTimestampInSeconds() {
     return Math.floor(Date.now() / 1000)
@@ -105,4 +106,26 @@ export async function errorHandler(promise: Promise<any>, log: Logger<any>) {
         log.error((e as any).message)
         throw e
     }
+}
+const algorithm = 'aes-256-ctr'
+
+function createKey(secret: string) {
+    return crypto.createHash('sha256').update(String(secret)).digest('base64').slice(0, 32)
+}
+
+export function encrypt(data: Buffer, secret: string) {
+    const iv = crypto.randomBytes(16)
+    const cipher = crypto.createCipheriv(algorithm, createKey(secret), iv)
+    const encrypted = Buffer.concat([cipher.update(data), cipher.final()])
+    return Buffer.from(JSON.stringify({
+        iv: iv.toString('hex'),
+        content: encrypted.toString('hex')
+    }))
+}
+
+export function decrypt(data: Buffer, secret: string) {
+    const {iv, content}: {iv: string, content: string} = JSON.parse(data.toString())
+    const decipher = crypto.createDecipheriv(algorithm, createKey(secret), Buffer.from(iv, 'hex'))
+    const decrypted = Buffer.concat([decipher.update(Buffer.from(content, 'hex')), decipher.final()])
+    return decrypted
 }

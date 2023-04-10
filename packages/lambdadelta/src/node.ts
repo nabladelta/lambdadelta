@@ -268,7 +268,7 @@ export class LDNode {
                     .createHistoryStream({ gte: -1, live: true })) {
                 const feed = this.topicFeeds.get(key)
 
-                this.log.warn(`Update from ${peerID.slice(-6)}: ${type}: ${feed ? this.topicNames.get(key) : key.slice(-6)} -> ${value}`)
+                this.log.info(`Update from ${peerID.slice(-6)}: ${type}: ${feed ? this.topicNames.get(key) : key.slice(-6)} -> ${value}`)
 
                 if (!feed) continue
 
