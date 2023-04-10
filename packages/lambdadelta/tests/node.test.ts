@@ -92,8 +92,10 @@ describe('LDNode', () => {
             overwrite: {
                 formatLogObj(maskedArgs, settings) {
                     const args = maskedArgs as string[]
-                    for (const [str, repl] of mapping) {
-                        args[0] = args[0].replace(str, repl)
+                    for (let i = 0; i < args.length; i++) {
+                        for (const [str, repl] of mapping) {
+                            args[i] = args[i].replace(str, repl)
+                        }
                     }
                     return { args, errors: []}
                 },
