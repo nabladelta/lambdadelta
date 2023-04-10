@@ -47,6 +47,7 @@ export class LDNode {
 
     private topicsBee: Hyperbee<string, Buffer>
     public topicFeeds: Map<string, Lambdadelta> // Topic => feed
+    private topicNames: Map<string, string>
 
     private pendingHandshakes: Map<string, Promise<boolean>>
     private _ready: Promise<void>
@@ -58,6 +59,7 @@ export class LDNode {
         this.peers = new Map()
         this.memberCIDs = new Map()
         this.pendingHandshakes = new Map()
+        this.topicNames = new Map()
 
         this.log = logger || new Logger({
             prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
@@ -255,20 +257,20 @@ export class LDNode {
                     .createHistoryStream({ gte: -1, live: true })) {
                 const feed = this.topicFeeds.get(key)
 
-                this.log.warn(`Update from ${peerID.slice(-6)}: ${type}: ${feed ? feed.topic : key.slice(-6)} -> ${value}`)
+                this.log.warn(`Update from ${peerID.slice(-6)}: ${type}: ${feed ? this.topicNames.get(key) : key.slice(-6)} -> ${value}`)
 
                 if (!feed) continue
 
                 if (type === 'del') {
                     peer.topics.delete(key)
                     if (await feed.removePeer(peerID)) {
-                        this.log.info(`Removed topic ${feed.topic} from peer ${peerID.slice(-6)}`)
+                        this.log.info(`Removed topic ${this.topicNames.get(key)} from peer ${peerID.slice(-6)}`)
                     }
                 }
 
                 if (type === 'put') {
                     if (await this.syncTopicData(peerID, key, feed)) {
-                        this.log.info(`Added topic "${feed.topic}" from peer ${peerID.slice(-6)}`)
+                        this.log.info(`Added topic "${this.topicNames.get(key)}" from peer ${peerID.slice(-6)}`)
                     }
                 }
             }
@@ -305,15 +307,16 @@ export class LDNode {
         if (topic.length == 0) return false
         if (this.topicFeeds.has(topic)) return false
 
+        const topicHash = this.topicHash(topic, 'index').toString('hex')
         const feed = new Lambdadelta(
-            topic,
+            topicHash,
             this.corestore,
             this.rln!
         )
         await feed.ready()
 
-        const topicHash = this.topicHash(topic, 'index').toString('hex')
         this.topicFeeds.set(topicHash, feed)
+        this.topicNames.set(topicHash, topic)
         this.swarm.join(this.topicHash(topic, "DHT"))
     }
 
