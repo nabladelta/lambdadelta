@@ -8,7 +8,7 @@ import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, deserializeProof, RLNGFullProof, serializeProof } from 'bernkastel-rln'
 import { Lambdadelta } from './lambdadelta'
-import { errorHandler, getMemberCIDEpoch } from './utils'
+import { decrypt, deserializeTopicData, encrypt, errorHandler, getMemberCIDEpoch, serializeTopicData } from './utils'
 import { Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 import Hyperbee from 'hyperbee'
@@ -301,7 +301,8 @@ export class LDNode {
             return false
         }
         peer.topics.add(topicHash)
-        const { feedCore, drive } = JSON.parse(result.value.toString())
+        const topicKey = this.topicHash(this.topicNames.get(topicHash)!, 'key').toString('hex')
+        const { feedCore, drive } = deserializeTopicData(decrypt(result.value, topicKey))
         return feed.addPeer(peerID, feedCore, drive)
     }
 
@@ -341,9 +342,10 @@ export class LDNode {
 
         const [feedCore, drive] = feed.getCoreIDs()
         const topicData = {feedCore, drive}
+        const topicKey = this.topicHash(topic, 'key').toString('hex')
         await this.topicsBee.put(
             topicHash,
-            Buffer.from(JSON.stringify(topicData))
+            encrypt(serializeTopicData(topicData), topicKey)
         )
     }
 

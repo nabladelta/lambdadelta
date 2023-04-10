@@ -129,3 +129,11 @@ export function decrypt(data: Buffer, secret: string) {
     const decrypted = Buffer.concat([decipher.update(Buffer.from(content, 'hex')), decipher.final()])
     return decrypted
 }
+
+export function deserializeTopicData(dataBuf: Buffer): { feedCore: string, drive: string } {
+    return JSON.parse(dataBuf.toString('utf-8'))
+}
+
+export function serializeTopicData(data: { feedCore: string, drive: string }): Buffer {
+    return Buffer.from(JSON.stringify(data))
+}
