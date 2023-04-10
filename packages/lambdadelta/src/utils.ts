@@ -107,11 +107,12 @@ export async function errorHandler(promise: Promise<any>, log: Logger<any>) {
         throw e
     }
 }
-const algorithm = 'aes-256-ctr'
 
 function createKey(secret: string) {
     return crypto.createHash('sha256').update(String(secret)).digest('base64').slice(0, 32)
 }
+
+const algorithm = 'aes-256-ctr'
 
 export function encrypt(data: Buffer, secret: string) {
     const iv = crypto.randomBytes(16)

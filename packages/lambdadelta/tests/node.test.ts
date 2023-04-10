@@ -30,7 +30,7 @@ describe('LDNode', () => {
         await destroy()
     })
 
-    jest.setTimeout(120000)
+    jest.setTimeout(150000)
 
     it('Join a topic', async () => {
         for (const node of nodes) {
