@@ -243,7 +243,7 @@ export class LDNode {
         for (const [topicHash, feed] of this.topicFeeds) {
             addPromises.push(this.syncTopicData(peerID, topicHash, feed))
         }
-        // this.continuousTopicSync(peerID)
+        this.continuousTopicSync(peerID)
         const nAdded = (await Promise.all(addPromises)).filter(r => r).length
         this.log.info(`Added ${nAdded} topic(s) from ${peerID.slice(-6)}`)
     }
@@ -252,10 +252,10 @@ export class LDNode {
         const peer = this.getPeer(peerID)
         for await (const { key, type, value } of peer.topicsBee!
                 .createHistoryStream({ gte: -1, live: true })) {
-
-            this.log.warn(`Update: ${type}: ${key} -> ${value}`)
-
             const feed = this.topicFeeds.get(key)
+
+            this.log.warn(`Update from ${peerID.slice(-6)}: ${type}: ${feed ? feed.topic : key.slice(-6)} -> ${value}`)
+
             if (!feed) continue
 
             if (type === 'del') {
