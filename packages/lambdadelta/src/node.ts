@@ -129,6 +129,17 @@ export class LDNode {
         return peers
     }
 
+    public getTopicList() {
+        const topics = []
+        for (const [topicHash, _] of this.topicFeeds) {
+            const name = this.topicNames.get(topicHash)
+            if (name) {
+                topics.push(name)
+            }
+        }
+        return topics
+    }
+
     public peerHasTopic(peerID: string, topic: string) {
         return this.peers.get(peerID)?.topics.has(this.topicHash(topic, 'index').toString('hex'))
     }

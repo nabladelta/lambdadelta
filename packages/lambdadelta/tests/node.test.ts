@@ -182,17 +182,19 @@ describe('LDNode', () => {
         console.log("END")
     })
 
-    it.only('Join topics one by one', async () => {
+    it('Join and leave topics', async () => {
 
         await anode.join([T])
+
         await bnode.join([TOPICS[2]])
         await bnode.leave([TOPICS[2]])
         await bnode.join([TOPICS[1]])
         await bnode.join([T]) 
+        expect(bnode.getTopicList().length).toBe(2)
         await sleep(10000)
+        expect(findMissingTopics([anode, bnode], [T]).length).toBe(0)
         await bnode.leave([T])
-        console.log("LEFT")
         await sleep(10000)
-        console.log("END")
+        expect(findMissingTopics([anode, bnode], [T]).length).toBe(2)
     })
 })
