@@ -155,6 +155,15 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.corestore = corestore.namespace('lambdadelta')
         this.core = this.corestore.get({ name: topic })
         this.drive = new Hyperdrive(this.corestore)
+        this.registerTypes()
+    }
+
+    protected registerTypes() {
+        const spec: NullifierSpec = {
+            epoch: 1,
+            messageLimit: 1
+        }
+        this.addEventType("POST", [spec, spec], 4096)
     }
 
     public async ready() {
