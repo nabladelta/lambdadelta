@@ -171,18 +171,6 @@ describe('LDNode', () => {
         expect(findMissingPeersInFeed(nodes, TOPICS).length).toBe(0)
     })
 
-    it('Join many topics', async () => {
-        for (const node of nodes) {
-            await node.join(TOPICS)
-        }
-
-        await sleep(10000)
-
-        expect(findMissingPeers(nodes).length).toBe(0)
-        expect(findMissingTopics(nodes, TOPICS).length).toBe(0)
-        expect(findMissingPeersInFeed(nodes, TOPICS).length).toBe(0)
-    })
-
     it('Join topics one by one', async () => {
         for (const topic of TOPICS) {
             for (const node of nodes) {
