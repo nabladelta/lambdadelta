@@ -58,6 +58,7 @@ interface TopicEvents {
     'peerAdded': (peerID: string) => void
     'peerRemoved': (peerID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
+    'syncEventStart': (peerID: string, index: number) => void
     'syncFatalError': (
             peerID: string,
             error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
@@ -428,8 +429,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             const lastEntry = deserializeFeedEntry(lastEntryBuf)
             startFrom = lastEntry.oldestIndex
         }
-
         for (let i = startFrom; i < peer.feedCore.length; i++) {
+            this.emit('syncEventStart', peerID, i)
+            peer.nextIndex = i + 1
             const shouldContinue = await this.syncEntry(peerID, i, initialSync)
             // Interrupt synchronization from this peer immediately
             if (!shouldContinue) return false
@@ -486,8 +488,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 || contentResult !== ContentVerificationResult.VALID) {
                 // Either the header or the content for this event did not validate.
                 // The event is invalid or the data is unavailable, and we have to skip it
-                peer.nextIndex = i + 1
-                this.peers.set(peerID, peer)
                 // Decides whether to continue syncing the next events from this peer or stop
                 const shouldContinue = this.onInvalidInput(peerID, headerResult, contentResult)
                 return shouldContinue
@@ -534,7 +534,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.eventMetadata.set(eventID, eventMetadata)
 
         peer.events.set(eventID, i)
-        peer.nextIndex = i + 1
         this.peers.set(peerID, peer)
         // No longer needed
         peer.indexReceived.delete(i)
