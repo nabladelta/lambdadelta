@@ -91,13 +91,15 @@ describe('LDNode', () => {
             prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
             overwrite: {
                 formatLogObj(maskedArgs, settings) {
-                    const args = maskedArgs as string[]
-                    for (let i = 0; i < args.length; i++) {
+                    for (let i = 0; i < maskedArgs.length; i++) {
+                        if (typeof maskedArgs[i] !== "string") {
+                            continue
+                        }
                         for (const [str, repl] of mapping) {
-                            args[i] = args[i].replace(str, repl)
+                            maskedArgs[i] = (maskedArgs[i] as string).replace(str, repl)
                         }
                     }
-                    return { args, errors: []}
+                    return { args: maskedArgs, errors: []}
                 },
             }
         })
@@ -164,7 +166,7 @@ describe('LDNode', () => {
         expect(findMissingPeersInFeed(nodes, TOPICS).length).toBe(0)
     })
 
-    it.only('Join topics one by one', async () => {
+    it('Join topics one by one', async () => {
         for (const topic of TOPICS) {
             for (const node of nodes) {
                 await node.join([topic])
@@ -177,6 +179,20 @@ describe('LDNode', () => {
         }
         expect(findMissingTopics(nodes, TOPICS).length).toBe(0)
         expect(findMissingPeersInFeed(nodes, TOPICS).length).toBe(0)
+        console.log("END")
+    })
+
+    it.only('Join topics one by one', async () => {
+
+        await anode.join([T])
+        await bnode.join([TOPICS[2]])
+        await bnode.leave([TOPICS[2]])
+        await bnode.join([TOPICS[1]])
+        await bnode.join([T]) 
+        await sleep(10000)
+        await bnode.leave([T])
+        console.log("LEFT")
+        await sleep(10000)
         console.log("END")
     })
 })
