@@ -148,7 +148,7 @@ export class LDNode {
             peer.topicsBee?.close()
             removePromises.push(feed.removePeer(peer.memberCID!))
         }
-        await Promise.all(removePromises)
+        return (await Promise.all(removePromises)).map(r => r).length
     }
 
     private handlePeer(stream: NoiseSecretStream, info: PeerInfo) {
@@ -261,7 +261,9 @@ export class LDNode {
 
                 if (type === 'del') {
                     peer.topics.delete(key)
-                    feed.removePeer(peerID)
+                    if (await feed.removePeer(peerID)) {
+                        this.log.info(`Removed topic ${feed.topic} from peer ${peerID.slice(-6)}`)
+                    }
                 }
 
                 if (type === 'put') {
@@ -332,16 +334,19 @@ export class LDNode {
     }
 
     private async _leave(topic: string) {
-        const feed = this.topicFeeds.get(topic)
+        const topicHash = this.topicHash(topic, 'index').toString('hex')
+        const feed = this.topicFeeds.get(topicHash)
         if (!feed) return false
 
         await feed.close()
-        this.topicFeeds.delete(topic)
+        this.topicFeeds.delete(topicHash)
         for (let [_, peer] of this.peers) {
-            peer.topics.delete(topic)
+            peer.topics.delete(topicHash)
         }
-        await this.topicsBee.del(this.topicHash(topic, 'index').toString('hex'))
+        await this.topicsBee.del(topicHash)
         await this.swarm.leave(this.topicHash(topic, "DHT"))
+        this.log.info(`Left topic ${topic}`)
+        return true
     }
 
     public async join(topics: string[]) {
@@ -353,7 +358,8 @@ export class LDNode {
     }
 
     public async leave(topics: string[]) {
-        await Promise.all(topics.map(topic => this._leave(topic)))
+        const nRemoved = (await Promise.all(topics.map(topic => this._leave(topic)))).filter(r => r).length
+        this.log.info(`Left ${nRemoved} topic(s)`)
         await this.swarm.flush()
     }
 
