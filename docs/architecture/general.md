@@ -5,9 +5,9 @@ This project involves building a multiwriter event feed protocol and datastructu
 ## Design requirements
 
 1. Event author privacy
-2. Asynchronous posting and validation of content
+2. Asynchronous posting and validation of events
 3. Consistency between nodes that witnessed an event and nodes that synchronize from scratch later
-4. Validation of RLN without the assumption of witnessing live events (necessary for #3)
+4. Validation of RLN without the assumption of witnessing events live (necessary for #3)
 5. Posting of events is only allowed for members of a certain "group" (economic cost can be involved)
 6. Violation of rate-limiting rules results in being removed from "group" (slashing)
 
