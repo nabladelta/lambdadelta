@@ -6,13 +6,43 @@
 declare module 'autobase'
 declare module 'protomux'
 declare module 'compact-encoding'
-declare module 'hyperblobs'
 
 declare module 'brittle'
 declare module 'multi-core-indexer'
 declare module '@mapeo/sqlite-indexer'
 declare module 'sodium-universal'
 declare module 'base32.js'
+
+declare module 'hyperblobs' {
+  import Hypercore from 'hypercore'
+
+  interface SizeOpts {
+    blockSize: number
+  }
+
+  export interface BlobBlockID {
+    blockOffset: number,
+    blockLength: number,
+  }
+
+  export interface BlobID extends BlobBlockID {
+    byteOffset: number
+    byteLength: number
+  }
+
+  const test: BlobID
+
+  export default class Hyperblobs {
+    feed: Hypercore
+    locked: boolean
+
+    constructor(core: Hypercore, opts?: SizeOpts)
+
+    put(blob: Buffer | Uint8Array | string, opts?: SizeOpts): Promise<BlobID>
+    get(id: BlobID, opts?: SizeOpts): Promise<Buffer | null>
+    clear(id: BlobBlockID): Promise<void>
+  }
+}
 
 declare module 'hyperdrive' {
   import Corestore from 'corestore'
