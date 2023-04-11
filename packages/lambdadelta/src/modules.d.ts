@@ -49,6 +49,7 @@ declare module 'hyperdrive' {
   import Hypercore, { RangeOpts } from 'hypercore'
   import Hyperbee, { StreamOpts, Batch } from 'hyperbee'
   import { Writable, Readable } from 'streamx'
+  import Hyperblobs from 'hyperblobs'
   export interface PathEntry {
     seq: number,
     key: string,
