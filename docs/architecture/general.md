@@ -2,7 +2,7 @@
 
 This project involves building a multiwriter event feed protocol and datastructure, which will be described in detail below, as well as an anonymous BBS powered by it.
 
-## Design requirements
+## Design objectives
 
 1. Event author privacy
 2. Asynchronous posting and validation of events
