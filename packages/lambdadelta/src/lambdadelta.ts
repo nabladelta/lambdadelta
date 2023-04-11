@@ -216,7 +216,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      */
     private unsetTime(eventID: string) {
         const prevTime = this.eidTime.get(eventID)
-        if (prevTime) { // Already existing key
+        if (prevTime !== undefined) { // Already existing key
             if (!this.timeline.delete(prevTime)){
                 throw new Error("Key was missing from timeline")
             }
