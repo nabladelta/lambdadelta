@@ -89,4 +89,44 @@ describe('LDNode', () => {
             expect(messageLists[0][i]).toEqual(messageLists[2][i])
         }
     })
+
+    it('Post multiple at a time', async () => {
+        for (const node of nodes) {
+            await node.join([T])
+        }
+
+        await sleep(10000)
+
+        expect(findMissingPeers(nodes).length).toBe(0)
+        expect(findMissingTopics(nodes, [T]).length).toBe(0)
+        expect(findMissingPeersInFeed(nodes, [T]).length).toBe(0)
+
+        const feeds = nodes.map(n => n.getTopic(T)!)
+        let messages = []
+        let n = 0
+        for (const feed of feeds) {
+            messages.push(Buffer.from(`test ${n++}`))
+            expect(await feeds[0].newEvent("POST", messages[n - 1]))
+                .toEqual(VerificationResult.VALID)
+            await sleep(1100)
+            messages.push(Buffer.from(`test ${n++}`))
+            expect(await feeds[0].newEvent("POST", messages[n - 1]))
+            .toEqual(VerificationResult.VALID)
+            expect(feed.getPeerList().length).toBe(2)
+        }
+
+        await sleep(10000)
+        const messageLists = []
+        for (const feed of feeds) {
+            const feedMessages = (await feed.getEvents())
+                                .map(e => e.content.toString())
+            expect(feedMessages.length).toEqual(n)
+            messageLists.push(feedMessages)
+        }
+
+        for (let i = 0; i < messageLists[0].length; i++) {
+            expect(messageLists[0][i]).toEqual(messageLists[1][i])
+            expect(messageLists[0][i]).toEqual(messageLists[2][i])
+        }
+    })
 })
