@@ -247,7 +247,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             await peer.feedCore.close()
         }
     }
-
+    /**
+     * Add a new peer to this topic feed and synchronize
+     * @param peerID ID of this peer
+     * @param feedCoreID ID of this peer's feed core which contains `received` times
+     * @param driveID ID of this peer's Hyperdrive which contains the event headers and content
+     * @returns Whether or not the synchronization the peer was added and synced
+     */
     public async addPeer(peerID: string, feedCoreID: string, driveID: string) {
         if (this.peers.has(peerID)) {
             // Peer already added
