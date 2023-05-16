@@ -1,4 +1,4 @@
-import { FileProvider, GroupDataProvider } from "bernkastel-rln";
+import { FileProvider, GroupDataProvider } from "@bernkastel/rln";
 import { LDNode } from "../src/node";
 import { Identity } from "@semaphore-protocol/identity";
 import { existsSync, rmSync } from "fs";

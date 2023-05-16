@@ -1,4 +1,4 @@
-import { RLN } from "bernkastel-rln";
+import { RLN } from "@bernkastel/rln";
 import Corestore from "corestore";
 import { FeedEventHeader, NullifierSpec } from "../lambdadelta";
 

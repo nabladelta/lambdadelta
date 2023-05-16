@@ -5,7 +5,16 @@
   "directories": {
     "doc": "docs"
   },
-  "workspaces": ["./packages/*"],
+  "workspaces": [
+    "./packages/*"
+  ],
   "author": "moot",
-  "license": "AGPL-3.0-or-later"
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "typescript": "^5.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.1.7",
+    "ts-node": "^10.9.1"
+  }
 }

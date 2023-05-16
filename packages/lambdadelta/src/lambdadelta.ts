@@ -3,7 +3,7 @@ import b4a from 'b4a'
 import Hyperdrive from 'hyperdrive'
 import crypto from 'crypto'
 import { TypedEmitter } from 'tiny-typed-emitter'
-import { RLN, RLNGFullProof, VerificationResult, nullifierInput } from 'bernkastel-rln'
+import { RLN, RLNGFullProof, VerificationResult, nullifierInput } from '@bernkastel/rln'
 import { deserializeEvent, deserializeFeedEntry,
     getEpoch, getMean, getStandardDeviation,
     getTimestampInSeconds,

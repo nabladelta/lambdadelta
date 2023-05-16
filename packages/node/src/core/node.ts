@@ -10,7 +10,7 @@ import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { mainLogger } from './logger'
-import { RLN, deserializeProof, RLNGFullProof, serializeProof } from 'bernkastel-rln'
+import { RLN, deserializeProof, RLNGFullProof, serializeProof } from '@bernkastel/rln'
 import { generateMemberCID, verifyMemberCIDProof } from 'lambdadelta'
 import { getMemberCIDEpoch } from './utils/utils'
 
