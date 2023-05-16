@@ -1,0 +1,13 @@
+{
+  "name": "@bernkastel/core",
+  "version": "1.0.0",
+  "description": "",
+  "devDependencies": {},
+  "main": "build/index.js",
+  "scripts": {
+        "build": "tsc --build"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
