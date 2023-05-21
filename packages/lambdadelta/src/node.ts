@@ -108,7 +108,9 @@ export class LDNode {
         await this.corestore.ready()
         await this.topicsBee.ready()
     }
-
+    /**
+     * Wait for all pending handshakes to be completed
+     */
     public async awaitPending() {
         await Promise.all(this.pendingHandshakes.values())
     }
@@ -150,6 +152,11 @@ export class LDNode {
         return this.topicFeeds.get(this.topicHash(topic, 'index').toString('hex'))
     }
 
+    /**
+     * Removes a peer form all topics he is connected to
+     * @param peerID ID of the peer to remove
+     * @returns Number of topics the peer was removed from
+     */
     private async removePeer(peerID: string) {
         const peer = this.getPeer(peerID)
         this.peers.delete(peerID)
@@ -166,6 +173,11 @@ export class LDNode {
         return (await Promise.all(removePromises)).map(r => r).length
     }
 
+    /**
+     * Handles a new peer connection
+     * @param stream The encrypted socket used for communication
+     * @param info An object containing metadata regarding this peer
+     */
     private handlePeer(stream: NoiseSecretStream, info: PeerInfo) {
         this.log.info(`Found peer ${info.publicKey.toString('hex').slice(-6)}`)
         const peerID = stream.remotePublicKey.toString('hex')
@@ -196,6 +208,10 @@ export class LDNode {
         this.sendHandshake(peerID)
     }
 
+    /**
+     * Sends a handshake message to a peer
+     * @param peerID ID of the peer to send the handshake to
+     */
     private async sendHandshake(peerID: string) {
         const peer = this.getPeer(peerID)
         this.log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
@@ -208,6 +224,11 @@ export class LDNode {
         await peer.connection.handshakeSender.send([proofBuf, topicsCoreKey])
     }
 
+    /**
+     * Handler for receiveing a handshake from a peer
+     * @param peerID ID of the peer
+     * @param proofBuf Buffer containing the RLN zkSnarks proof for the handshake
+     */
     private async recvHandshake(peerID: string, proofBuf: Buffer[]) {
         if (this.pendingHandshakes.has(peerID)) throw new Error("Received double handshake")
 
@@ -217,6 +238,13 @@ export class LDNode {
         this.pendingHandshakes.delete(peerID)
     }
 
+    /**
+     * Handles verification of a handshake proof and completion or failure of the handshake
+     * Establishes the peer's MemberCID
+     * @param peerID ID of the peer
+     * @param proofBuf  Buffer containing the RLN zkSnarks proof for the handshake
+     * @returns True if successful. Throws an exception otherwise
+     */
     private async handleHandshake(peerID: string, proofBuf: Buffer[]) {
         const peer = this.getPeer(peerID)
 
@@ -259,7 +287,12 @@ export class LDNode {
         await this.syncTopics(peerID)
         return true
     }
-
+    /**
+     * Handler for a fatal synchronization error from an event feed.
+     * Bans the peer responsible and disconnects.
+     * @param peerID ID of the peer
+     * @param error The fatal error that triggered this handler
+     */
     private async fatalSyncError(peerID: string, error: VerificationResult | HeaderVerificationError | ContentVerificationResult) {
         const peer = this.getPeer(peerID)
         this.bannedMCIDs.set(peerID, error)
@@ -267,6 +300,10 @@ export class LDNode {
         peer.info.reconnect()
     }
 
+    /**
+     * Synchronizes the list of topics from a peer
+     * @param peerID ID of the peer
+     */
     private async syncTopics(peerID: string) {
         const addPromises: Promise<boolean>[] = []
         for (const [topicHash, feed] of this.topicFeeds) {
@@ -277,6 +314,11 @@ export class LDNode {
         this.log.info(`Added ${nAdded} topic(s) from ${peerID.slice(-6)}`)
     }
 
+    /**
+     * Continuously synchronizes updates to the peer's topic list.
+     * Reacts to topic addition and removal.
+     * @param peerID ID of the peer
+     */
     private async continuousTopicSync(peerID: string) {
         const peer = this.getPeer(peerID)
         try {
@@ -310,6 +352,13 @@ export class LDNode {
         }
     }
 
+    /**
+     * Attempts to add a peer to a specific topic feed we are currently participating in.
+     * @param peerID ID of the peer
+     * @param topicHash Hash for the topic
+     * @param feed Lambdadelta event feed object for this topic
+     * @returns True if the peer was added successfully, false if the peer is not participating in the topic.
+     */
     private async syncTopicData(peerID: string, topicHash: string, feed: Lambdadelta) {
         const peer = this.getPeer(peerID)
         const result = await peer.topicsBee?.get(topicHash)
@@ -322,6 +371,11 @@ export class LDNode {
         return feed.addPeer(peerID, feedCore, drive)
     }
 
+    /**
+     * Attempts to add all peers to a specific topic we are currently participating in.
+     * @param topicHash Hash for the topic
+     * @param feed Lambdadelta event feed object for this topic
+     */
     private async addPeersToTopic(topicHash: string, feed: Lambdadelta) {
         const addPromises: Promise<boolean>[] = []
         for (const [peerID, peer] of this.peers) {
@@ -349,6 +403,10 @@ export class LDNode {
         this.swarm.join(this.topicHash(topic, "DHT"))
     }
 
+    /**
+     * Announce our participation in a topic feed to our peers.
+     * @param topic The topic we intend to participate in.
+     */
     private async publishTopic(topic: string) {
         const feed = this.getTopic(topic)
         if (!feed) throw new Error("Publishing inexistent topic")
@@ -382,6 +440,10 @@ export class LDNode {
         return true
     }
 
+    /**
+     * Join new topic(s) and find peers for them
+     * @param topics The list of topics we want to join
+     */
     public async join(topics: string[]) {
         this.log.info(`Joining topics: ${topics.join(',')}`)
         await Promise.all(topics.map(topic => this._join(topic)))
@@ -390,12 +452,27 @@ export class LDNode {
         await Promise.all(topics.map(topic => this.publishTopic(topic)))
     }
 
+    /**
+     * Leave topic(s) we have previously joined
+     * @param topics The list of topics we want to leave
+     */
     public async leave(topics: string[]) {
         const nRemoved = (await Promise.all(topics.map(topic => this._leave(topic)))).filter(r => r).length
         this.log.info(`Left ${nRemoved} topic(s)`)
         await this.swarm.flush()
     }
 
+    /**
+     * Returns a namespaced identifier for a given topic and namespace.
+     * Ensures that different applications based on this library, 
+     * as well as incompatible versions of the same app,
+     * will generate different hashes for the same topic.
+     * Topic hashes are used by nodes in order to find each other through the DHT.
+     * Thanks to this, incompatible nodes will not try to connect to each other.
+     * @param topic Topic name
+     * @param namespace Namespace for the hash
+     * @returns A hash commitment to this topic
+     */
     private topicHash(topic: string, namespace: string) {
         return crypto
             .createHash('sha256')
