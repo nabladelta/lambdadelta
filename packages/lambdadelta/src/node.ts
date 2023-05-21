@@ -6,8 +6,8 @@ import path from 'path'
 import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
-import { RLN, deserializeProof, RLNGFullProof, serializeProof } from '@bernkastel/rln'
-import { Lambdadelta } from './lambdadelta'
+import { RLN, deserializeProof, RLNGFullProof, serializeProof, VerificationResult } from '@bernkastel/rln'
+import { ContentVerificationResult, HeaderVerificationError, Lambdadelta } from './lambdadelta'
 import { decrypt, deserializeTopicData, encrypt, errorHandler, getMemberCIDEpoch, serializeTopicData } from './utils'
 import { Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
@@ -44,6 +44,7 @@ export class LDNode {
 
     private peers: Map<string, NodePeerData>
     private memberCIDs: Map<string, string> // MCID => peerID
+    private bannedMCIDs: Map<string, VerificationResult | HeaderVerificationError | ContentVerificationResult | undefined>
 
     private topicsBee: Hyperbee<string, Buffer>
     public topicFeeds: Map<string, Lambdadelta> // Topic => feed
@@ -60,6 +61,7 @@ export class LDNode {
         this.memberCIDs = new Map()
         this.pendingHandshakes = new Map()
         this.topicNames = new Map()
+        this.bannedMCIDs = new Map()
 
         this.log = logger || new Logger({
             prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
@@ -236,6 +238,13 @@ export class LDNode {
         this.log.info(`Received MemberCID from ${peerID.slice(-6)}`)
 
         peer.memberCID = proof.signal
+
+        if (this.bannedMCIDs.has(peer.memberCID)) {
+            peer.info.ban()
+            peer.info.reconnect()
+            throw new Error("Banned peer")
+        }
+
         const beeCore = this.corestore.get(proofBuf[1])
         if (!await Hyperbee.isHyperbee(beeCore)) {
             throw new Error("Invalid hyperbee")
@@ -249,6 +258,13 @@ export class LDNode {
         this.log.info(`Accepted MemberCID from ${peerID.slice(-6)}`)
         await this.syncTopics(peerID)
         return true
+    }
+
+    private async fatalSyncError(peerID: string, error: VerificationResult | HeaderVerificationError | ContentVerificationResult) {
+        const peer = this.getPeer(peerID)
+        this.bannedMCIDs.set(peerID, error)
+        peer.info.ban()
+        peer.info.reconnect()
     }
 
     private async syncTopics(peerID: string) {
@@ -325,6 +341,7 @@ export class LDNode {
             this.corestore,
             this.rln!
         )
+        feed.on('syncFatalError', (peerId, error) => {this.fatalSyncError(peerId, error)})
         await feed.ready()
 
         this.topicFeeds.set(topicHash, feed)

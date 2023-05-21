@@ -591,8 +591,8 @@ declare module 'hyperswarm' {
     get server(): boolean
     get prioritized(): boolean
 
-    reconnect(val: any): void
-    ban(val: any): void
+    reconnect(val?: any): void
+    ban(val?: any): void
   }
 
   class Hyperswarm extends TypedEmitter<{

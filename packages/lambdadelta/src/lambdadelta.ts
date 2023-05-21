@@ -98,7 +98,7 @@ interface PeerData {
     _onappend: () => Promise<void>
 }
 
-enum ContentVerificationResult {
+export enum ContentVerificationResult {
     VALID,
     UNAVAILABLE,
     SIZE,
@@ -106,7 +106,7 @@ enum ContentVerificationResult {
     INVALID
 }
 
-enum HeaderVerificationError {
+export enum HeaderVerificationError {
     HASH_MISMATCH = 16, // Make sure we don't overlap with other enums
     UNEXPECTED_RLN_IDENTIFIER,
     UNEXPECTED_MESSAGE_LIMIT,
