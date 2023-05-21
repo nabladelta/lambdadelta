@@ -140,6 +140,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
     private peers: Map<string, PeerData> // peerID => Hypercore
 
+    private lastUsedMessageId: { [type: string]: Map<string, number>[] } // EventType => [nullifier => messageId]
+
     constructor(topic: string, corestore: Corestore, rln: RLN) {
         super()
         this.topic = topic
@@ -156,6 +158,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
         this.core = this.corestore.get({ name: `${topic}-received` })
         this.drive = new Hyperdrive(this.corestore.namespace('drive'))
+        this.lastUsedMessageId = {}
         this.registerTypes()
     }
 
@@ -864,12 +867,23 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             throw new Error("Unknown event type")
         }
         const nulls: nullifierInput[] = []
-        for (let spec of specs) {
-            nulls.push({
-                nullifier: `${getEpoch(spec.epoch)}|${eventType}`,
-                messageLimit: spec.messageLimit,
+        for (let i = 0; i < specs.length; i++) {
+            
+            const input = {
+                nullifier: `${getEpoch(specs[i].epoch)}|${eventType}`,
+                messageLimit: specs[i].messageLimit,
                 messageId: 1
-            })
+            }
+            const lastId = this.lastUsedMessageId[eventType][i].get(input.nullifier)
+            if (lastId) {
+                input.messageId = lastId + 1
+            }
+            if (input.messageId > input.messageLimit) {
+                throw new Error("Message limit reached")
+            }
+            nulls.push(input)
+
+            this.lastUsedMessageId[eventType][i].set(input.nullifier, input.messageId)
         }
         return nulls
     }
@@ -918,6 +932,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     public addEventType(eventType: string, specs: NullifierSpec[], maxContentSize: number) {
         this.nullifierSpecs.set(eventType, specs)
         this.maxContentSize.set(eventType, maxContentSize)
+        this.lastUsedMessageId[eventType] = specs.map((_) => new Map())
     }
 
     /**
