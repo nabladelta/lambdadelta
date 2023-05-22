@@ -269,7 +269,7 @@ export class LDNode {
 
         if (this.bannedMCIDs.has(peer.memberCID)) {
             peer.info.ban()
-            peer.info.reconnect()
+            peer.connection.stream.destroy()
             throw new Error("Banned peer")
         }
 
@@ -297,7 +297,7 @@ export class LDNode {
         const peer = this.getPeer(peerID)
         this.bannedMCIDs.set(peerID, error)
         peer.info.ban()
-        peer.info.reconnect()
+        peer.connection.stream.destroy()
     }
 
     /**
