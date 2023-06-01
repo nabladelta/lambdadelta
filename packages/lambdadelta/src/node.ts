@@ -12,6 +12,7 @@ import { decrypt, deserializeTopicData, encrypt, errorHandler, getMemberCIDEpoch
 import { Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 import Hyperbee from 'hyperbee'
+import { TypedEmitter } from 'tiny-typed-emitter'
 
 const DATA_FOLDER = 'data'
 const GROUP_FILE = 'testGroup.json'
@@ -27,8 +28,33 @@ interface NodePeerData {
     localMemberCID?: string
     info: PeerInfo
 }
+export enum HandshakeErrorCode {
+    DoubleHandshake,
+    DuplicateHandshake,
+    FailedDeserialization,
+    DuplicateMemberCID,
+    InvalidProof,
+    BannedPeer,
+    InvalidHyperbee,
+    SyncFailure
+}
 
-export class LDNode {
+class HandshakeError extends Error {
+    public code: HandshakeErrorCode
+    public peerID: string
+    constructor(message: string, code: HandshakeErrorCode, peerID: string) {
+      super(message)
+      Object.setPrototypeOf(this, HandshakeError.prototype)
+      this.code = code
+      this.peerID = peerID
+    }
+}
+
+interface LDNodeEvents {
+    'handshakeFailure': (code: HandshakeErrorCode, peerID: string) => void
+}
+
+export class LDNode extends TypedEmitter<LDNodeEvents> {
     public static appID = "LDD"
     public static protocolVersion = "1"
 
@@ -54,6 +80,7 @@ export class LDNode {
     private _ready: Promise<void>
 
     constructor(secret: string, groupID: string, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
+        super()
         this.secret = secret
         this.groupID = groupID
         this.topicFeeds = new Map()
@@ -202,7 +229,11 @@ export class LDNode {
 
         const handshakeSender = channel.addMessage({
             encoding: c.array(c.buffer),
-            async onmessage(proof: Buffer[], _: any) { await errorHandler(self.recvHandshake(peerID, proof), self.log) }})
+            async onmessage(proof: Buffer[], _: any) { 
+                    await self.handleHandshakeError(
+                        self.recvHandshake(peerID, proof)
+                    )
+            }})
 
         this.peers.set(peerID, { info, topics: new Set(), connection: {stream, handshakeSender} })
         this.sendHandshake(peerID)
@@ -232,6 +263,7 @@ export class LDNode {
     private async recvHandshake(peerID: string, proofBuf: Buffer[]) {
         if (this.pendingHandshakes.has(peerID)) {            
             this.pendingHandshakes.delete(peerID)
+            this.emit('handshakeFailure', HandshakeErrorCode.DoubleHandshake, peerID)
             throw new Error("Received double handshake")
         } 
 
@@ -253,24 +285,20 @@ export class LDNode {
         const peer = this.getPeer(peerID)
 
         if (peer.memberCID) {
-            this.log.error(`Received duplicate handshake from ${peerID.slice(-6)}`)
-            throw new Error("Duplicate handshake")
+            throw new HandshakeError(`Received duplicate handshake from ${peerID.slice(-6)}`, HandshakeErrorCode.DuplicateHandshake, peerID)
         }
         let proof
         try {
             proof = deserializeProof(proofBuf[0])
         } catch {
-            this.log.error(`Failed to deserialize proof from ${peerID.slice(-6)}`)
-            throw new Error("Invalid handshake")
+            throw new HandshakeError(`Failed to deserialize proof from ${peerID.slice(-6)}`, HandshakeErrorCode.FailedDeserialization, peerID)
         }
         if (this.memberCIDs.has(proof.signal)) {
-            this.log.error(`Received duplicate MemberCID from ${peerID.slice(-6)}`)
-            throw new Error("Invalid handshake")
+            throw new HandshakeError(`Received duplicate MemberCID from ${peerID.slice(-6)}`, HandshakeErrorCode.DuplicateMemberCID, peerID)
         }
         const result = await verifyMemberCIDProof(proof, peer.connection.stream, this.rln!)
         if (!result) {
-            this.log.error(`Received invalid MemberCID from ${peerID.slice(-6)}`)
-            throw new Error("Invalid handshake")
+            throw new HandshakeError(`Received invalid MemberCID from ${peerID.slice(-6)}`, HandshakeErrorCode.InvalidProof, peerID)
         }
 
         this.log.info(`Received MemberCID from ${peerID.slice(-6)}`)
@@ -280,12 +308,12 @@ export class LDNode {
         if (this.bannedMCIDs.has(peer.memberCID)) {
             peer.info.ban(true)
             peer.connection.stream.destroy()
-            throw new Error("Banned peer")
+            throw new HandshakeError("Banned peer", HandshakeErrorCode.BannedPeer, peerID)
         }
 
         const beeCore = this.corestore.get(proofBuf[1])
         if (!await Hyperbee.isHyperbee(beeCore)) {
-            throw new Error("Invalid hyperbee")
+            throw new HandshakeError("Invalid hyperbee", HandshakeErrorCode.InvalidHyperbee, peerID)
         }
         peer.topicsBee = new Hyperbee(beeCore, {
             valueEncoding: 'binary',
@@ -294,8 +322,24 @@ export class LDNode {
 
         this.memberCIDs.set(peer.memberCID, peerID)
         this.log.info(`Accepted MemberCID from ${peerID.slice(-6)}`)
-        await this.syncTopics(peerID)
+        try {
+            await this.syncTopics(peerID)
+        } catch (e) {
+            throw new HandshakeError((e as any).message, HandshakeErrorCode.SyncFailure, peerID)
+        }
         return true
+    }
+
+    private async handleHandshakeError(promise: Promise<any>) {
+        try {
+            return await promise
+        } catch (e) {
+            if (e instanceof HandshakeError) {
+                this.emit("handshakeFailure", e.code, e.peerID)
+            }
+            this.log.error((e as any).message)
+            throw e
+        }
     }
     /**
      * Handler for a fatal synchronization error from an event feed.
