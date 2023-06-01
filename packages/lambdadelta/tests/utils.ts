@@ -64,7 +64,7 @@ export async function nodeSetup() {
         if (existsSync(GROUP_FILE)) rmSync(GROUP_FILE, {force: true})
         await Promise.all([testnet.destroy(), anode.destroy(), bnode.destroy(), cnode.destroy()])
     }
-    return {anode, bnode, cnode, nodes, destroy}
+    return {anode, bnode, cnode, nodes, destroy, bootstrap: testnet.bootstrap}
 }
 
 
