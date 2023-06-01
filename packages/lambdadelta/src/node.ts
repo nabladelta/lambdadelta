@@ -230,10 +230,14 @@ export class LDNode {
      * @param proofBuf Buffer containing the RLN zkSnarks proof for the handshake
      */
     private async recvHandshake(peerID: string, proofBuf: Buffer[]) {
-        if (this.pendingHandshakes.has(peerID)) throw new Error("Received double handshake")
+        if (this.pendingHandshakes.has(peerID)) {            
+            this.pendingHandshakes.delete(peerID)
+            throw new Error("Received double handshake")
+        } 
 
         const handshakePromise = this.handleHandshake(peerID, proofBuf)
         this.pendingHandshakes.set(peerID, handshakePromise)
+        handshakePromise.catch(() => { this.pendingHandshakes.delete(peerID) })
         await handshakePromise
         this.pendingHandshakes.delete(peerID)
     }
@@ -252,7 +256,13 @@ export class LDNode {
             this.log.error(`Received duplicate handshake from ${peerID.slice(-6)}`)
             throw new Error("Duplicate handshake")
         }
-        const proof = deserializeProof(proofBuf[0])
+        let proof
+        try {
+            proof = deserializeProof(proofBuf[0])
+        } catch {
+            this.log.error(`Failed to deserialize proof from ${peerID.slice(-6)}`)
+            throw new Error("Invalid handshake")
+        }
         if (this.memberCIDs.has(proof.signal)) {
             this.log.error(`Received duplicate MemberCID from ${peerID.slice(-6)}`)
             throw new Error("Invalid handshake")
