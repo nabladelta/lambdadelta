@@ -268,7 +268,7 @@ export class LDNode {
         peer.memberCID = proof.signal
 
         if (this.bannedMCIDs.has(peer.memberCID)) {
-            peer.info.ban()
+            peer.info.ban(true)
             peer.connection.stream.destroy()
             throw new Error("Banned peer")
         }
@@ -296,7 +296,7 @@ export class LDNode {
     private async fatalSyncError(peerID: string, error: VerificationResult | HeaderVerificationError | ContentVerificationResult) {
         const peer = this.getPeer(peerID)
         this.bannedMCIDs.set(peerID, error)
-        peer.info.ban()
+        peer.info.ban(true)
         peer.connection.stream.destroy()
     }
 

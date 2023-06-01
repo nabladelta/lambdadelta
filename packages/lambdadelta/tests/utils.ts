@@ -9,7 +9,8 @@ export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 const GROUP_FILE = 'testData.json'
 
-export async function nodeSetup() {let anode: LDNode
+export async function nodeSetup() {
+    let anode: LDNode
     let bnode: LDNode
     let cnode: LDNode
 
