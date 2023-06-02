@@ -54,7 +54,7 @@ export interface NullifierSpec {
     messageLimit: number
 }
 
-interface TopicEvents {
+export interface TopicEvents {
     'peerAdded': (peerID: string) => void
     'peerRemoved': (peerID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void

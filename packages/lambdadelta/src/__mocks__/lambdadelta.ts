@@ -1,11 +1,13 @@
 import { RLN } from "@bernkastel/rln";
 import Corestore from "corestore";
-import { FeedEventHeader, NullifierSpec } from "../lambdadelta";
+import { FeedEventHeader, NullifierSpec, TopicEvents } from "../lambdadelta";
+import { TypedEmitter } from "tiny-typed-emitter";
 
-export class Lambdadelta {
+export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private peers: Set<string>
     public topic: string
     constructor(topic: string, corestore: Corestore, rln: RLN) {
+        super()
         this.peers = new Set()
         this.topic = topic
     }
