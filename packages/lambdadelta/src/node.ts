@@ -231,7 +231,8 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
             encoding: c.array(c.buffer),
             async onmessage(proof: Buffer[], _: any) {
                     await self.handleHandshakeError(
-                        self.recvHandshake(peerID, proof)
+                        self.recvHandshake(peerID, proof),
+                        stream
                     )
             }})
 
@@ -334,15 +335,15 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
         return true
     }
 
-    private async handleHandshakeError(promise: Promise<any>) {
+    private async handleHandshakeError(promise: Promise<any>, stream: NoiseSecretStream) {
         try {
             return await promise
         } catch (e) {
             if (e instanceof HandshakeError) {
                 this.emit("handshakeFailure", e.code, e.peerID)
             }
-            this.log.error((e as any).message)
-            throw e
+            this.log.error(`Failed handshake: ${(e as any).message}`)
+            stream.destroy()
         }
     }
     /**
@@ -378,8 +379,8 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
      * @param peerID ID of the peer
      */
     private async continuousTopicSync(peerID: string) {
-        const peer = this.getPeer(peerID)
         try {
+            const peer = this.getPeer(peerID)
             for await (const { key, type, value } of peer.topicsBee!
                     .createHistoryStream({ gte: -1, live: true })) {
                 const feed = this.topicFeeds.get(key)

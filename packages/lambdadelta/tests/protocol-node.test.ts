@@ -137,22 +137,71 @@ describe('LDNode', () => {
             localPeerId)
     })
 
-    it('Rejects wrong bee core ID', async () => {
+    it('Rejects double handshake', async () => {
         jest.spyOn(anode, 'emit')
         await anode.join([T])
 
         const secretB = 'secret1secret1secret2'
         const localPeerId = await fakeNode(secretB,    
-            async (_: Buffer[], stream: any, info: PeerInfo, rln: RLN, handshakeSender: any) => {
+            async (proof: Buffer[], stream: any, info: PeerInfo, rln: RLN, handshakeSender: any) => {
                 const ourProof = await generateMemberCID(secretB, stream, rln)
                 const proofBuf = serializeProof(ourProof)
-                handshakeSender.send([proofBuf, Buffer.from('a')])
+                handshakeSender.send([proofBuf, proof[1]])
+                handshakeSender.send([proofBuf, proof[1]])
                 info.ban(true)
         })
         await sleep(3000)
         expect(anode.emit).toHaveBeenCalledWith(
             "handshakeFailure",
-            HandshakeErrorCode.InvalidHyperbee,
+            HandshakeErrorCode.DoubleHandshake,
             localPeerId)
+    })
+
+    it('Rejects second handshake', async () => {
+        jest.spyOn(anode, 'emit')
+        await anode.join([T])
+
+        const secretB = 'secret1secret1secret2'
+        const localPeerId = await fakeNode(secretB,    
+            async (proof: Buffer[], stream: any, info: PeerInfo, rln: RLN, handshakeSender: any) => {
+                const ourProof = await generateMemberCID(secretB, stream, rln)
+                const proofBuf = serializeProof(ourProof)
+                handshakeSender.send([proofBuf, proof[1]])
+                await sleep(3000)
+                handshakeSender.send([proofBuf, proof[1]])
+                info.ban(true)
+        })
+        await sleep(5000)
+        expect(anode.emit).toHaveBeenCalledWith(
+            "handshakeFailure",
+            HandshakeErrorCode.DuplicateHandshake,
+            localPeerId)
+    })
+
+    it.only('Rejects duplicate memberCID', async () => {
+        jest.spyOn(anode, 'emit')
+        await anode.join([T])
+        const secretB = 'secret1secret1secret2'
+        const localPeerIdB = await fakeNode(secretB,    
+            async (proof: Buffer[], stream: any, info: PeerInfo, rln: RLN, handshakeSender: any) => {
+                const ourProof = await generateMemberCID(secretB, stream, rln)
+                const proofBuf = serializeProof(ourProof)
+                handshakeSender.send([proofBuf, proof[1]])
+                info.ban(true)
+        })
+        await sleep(2000)
+        const localPeerIdC = await fakeNode(secretB,    
+            async (proof: Buffer[], stream: any, info: PeerInfo, rln: RLN, handshakeSender: any) => {
+                const ourProof = await generateMemberCID(secretB, stream, rln)
+                const proofBuf = serializeProof(ourProof)
+                handshakeSender.send([proofBuf, proof[1]])
+                info.ban(true)
+        })
+
+        await sleep(3000)
+        expect(anode.emit).toHaveBeenCalledWith(
+            "handshakeFailure",
+            HandshakeErrorCode.DuplicateMemberCID,
+            localPeerIdC)
     })
 })
