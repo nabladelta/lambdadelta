@@ -63,7 +63,8 @@ export interface TopicEvents {
             peerID: string,
             error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
     'syncEventResult': (
-            peerID: string, 
+            peerID: string,
+            eventID: string,
             headerResult: VerificationResult | HeaderVerificationError,
             contentResult: ContentVerificationResult | undefined) => void
     'syncContentResult': (peerID: string, contentResult: ContentVerificationResult) => void
@@ -475,7 +476,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             headerResult = results.headerResult
             contentResult = results.contentResult
             claimedTime = results.claimedTime
-            this.emit('syncEventResult', peerID, results.headerResult, results.contentResult)
+            this.emit('syncEventResult', peerID, eventID, results.headerResult, results.contentResult)
 
         } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
             // In this case we have the header, but we are missing the content
