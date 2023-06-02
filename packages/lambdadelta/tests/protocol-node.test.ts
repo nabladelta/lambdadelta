@@ -178,7 +178,7 @@ describe('LDNode', () => {
             localPeerId)
     })
 
-    it.only('Rejects duplicate memberCID', async () => {
+    it('Rejects duplicate memberCID', async () => {
         jest.spyOn(anode, 'emit')
         await anode.join([T])
         const secretB = 'secret1secret1secret2'
