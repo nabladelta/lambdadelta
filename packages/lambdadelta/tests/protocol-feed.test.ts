@@ -361,7 +361,7 @@ describe('Event feed', () => {
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.HASH_MISMATCH)
     })
 
-    it.only('Handles content size mismatch', async () => {
+    it('Handles content size mismatch', async () => {
         const topic = "a"
         const eventTypePost = "POST"
         const postNullifierSpec: NullifierSpec = {
