@@ -229,7 +229,7 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
 
         const handshakeSender = channel.addMessage({
             encoding: c.array(c.buffer),
-            async onmessage(proof: Buffer[], _: any) { 
+            async onmessage(proof: Buffer[], _: any) {
                     await self.handleHandshakeError(
                         self.recvHandshake(peerID, proof)
                     )
@@ -261,11 +261,11 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
      * @param proofBuf Buffer containing the RLN zkSnarks proof for the handshake
      */
     private async recvHandshake(peerID: string, proofBuf: Buffer[]) {
-        if (this.pendingHandshakes.has(peerID)) {            
+        if (this.pendingHandshakes.has(peerID)) {
             this.pendingHandshakes.delete(peerID)
             this.emit('handshakeFailure', HandshakeErrorCode.DoubleHandshake, peerID)
             throw new Error("Received double handshake")
-        } 
+        }
 
         const handshakePromise = this.handleHandshake(peerID, proofBuf)
         this.pendingHandshakes.set(peerID, handshakePromise)
@@ -311,14 +311,18 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
             throw new HandshakeError("Banned peer", HandshakeErrorCode.BannedPeer, peerID)
         }
 
-        const beeCore = this.corestore.get(proofBuf[1])
-        if (!await Hyperbee.isHyperbee(beeCore)) {
-            throw new HandshakeError("Invalid hyperbee", HandshakeErrorCode.InvalidHyperbee, peerID)
+        try {
+            const beeCore = this.corestore.get(proofBuf[1])
+            if (!await Hyperbee.isHyperbee(beeCore)) {
+                throw new HandshakeError("Invalid hyperbee", HandshakeErrorCode.InvalidHyperbee, peerID)
+            }
+            peer.topicsBee = new Hyperbee(beeCore, {
+                valueEncoding: 'binary',
+                keyEncoding: 'utf-8'
+            })
+        } catch (e) {
+            throw new HandshakeError(`Invalid hyperbee (${(e as any).message})`, HandshakeErrorCode.InvalidHyperbee, peerID)
         }
-        peer.topicsBee = new Hyperbee(beeCore, {
-            valueEncoding: 'binary',
-            keyEncoding: 'utf-8'
-        })
 
         this.memberCIDs.set(peer.memberCID, peerID)
         this.log.info(`Accepted MemberCID from ${peerID.slice(-6)}`)
