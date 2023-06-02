@@ -4,6 +4,7 @@ import { FileProvider } from "./providers/file"
 import { generateProof, nullifierInput, RLNGFullProof, verifyProof } from "./rln"
 import { getZKFiles } from "./utils/files"
 import { retrieveSecret } from "./utils/recovery"
+import { GroupData, MemoryProvider } from "./providers/memory"
 
 export enum VerificationResult {
     VALID,
@@ -42,6 +43,11 @@ export class RLN {
 
     public static async load(secret: string, filename: string): Promise<RLN> {
         const provider = await FileProvider.load(filename)
+        return new RLN(provider, secret)
+    }
+
+    public static async loadMemory(secret: string, groupData: GroupData) {
+        const provider = await MemoryProvider.load(groupData)
         return new RLN(provider, secret)
     }
 

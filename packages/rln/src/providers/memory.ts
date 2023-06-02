@@ -2,16 +2,16 @@ import { readFile, writeFile } from "fs/promises"
 import { GroupDataProvider, GroupEvent } from "./dataProvider"
 import poseidon from 'poseidon-lite'
 
-export interface Group {
+export interface GroupData {
     id: string,
     treeDepth: number,
     groupEvents: GroupEvent[]
 }
 
 export class MemoryProvider extends GroupDataProvider {
-    private groupData: Group
+    private groupData: GroupData
 
-    private constructor(gid: string, treeDepth: number, groupData: Group) {
+    private constructor(gid: string, treeDepth: number, groupData: GroupData) {
         super(gid, treeDepth)
         this.groupData = groupData
     }
@@ -24,13 +24,13 @@ export class MemoryProvider extends GroupDataProvider {
         return [undefined, undefined]
     }
 
-    public static async load(groupData: Group) {
+    public static async load(groupData: GroupData) {
         const provider = new MemoryProvider(groupData.id, groupData.treeDepth, groupData)
         await provider.update()
         return provider
     }
 
-    public static write(groupEvents: GroupEvent[], groupData: Group | undefined) {        
+    public static write(groupEvents: GroupEvent[], groupData: GroupData | undefined) {        
         if (!groupData) groupData = {id: "1", treeDepth: 20, groupEvents: []}
         groupData.groupEvents = groupData.groupEvents.concat(groupEvents)
         return groupData
