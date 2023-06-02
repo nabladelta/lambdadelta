@@ -40,5 +40,20 @@ describe('Member CID', () => {
         expect(await verifyMemberCIDProof(proofB, mockStreamA, rln)).toEqual(true) // Duplicate should not be a problem
         expect(await verifyMemberCIDProof(proofA, mockStreamB, rlnB)).toEqual(true) // From the perspective of being B
         expect(await verifyMemberCIDProof(proofA, mockStreamB, rlnB)).toEqual(true) // Duplicate should not be a problem
+        const signal = proofA.signal
+        proofA.signal = "test"
+        expect(await verifyMemberCIDProof(proofA, mockStreamB, rlnB)).toEqual(false) // Should detect the issue
+        proofA.signal = signal
+        expect(await verifyMemberCIDProof(proofA, mockStreamB, rlnB)).toEqual(true)
+        proofA.rlnIdentifier = "0"
+        expect(await verifyMemberCIDProof(proofA, mockStreamB, rlnB)).toEqual(false) // Should detect the issue
+        proofA.rlnIdentifier = "1000"
+        expect(await verifyMemberCIDProof(proofA, mockStreamB, rlnB)).toEqual(true)
+        proofA.externalNullifiers[0].messageLimit = 2
+        expect(await verifyMemberCIDProof(proofA, mockStreamB, rlnB)).toEqual(false) // Should detect the issue
+        proofA.externalNullifiers[0].messageLimit = 1
+        proofA.externalNullifiers[0].nullifier = "test"
+        expect(await verifyMemberCIDProof(proofA, mockStreamB, rlnB)).toEqual(false) // Should detect the issue
+
     })
 })
