@@ -331,7 +331,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             contentResult: ContentVerificationResult | undefined
         ) {
 
-        if (headerResult !== undefined) {
+        if (headerResult !== undefined && headerResult !== VerificationResult.VALID) {
             if (headerResult === HeaderVerificationError.UNAVAILABLE) {
                 return true
             }
@@ -340,7 +340,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return false
         }
 
-        if (contentResult !== undefined) {
+        if (contentResult !== undefined && contentResult !== ContentVerificationResult.VALID) {
             if (contentResult === ContentVerificationResult.UNAVAILABLE) {
                 return true
             }
