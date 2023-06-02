@@ -119,7 +119,7 @@ describe('LDNode', () => {
                 async onmessage(proof: Buffer[], _: any) {
                     handshakeSender.send(proof)
                     info.ban(true)
-            }})            
+            }})
         })
 
         swarm.join(topicHash(T, "DHT"))
