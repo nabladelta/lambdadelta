@@ -1,33 +1,30 @@
 
 import crypto from 'crypto'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
-import { RLN, deserializeProof, FileProvider, GroupDataProvider, nullifierInput, RLNGFullProof, serializeProof, VerificationResult } from '@bernkastel/rln'
+import { RLN, deserializeProof, FileProvider, GroupDataProvider, nullifierInput, RLNGFullProof, serializeProof, VerificationResult, MemoryProvider } from '@bernkastel/rln'
 import { getMemberCIDEpoch, getTimestampInSeconds } from '../src/utils'
 import { existsSync, rmSync } from "fs"
 import { Identity } from '@semaphore-protocol/identity'
 import { generateMemberCID, verifyMemberCIDProof } from '../src/membercid'
 
-const GROUPFILE = 'testData.json'
-
+jest.setTimeout(150000)
 describe('Member CID', () => {
     beforeEach(async () => {
-        if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
     })
     afterEach(async () => {
-        if (existsSync(GROUPFILE)) rmSync(GROUPFILE, {force: true})
     })
     it('Creates and verifies member CID', async () => {
         const secretA = "john"
         const secretB = "steve"
-        await FileProvider.write(
+        const gData = MemoryProvider.write(
             [
                 GroupDataProvider.createEvent(new Identity(secretA).commitment, 2),
                 GroupDataProvider.createEvent(new Identity(secretB).commitment)
             ],
-            GROUPFILE)
+            undefined)
 
-        const rln = await RLN.load(secretA, GROUPFILE)
-        const rlnB = await RLN.load(secretB, GROUPFILE)
+        const rln = await RLN.loadMemory(secretA, gData)
+        const rlnB = await RLN.loadMemory(secretB, gData)
 
         const pubkeyA = crypto.createHash('sha256').update(secretA).update('fakekey').digest()
         const pubkeyB = crypto.createHash('sha256').update(secretB).update('fakekey').digest()

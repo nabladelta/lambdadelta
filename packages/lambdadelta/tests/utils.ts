@@ -1,4 +1,4 @@
-import { FileProvider, GroupDataProvider } from "@bernkastel/rln";
+import { FileProvider, GroupDataProvider, MemoryProvider, RLN } from "@bernkastel/rln";
 import { LDNode } from "../src/node";
 import { Identity } from "@semaphore-protocol/identity";
 import { existsSync, rmSync } from "fs";
@@ -6,8 +6,6 @@ import createTestnet from "@hyperswarm/testnet";
 import { Logger } from "tslog";
 
 export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
-const GROUP_FILE = 'testData.json'
 
 export async function nodeSetup() {
     let anode: LDNode
@@ -21,13 +19,13 @@ export async function nodeSetup() {
     const secretA = 'secret1secret1secret1'
     const secretB = 'secret1secret1secret2'
     const secretC = 'secret1secret1secret3'
-    await FileProvider.write(
+    const gData = MemoryProvider.write(
     [
         GroupDataProvider.createEvent(new Identity(secretA).commitment, 2),
         GroupDataProvider.createEvent(new Identity(secretB).commitment),
         GroupDataProvider.createEvent(new Identity(secretC).commitment, 5)
-    ],
-    GROUP_FILE)
+    ], undefined)
+
     let mapping: Map<string, string> = new Map()
     const mainLogger = new Logger({
         prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
@@ -50,9 +48,9 @@ export async function nodeSetup() {
     const logC = mainLogger.getSubLogger({name: 'node C'})
     const gid = 'AAA'
     const testnet = await createTestnet(3)
-    anode = new LDNode(secretA, gid, {logger: logA, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
-    bnode = new LDNode(secretB, gid, {logger: logB, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
-    cnode = new LDNode(secretC, gid, {logger: logC, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+    anode = new LDNode(secretA, gid, await RLN.loadMemory(secretA, gData), {logger: logA, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+    bnode = new LDNode(secretB, gid, await RLN.loadMemory(secretB, gData), {logger: logB, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+    cnode = new LDNode(secretC, gid, await RLN.loadMemory(secretC, gData), {logger: logC, memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
 
     mapping.set(anode.peerId.slice(-6), "A")
     mapping.set(bnode.peerId.slice(-6), "B")
@@ -61,10 +59,9 @@ export async function nodeSetup() {
     await Promise.all([anode.ready(), bnode.ready(), cnode.ready()])
     nodes = [anode, bnode, cnode]
     destroy = async() => {
-        if (existsSync(GROUP_FILE)) rmSync(GROUP_FILE, {force: true})
         await Promise.all([testnet.destroy(), anode.destroy(), bnode.destroy(), cnode.destroy()])
     }
-    return {anode, bnode, cnode, nodes, destroy, bootstrap: testnet.bootstrap}
+    return {anode, bnode, cnode, nodes, destroy, bootstrap: testnet.bootstrap, groupData: gData}
 }
 
 

@@ -1,7 +1,7 @@
 import 'jest'
 import { LDNode } from '../src/node'
 import { findMissingPeers, findMissingPeersInFeed, findMissingTopics, nodeSetup, sleep } from './utils'
-import { RLN, VerificationResult, serializeProof } from '@bernkastel/rln'
+import { GroupData, RLN, VerificationResult, serializeProof } from '@bernkastel/rln'
 import crypto from 'crypto'
 import Hyperswarm, { PeerInfo } from 'hyperswarm'
 import Protomux from 'protomux'
@@ -34,6 +34,7 @@ describe('LDNode', () => {
 
     let destroy: () => Promise<void>
     let bootstrap: any
+    let groupData: GroupData
     beforeEach(async () => {
         const data = await nodeSetup()
         bootstrap = data.bootstrap
@@ -42,6 +43,7 @@ describe('LDNode', () => {
         cnode = data.cnode
         nodes = data.nodes
         destroy = data.destroy
+        groupData = data.groupData
     })
 
     afterEach(async () => {
@@ -57,7 +59,7 @@ describe('LDNode', () => {
             .update("0")
             .digest()
         const GROUP_FILE = 'testGroup.json'
-        const rln = await RLN.load(secret, GROUP_FILE)
+        const rln = await RLN.loadMemory(secret, groupData)
         const swarm = new Hyperswarm({ seed: swarmKeySeed, bootstrap})
         const localPeerId = swarm.keyPair.publicKey.toString('hex')
         swarm.on('connection', (stream: any, info: PeerInfo) => {

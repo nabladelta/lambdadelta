@@ -15,7 +15,6 @@ import Hyperbee from 'hyperbee'
 import { TypedEmitter } from 'tiny-typed-emitter'
 
 const DATA_FOLDER = 'data'
-const GROUP_FILE = 'testGroup.json'
 
 interface NodePeerData {
     connection: {
@@ -79,7 +78,7 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
     private pendingHandshakes: Map<string, Promise<boolean>>
     private _ready: Promise<void>
 
-    constructor(secret: string, groupID: string, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
+    constructor(secret: string, groupID: string, rln: RLN, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
         super()
         this.secret = secret
         this.groupID = groupID
@@ -114,7 +113,6 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
         this.swarm = new Hyperswarm({ seed: swarmKeySeed, ...swarmOpts})
         this.swarm.on('connection', this.handlePeer.bind(this))
         this.peerId = this.swarm.keyPair.publicKey.toString('hex')
-        const rln = RLN.load(this.secret, GROUP_FILE)
         this._ready = (async () => { this.rln = await rln })()
     }
 
