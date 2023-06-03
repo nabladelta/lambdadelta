@@ -20,6 +20,12 @@ jest.setTimeout(120000)
 describe('Event feed', () => {
     let peerA: { rln: RLN, mcid: string, corestore: Corestore}
     let peerB: { rln: RLN, mcid: string, corestore: Corestore}
+    const topic = 'a'
+    const eventTypePost = "POST"
+    const postNullifierSpec: NullifierSpec = {
+        messageLimit: 1,
+        epoch: 1
+    }
 
     beforeEach(async () => {
         const secretA = "secret1secret1secret1"
@@ -69,12 +75,6 @@ describe('Event feed', () => {
     }
 
     it('Rejects duplicate events', async () => {
-        const topic = "a"
-        const eventTypePost = "POST"
-        const postNullifierSpec: NullifierSpec = {
-            messageLimit: 1,
-            epoch: 1
-        }
         const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
@@ -95,12 +95,6 @@ describe('Event feed', () => {
     })
 
     it('Handles missing headers gracefully', async () => {
-        const topic = "a"
-        const eventTypePost = "POST"
-        const postNullifierSpec: NullifierSpec = {
-            messageLimit: 1,
-            epoch: 1
-        }
         const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
@@ -142,12 +136,6 @@ describe('Event feed', () => {
     })
 
     it('Handles missing content gracefully', async () => {
-        const topic = "a"
-        const eventTypePost = "POST"
-        const postNullifierSpec: NullifierSpec = {
-            messageLimit: 1,
-            epoch: 1
-        }
         const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
@@ -208,12 +196,6 @@ describe('Event feed', () => {
     })
 
     it('Handles reused proof', async () => {
-        const topic = "a"
-        const eventTypePost = "POST"
-        const postNullifierSpec: NullifierSpec = {
-            messageLimit: 1,
-            epoch: 1
-        }
         const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
@@ -271,12 +253,6 @@ describe('Event feed', () => {
     })
 
     it('Handles header hash mismatch', async () => {
-        const topic = "a"
-        const eventTypePost = "POST"
-        const postNullifierSpec: NullifierSpec = {
-            messageLimit: 1,
-            epoch: 1
-        }
         const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
@@ -315,12 +291,6 @@ describe('Event feed', () => {
     })
 
     it('Handles content hash mismatch', async () => {
-        const topic = "a"
-        const eventTypePost = "POST"
-        const postNullifierSpec: NullifierSpec = {
-            messageLimit: 1,
-            epoch: 1
-        }
         const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
@@ -359,12 +329,6 @@ describe('Event feed', () => {
     })
 
     it('Handles content size mismatch', async () => {
-        const topic = "a"
-        const eventTypePost = "POST"
-        const postNullifierSpec: NullifierSpec = {
-            messageLimit: 1,
-            epoch: 1
-        }
         const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
@@ -400,5 +364,46 @@ describe('Event feed', () => {
         await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.SIZE)
+    })
+
+    it.only('Can fetch content and header separately', async () => {
+        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
+        // jest.spyOn(feedA, 'emit')
+        patchEmitter(feedA)
+        feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
+        const fake = await fakeFeed(topic, peerB)
+        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
+        const nullifiers = feedA['createNullifier'](eventTypePost)
+        let id1
+        {
+            const [{
+                eventType,
+                proof,
+                claimed,
+                contentHash
+            },
+            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test6"))
+            const header = {
+                eventType,
+                proof,
+                claimed,
+                contentHash
+            }
+            const ebuf = serializeEvent(header)
+            await fake.drive.put(`/events/${eventID}/header`, ebuf)
+            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
+            await fake.core.append(entry)
+            await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
+            await sleep(2000)
+            await fake.drive.put(`/events/${eventID}/content`, Buffer.from("test6"))
+            await feedA.removePeer(peerB.mcid)
+            await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
+            id1 = eventID
+        }
+        await sleep(2000)
+        // expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
+        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
+        // expect(feedA.emit).toHaveBeenCalledWith('peerRemoved', peerB.mcid)
+        // expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.VALID)
     })
 })
