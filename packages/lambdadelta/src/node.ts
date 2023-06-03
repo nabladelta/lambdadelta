@@ -442,16 +442,26 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
         this.log.info(`Added a topic from ${nAdded} peers`)
     }
 
+    /**
+     * Creates a new Lambdadelta instance.
+     * Override to replace with a class that inherits from it.
+     * @param topicHash topich for this feed
+     * @returns A new Lambdadelta instance
+     */
+    protected newFeed(topicHash: string): Lambdadelta {
+        return new Lambdadelta(
+            topicHash,
+            this.corestore,
+            this.rln!
+        )
+    }
+
     private async _join(topic: string) {
         if (topic.length == 0) return false
         if (this.topicFeeds.has(topic)) return false
 
         const topicHash = this.topicHash(topic, 'index').toString('hex')
-        const feed = new Lambdadelta(
-            topicHash,
-            this.corestore,
-            this.rln!
-        )
+        const feed = this.newFeed(topicHash)
         feed.on('syncFatalError', (peerId, error) => {this.fatalSyncError(peerId, error)})
         await feed.ready()
 
