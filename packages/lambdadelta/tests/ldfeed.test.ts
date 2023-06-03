@@ -57,31 +57,36 @@ describe('Event feed', () => {
 
         expect(await feedA.getCoreLength()).toEqual(1)
         expect(await feedB.getCoreLength()).toEqual(1)
-        feedA.on('syncEventReceivedTime', async (cid, eventID, result) => {
-            console.log(`[A]: ${cid} ${eventID} ${result}`)
-        })
-        feedB.on('syncEventReceivedTime', async (cid, eventID, result) => {
-            console.log(`[B]: ${cid} ${eventID} ${result}`)
-        })
+        // feedA.on('syncEventReceivedTime', async (cid, eventID, result) => {
+        //     console.log(`[A]: ${cid} ${eventID} ${result}`)
+        // })
+        // feedB.on('syncEventReceivedTime', async (cid, eventID, result) => {
+        //     console.log(`[B]: ${cid} ${eventID} ${result}`)
+        // })
 
-        feedA.on('publishReceivedTime', async (eventID, time) => {
-            console.log(`[A]: EID: ${eventID} Time:  ${time}`)
-        })
+        // feedA.on('publishReceivedTime', async (eventID, time) => {
+        //     console.log(`[A]: EID: ${eventID} Time:  ${time}`)
+        // })
+
+
         feedB.on('publishReceivedTime', async (eventID, time) => {
             const event = await feedB.getEventByID(eventID)
             expect(event?.header.eventType).toEqual(eventTypePost)
-            console.log(`[B]: EID: ${eventID} Time: ${time}`)
+            // console.log(`[B]: EID: ${eventID} Time: ${time}`)
         })
 
         await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
-        // Adding twice has no effect
-        await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
+        // Adding twice should have no effect
+        const added = await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
+        expect(added).toEqual(false)
+
         await feedB.addPeer(peerA.mcid, feedA.getCoreIDs()[0], feedA.getCoreIDs()[1])
         let eventsA = (await feedA.getEvents()).map(e => e.content.toString('utf-8'))
         let eventsB = (await feedB.getEvents()).map(e => e.content.toString('utf-8'))
-        
+
         expect(eventsA.length).toEqual(2)
         expect(eventsB.length).toEqual(2)
+
         expect(await feedA.getCoreLength()).toEqual(2)
         expect(await feedB.getCoreLength()).toEqual(2)
 
