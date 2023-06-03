@@ -81,9 +81,13 @@ describe('Event feed', () => {
             console.log(`[A]: EID: ${eventID} Time:  ${time}`)
         })
         feedB.on('publishReceivedTime', async (eventID, time) => {
+            const event = await feedB.getEventByID(eventID)
+            expect(event?.header.eventType).toEqual(eventTypePost)
             console.log(`[B]: EID: ${eventID} Time: ${time}`)
         })
 
+        await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
+        // Adding twice has no effect
         await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
         await feedB.addPeer(peerA.mcid, feedA.getCoreIDs()[0], feedA.getCoreIDs()[1])
         let eventsA = (await feedA.getEvents()).map(e => e.content.toString('utf-8'))
@@ -110,4 +114,34 @@ describe('Event feed', () => {
             expect(eventsA[i]).toEqual(eventsB[i])
         }
     })
+
+    it("Throws on unknown peer", () => {
+        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
+        expect(() => feedA['getPeer']('test')).toThrow
+    })
+
+    it("Sets and unsets times", () => {
+        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
+        feedA['setTime']('test', 100)
+        feedA['setTime']('test2', 100)
+        feedA['unsetTime']('test1')
+    })
+
+    it("Calls onInvalidInput with just undefined", () => {
+        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
+        expect(feedA['onInvalidInput']('test', undefined, undefined)).toBe(true)
+    })
+
+    it("Handles index confusion", () => {
+        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
+        expect(() => feedA['onDuplicateInput']('test', 'test', 0, undefined)).toThrow
+        expect(() => feedA['onDuplicateInput']('test', 'test', 1, 1)).toThrow
+    })
+
+    it("Consensus time calculation", () => {
+        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
+        expect(Math.floor(feedA['calculateConsensusTime']([10, 100, 1000, 0], 4))).toEqual(36)
+        expect(feedA['calculateConsensusTime']([0, 1, 1000, 1001], 4)).toEqual(500.5)
+    })
+
 })
