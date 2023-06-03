@@ -201,9 +201,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private setTime(eventID: string, time: number) {
         const prevTime = this.eidTime.get(eventID)
         if (prevTime) { // Already existing key
-            if (!this.timeline.delete(prevTime)){
-                throw new Error("Key was missing from timeline")
-            }
+            this.timeline.delete(prevTime)
         }
         let newTime = time * 1000 // Convert to ms
         while(!this.timeline.setIfNotPresent(newTime, eventID)) {
@@ -221,9 +219,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private unsetTime(eventID: string) {
         const prevTime = this.eidTime.get(eventID)
         if (prevTime !== undefined) { // Already existing key
-            if (!this.timeline.delete(prevTime)){
-                throw new Error("Key was missing from timeline")
-            }
+            this.timeline.delete(prevTime)
         }
         this.eidTime.delete(eventID)
         return prevTime
@@ -366,14 +362,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             eventID: string,
             index: number,
             prevIndex: number | undefined) {
-        
-        const peer = this.getPeer(peerID)
         if (index === prevIndex && index !== undefined && prevIndex !== undefined) {
             throw new Error("Scanned same index entry twice")
         }
         if (prevIndex === undefined) {
             throw new Error("Index confusion")
         }
+        const peer = this.getPeer(peerID)
 
         const entryBufA: Buffer = await peer.feedCore.get(prevIndex, {timeout: TIMEOUT})
         const entryA = deserializeFeedEntry(entryBufA)
@@ -414,10 +409,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns boolean indicating whether the synchronization completed successfully
      */
     private async syncPeer(peerID: string, initialSync: boolean): Promise<boolean> {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unknown peer")
-        }
+        const peer = this.getPeer(peerID)
 
         if (!initialSync && !peer.finishedInitialSync) {
             return false
@@ -457,10 +449,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns boolean indicating whether we should continue synchronizing events from this peer or stop
      */
     private async syncEntry(peerID: string, i: number, initialSync: boolean): Promise<boolean> {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unknown peer")
-        }
+        const peer = this.getPeer(peerID)
 
         const entryBuf: Buffer = await peer.feedCore.get(i, {timeout: TIMEOUT})
         const entry = deserializeFeedEntry(entryBuf)
@@ -577,10 +566,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             contentHash = eventHeader.contentHash
             claimedTime = eventHeader.claimed
         }
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unkown peer")
-        }
+        const peer = this.getPeer(peerID)
         const entry = await peer.drive.entry(`/events/${eventID}/content`)
         if (!entry) {
             return { contentResult: ContentVerificationResult.UNAVAILABLE, claimedTime }
