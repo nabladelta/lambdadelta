@@ -20,6 +20,8 @@ jest.setTimeout(120000)
 describe('Event feed', () => {
     let peerA: { rln: RLN, mcid: string, corestore: Corestore}
     let peerB: { rln: RLN, mcid: string, corestore: Corestore}
+    let feedA: Lambdadelta
+
     const topic = 'a'
     const eventTypePost = "POST"
     const postNullifierSpec: NullifierSpec = {
@@ -39,22 +41,11 @@ describe('Event feed', () => {
 
         const rln = await RLN.loadMemory(secretA, gData)
         const rlnB = await RLN.loadMemory(secretB, gData)
-
-        const pubkeyA = crypto.createHash('sha256').update(secretA).update('fakekey').digest()
-        const pubkeyB = crypto.createHash('sha256').update(secretB).update('fakekey').digest()
-        const mockStreamA: NoiseSecretStream = {publicKey: pubkeyA, remotePublicKey: pubkeyB} as NoiseSecretStream // Stream from persp. of A
-        const mockStreamB: NoiseSecretStream = {publicKey: pubkeyB, remotePublicKey: pubkeyA} as NoiseSecretStream // Stream from persp. of B
-
-        const proofA = await generateMemberCID(secretA, mockStreamA, rln)
-        const proofB = await generateMemberCID(secretB, mockStreamB, rlnB)
-
         const corestoreA = new Corestore(ram, {primaryKey: Buffer.from(secretA)})
-        corestoreA.replicate(true)
-        peerA = {rln, mcid: proofA.signal, corestore: corestoreA}
-        peerB = {rln: rlnB, mcid: proofB.signal, corestore: corestoreA.namespace('b')}
-    })
 
-    afterEach(async () => {
+        peerA = {rln, mcid: "MCID-A", corestore: corestoreA}
+        peerB = {rln: rlnB, mcid: "MCID-B", corestore: corestoreA.namespace('b')}
+        feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
     })
 
     const fakeFeed = async (topic: string, conf: { rln: RLN, mcid: string, corestore: Corestore}) => {
@@ -64,6 +55,16 @@ describe('Event feed', () => {
         await drive.ready()
         return {core, drive, ids: [core.key!.toString('hex'), drive.key.toString('hex')]}
     }
+
+    const createEvent = async(content: string, nullifiers?: nullifierInput[]) => {
+        nullifiers = nullifiers || feedA['createNullifier'](eventTypePost)
+        const [header,
+        eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from(content))
+        const headerBuf = serializeEvent(header)
+        const entryBuf = serializeFeedEntry({eventID, received: header.claimed, oldestIndex: 0})
+        return {header, headerBuf, entryBuf, eventID}
+    }
+
     const patchEmitter = (emitter: TypedEmitter) => {
         var oldEmit = emitter.emit;
       
@@ -75,7 +76,6 @@ describe('Event feed', () => {
     }
 
     it('Rejects duplicate events', async () => {
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
@@ -95,37 +95,19 @@ describe('Event feed', () => {
     })
 
     it('Handles missing headers gracefully', async () => {
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
         const fake = await fakeFeed(topic, peerB)
-        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
-        const nullifiers = feedA['createNullifier'](eventTypePost)
         let id1, id2
         {
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test5"))
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
+            const {entryBuf, eventID} = await createEvent("test1")
+            await fake.core.append(entryBuf)
             id1 = eventID
         }
-
         {
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test6"))
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
+            const {entryBuf, eventID} = await createEvent("test2")
+            await fake.core.append(entryBuf)
             id2 = eventID
         }
         await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
@@ -136,55 +118,22 @@ describe('Event feed', () => {
     })
 
     it('Handles missing content gracefully', async () => {
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-        const fake = await fakeFeed(topic, peerB)
-        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
-        
+        const fake = await fakeFeed(topic, peerB)        
         let id1, id2
         {
-            const nullifiers = feedA['createNullifier'](eventTypePost)
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test6"))
-            const header = {
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            }
-            const ebuf = serializeEvent(header)
-            await fake.drive.put(`/events/${eventID}/header`, ebuf)
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
+            const {eventID, entryBuf, headerBuf, header} = await createEvent("test1")
+            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
+            await fake.core.append(entryBuf)
             id1 = eventID
         }
         await sleep(1000)
         {
-            const nullifiers = feedA['createNullifier'](eventTypePost)
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test7"))
-            const header = {
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            }
-            const ebuf = serializeEvent(header)
-            await fake.drive.put(`/events/${eventID}/header`, ebuf)
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
+            const {eventID, entryBuf, headerBuf, header} = await createEvent("test2")
+            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
+            await fake.core.append(entryBuf)
             id2 = eventID
         }
 
@@ -195,92 +144,45 @@ describe('Event feed', () => {
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id2, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
     })
 
-    it('Handles reused proof', async () => {
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
+    it('Handles reused nullifier', async () => {
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
         const fake = await fakeFeed(topic, peerB)
-        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
         const nullifiers = feedA['createNullifier'](eventTypePost)
         let id1, id2
         {
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test6"))
-            const header = {
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            }
-            const ebuf = serializeEvent(header)
-            await fake.drive.put(`/events/${eventID}/header`, ebuf)
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
+            const {eventID, entryBuf, headerBuf, header} = await createEvent("test1", nullifiers)
+            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
+            await fake.core.append(entryBuf)
             id1 = eventID
         }
         {
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test7"))
-            const header = {
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            }
-            const ebuf = serializeEvent(header)
-            await fake.drive.put(`/events/${eventID}/header`, ebuf)
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
+            const {eventID, entryBuf, headerBuf, header} = await createEvent("test2", nullifiers)
+            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
+            await fake.core.append(entryBuf)
             id2 = eventID
         }
 
         await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
-        await sleep(5000)
+        await sleep(3000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id2, HeaderVerificationError.UNEXPECTED_NULLIFIER, undefined)
     })
 
     it('Handles header hash mismatch', async () => {
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
         const fake = await fakeFeed(topic, peerB)
-        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
-        const nullifiers = feedA['createNullifier'](eventTypePost)
-        let claimedTime
         let id1
         {
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test6"))
-            const header = {
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            }
-            header.claimed = 0
-            const ebuf = serializeEvent(header)
-            await fake.drive.put(`/events/${eventID}/header`, ebuf)
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
+            const {eventID, entryBuf, header} = await createEvent("test1")
+            header.claimed = header.claimed - 50
+            const headerBuf = serializeEvent(header)
+            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
+            await fake.core.append(entryBuf)
             id1 = eventID
         }
 
@@ -291,34 +193,16 @@ describe('Event feed', () => {
     })
 
     it('Handles content hash mismatch', async () => {
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
         const fake = await fakeFeed(topic, peerB)
-        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
-        const nullifiers = feedA['createNullifier'](eventTypePost)
-        let claimedTime
         let id1
         {
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test6"))
-            const header = {
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            }
-            const ebuf = serializeEvent(header)
-            await fake.drive.put(`/events/${eventID}/header`, ebuf)
+            const {eventID, entryBuf, headerBuf, header} = await createEvent("test1")
+            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
             await fake.drive.put(`/events/${eventID}/content`, Buffer.from("test7"))
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
+            await fake.core.append(entryBuf)
             id1 = eventID
         }
 
@@ -329,34 +213,17 @@ describe('Event feed', () => {
     })
 
     it('Handles content size mismatch', async () => {
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1)
         const fake = await fakeFeed(topic, peerB)
-        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
-        const nullifiers = feedA['createNullifier'](eventTypePost)
-        let claimedTime
         let id1
         {
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test6"))
-            const header = {
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            }
-            const ebuf = serializeEvent(header)
-            await fake.drive.put(`/events/${eventID}/header`, ebuf)
+            const {eventID, entryBuf, headerBuf, header} = await createEvent("test6")
+
+            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
             await fake.drive.put(`/events/${eventID}/content`, Buffer.from("test6"))
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
+            await fake.core.append(entryBuf)
             id1 = eventID
         }
 
@@ -364,46 +231,5 @@ describe('Event feed', () => {
         await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.SIZE)
-    })
-
-    it.only('Can fetch content and header separately', async () => {
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
-        // jest.spyOn(feedA, 'emit')
-        patchEmitter(feedA)
-        feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-        const fake = await fakeFeed(topic, peerB)
-        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
-        const nullifiers = feedA['createNullifier'](eventTypePost)
-        let id1
-        {
-            const [{
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            },
-            eventID] = await feedA['createEvent'](eventTypePost, nullifiers, Buffer.from("test6"))
-            const header = {
-                eventType,
-                proof,
-                claimed,
-                contentHash
-            }
-            const ebuf = serializeEvent(header)
-            await fake.drive.put(`/events/${eventID}/header`, ebuf)
-            const entry = serializeFeedEntry({eventID, received: claimed, oldestIndex: 0})
-            await fake.core.append(entry)
-            await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
-            await sleep(2000)
-            await fake.drive.put(`/events/${eventID}/content`, Buffer.from("test6"))
-            await feedA.removePeer(peerB.mcid)
-            await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
-            id1 = eventID
-        }
-        await sleep(2000)
-        // expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
-        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
-        // expect(feedA.emit).toHaveBeenCalledWith('peerRemoved', peerB.mcid)
-        // expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.VALID)
     })
 })
