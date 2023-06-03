@@ -1,7 +1,7 @@
 import { LDNode, Lambdadelta }  from "@bernkastel/lambdadelta"
 import { BulletinBoard } from "./board"
 
-class BBNode extends LDNode {
+export class BBNode extends LDNode {
     public static appID = "BBS"
     public static protocolVersion = "1"
 

@@ -1,3 +1,4 @@
-export function isEven(n: number): boolean {
-    return n % 2 === 0
-}
+import { BBNode } from "./node";
+import { BulletinBoard } from "./board";
+
+export { BBNode, BulletinBoard }
