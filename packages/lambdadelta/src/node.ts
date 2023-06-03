@@ -8,7 +8,7 @@ import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, deserializeProof, RLNGFullProof, serializeProof, VerificationResult } from '@bernkastel/rln'
 import { ContentVerificationResult, HeaderVerificationError, Lambdadelta } from './lambdadelta'
-import { decrypt, deserializeTopicData, encrypt, errorHandler, getMemberCIDEpoch, serializeTopicData } from './utils'
+import { decrypt, deserializeTopicData, encrypt, getMemberCIDEpoch, serializeTopicData } from './utils'
 import { Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 import Hyperbee from 'hyperbee'
