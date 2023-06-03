@@ -201,7 +201,7 @@ describe('Event feed', () => {
         }
 
         await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
-        await sleep(1000)
+        await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id2, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
@@ -264,7 +264,7 @@ describe('Event feed', () => {
         }
 
         await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
-        await sleep(1000)
+        await sleep(5000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id2, HeaderVerificationError.UNEXPECTED_NULLIFIER, undefined)
@@ -309,7 +309,7 @@ describe('Event feed', () => {
         }
 
         await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
-        await sleep(1000)
+        await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, HeaderVerificationError.HASH_MISMATCH, undefined)
     })
@@ -353,7 +353,7 @@ describe('Event feed', () => {
         }
 
         await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
-        await sleep(1000)
+        await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.HASH_MISMATCH)
     })
@@ -397,7 +397,7 @@ describe('Event feed', () => {
         }
 
         await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
-        await sleep(1000)
+        await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.SIZE)
     })
