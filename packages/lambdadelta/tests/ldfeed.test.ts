@@ -16,6 +16,15 @@ jest.setTimeout(120000)
 describe('Event feed', () => {
     let peerA: { rln: RLN, mcid: string, corestore: any}
     let peerB: { rln: RLN, mcid: string, corestore: any}
+    let feedA: Lambdadelta
+    let feedB: Lambdadelta
+
+    const topic = "a"
+    const eventTypePost = "POST"
+    const postNullifierSpec: NullifierSpec = {
+        messageLimit: 1,
+        epoch: 1
+    }
 
     beforeEach(async () => {
         const secretA = "secret1secret1secret1"
@@ -30,42 +39,20 @@ describe('Event feed', () => {
         const rln = await RLN.loadMemory(secretA, gData)
         const rlnB = await RLN.loadMemory(secretB, gData)
 
-        const pubkeyA = crypto.createHash('sha256').update(secretA).update('fakekey').digest()
-        const pubkeyB = crypto.createHash('sha256').update(secretB).update('fakekey').digest()
-        const mockStreamA: NoiseSecretStream = {publicKey: pubkeyA, remotePublicKey: pubkeyB} as NoiseSecretStream // Stream from persp. of A
-        const mockStreamB: NoiseSecretStream = {publicKey: pubkeyB, remotePublicKey: pubkeyA} as NoiseSecretStream // Stream from persp. of B
-
-        const proofA = await generateMemberCID(secretA, mockStreamA, rln)
-        const proofB = await generateMemberCID(secretB, mockStreamB, rlnB)
-
         const corestoreA = new Corestore(ram, {primaryKey: Buffer.from(secretA)})
-        const corestoreB = new Corestore(ram, {primaryKey: Buffer.from(secretB)})
-        const s1 = corestoreA.replicate(true)
-        const s2 = corestoreB.replicate(false)
 
-        s1.pipe(s2).pipe(s1)
-        peerA = {rln, mcid: proofA.signal, corestore: corestoreA}
-        peerB = {rln: rlnB, mcid: proofB.signal, corestore: corestoreA.namespace('b')}
-    })
+        peerA = {rln, mcid: "MCID-A", corestore: corestoreA}
+        peerB = {rln: rlnB, mcid: "MCID-B", corestore: corestoreA.namespace('b')}
 
-    afterEach(async () => {
+        feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
+        feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
+
+        feedB = new Lambdadelta(topic, peerB.corestore, peerB.rln)
+        feedB.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
     })
 
     it('Replicates events', async () => {
-        const topic = "a"
-        const eventTypePost = "POST"
-        const postNullifierSpec: NullifierSpec = {
-            messageLimit: 1,
-            epoch: 1
-        }
-        const feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
-        feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-
-        const feedB = new Lambdadelta(topic, peerB.corestore, peerB.rln)
-        feedB.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-
         await feedA.newEvent(eventTypePost, Buffer.from("test1"))
-
         await feedB.newEvent(eventTypePost, Buffer.from("test2"))
 
         expect(await feedA.getCoreLength()).toEqual(1)
@@ -116,30 +103,27 @@ describe('Event feed', () => {
     })
 
     it("Throws on unknown peer", () => {
-        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
         expect(() => feedA['getPeer']('test')).toThrow
     })
 
     it("Sets and unsets times", () => {
-        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
         feedA['setTime']('test', 100)
         feedA['setTime']('test2', 100)
         feedA['unsetTime']('test1')
+        expect(feedA['timeline'].has(100000)).toEqual(true)
+        expect(feedA['timeline'].has(100001)).toEqual(true)
     })
 
     it("Calls onInvalidInput with just undefined", () => {
-        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
         expect(feedA['onInvalidInput']('test', undefined, undefined)).toBe(true)
     })
 
     it("Handles index confusion", () => {
-        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
         expect(() => feedA['onDuplicateInput']('test', 'test', 0, undefined)).toThrow
         expect(() => feedA['onDuplicateInput']('test', 'test', 1, 1)).toThrow
     })
 
     it("Consensus time calculation", () => {
-        const feedA = new Lambdadelta('a', peerA.corestore, peerA.rln)
         expect(Math.floor(feedA['calculateConsensusTime']([10, 100, 1000, 0], 4))).toEqual(36)
         expect(feedA['calculateConsensusTime']([0, 1, 1000, 1001], 4)).toEqual(500.5)
     })
