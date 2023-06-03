@@ -930,6 +930,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      */
     public async newEvent(eventType: string, content: Buffer) {
         const [event, eventID] = await this.createEvent(eventType, this.createNullifier(eventType), content)
+        if (!(await this.validateContent(eventID, eventType, content))) {
+            return false
+        }
         await this.drive.put(`/events/${eventID}/content`, content)
         const result = await this.addEvent(event)
         if (result == VerificationResult.VALID) {
