@@ -296,7 +296,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         peer.feedCore.removeListener('append', peer._onappend)
         this.peers.delete(peerID)
-        await peer.drive.close()
+        // await peer.drive.close() TODO: investigate issues
         await peer.feedCore.close()
         // Remove peer's received timestamps contributions
         for (let [eventID, _] of peer.events) {
