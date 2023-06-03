@@ -232,4 +232,30 @@ describe('Event feed', () => {
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.SIZE)
     })
+
+    it('Can fetch content and header separately', async () => {
+        // jest.spyOn(feedA, 'emit')
+        patchEmitter(feedA)
+        feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
+        const mockFeed = await createMockFeed(topic, peerB)
+        await feedA.newEvent(eventTypePost, Buffer.from("test1"))
+        const nullifiers = feedA['createNullifier'](eventTypePost)
+        let id1
+        {
+            const {eventID, entryBuf, headerBuf, header} = await createEvent("test6")
+            await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
+            await mockFeed.core.append(entryBuf)
+            await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
+            await sleep(2000)
+            await mockFeed.drive.put(`/events/${eventID}/content`, Buffer.from("test6"))
+            await feedA.removePeer(peerB.mcid)
+            await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
+            id1 = eventID
+        }
+        await sleep(2000)
+        // expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
+        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
+        // expect(feedA.emit).toHaveBeenCalledWith('peerRemoved', peerB.mcid)
+        // expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.VALID)
+    })
 })
