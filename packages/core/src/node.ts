@@ -9,4 +9,3 @@ export class BBNode extends LDNodeBase<BulletinBoard> {
         return new BulletinBoard(topicHash, this.corestore, this.rln!)
     }
 }
-

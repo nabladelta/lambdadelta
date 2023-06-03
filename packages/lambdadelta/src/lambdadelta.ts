@@ -161,6 +161,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.drive = new Hyperdrive(this.corestore.namespace('drive'))
         this.lastUsedMessageId = {}
         this.registerTypes()
+        this.on('timelineAddEvent', this.onTimelineAddEvent)
+        this.on('timelineRemoveEvent', this.onTimelineAddEvent)
     }
 
     protected registerTypes() {
@@ -169,6 +171,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             messageLimit: 1
         }
         this.addEventType("POST", [spec, spec], 4096)
+    }
+
+    protected onTimelineAddEvent(eventID: string, time: number, consensusTime: number) {
+
+    }
+
+    protected onTimelineRemoveEvent(eventID: string, time: number, consensusTime: number) {
+        
     }
 
     public async ready() {
