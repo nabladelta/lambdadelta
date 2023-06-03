@@ -4,6 +4,8 @@ import { Identity } from "@semaphore-protocol/identity"
 import { Logger } from "tslog"
 import createTestnet from "@hyperswarm/testnet"
 
+export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 export async function nodeSetup() {
     let anode: BBNode
     let bnode: BBNode

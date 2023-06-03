@@ -9,7 +9,7 @@
         "esModuleInterop": true,
         "skipLibCheck": true,
         "forceConsistentCasingInFileNames": true,
-        "rootDir": "./src",
+        "rootDir": "./",
         "outDir": "./build",
         "composite": true
     }
