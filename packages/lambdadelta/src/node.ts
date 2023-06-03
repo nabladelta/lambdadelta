@@ -53,7 +53,7 @@ interface LDNodeEvents {
     'handshakeFailure': (code: HandshakeErrorCode, peerID: string) => void
 }
 
-export class LDNode extends TypedEmitter<LDNodeEvents> {
+export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<LDNodeEvents> {
     public static appID = "LDD"
     public static protocolVersion = "1"
 
@@ -72,7 +72,7 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
     private bannedMCIDs: Map<string, VerificationResult | HeaderVerificationError | ContentVerificationResult | undefined>
 
     private topicsBee: Hyperbee<string, Buffer>
-    public topicFeeds: Map<string, Lambdadelta> // Topic => feed
+    public topicFeeds: Map<string, Feed> // Topic => feed
     private topicNames: Map<string, string>
 
     private pendingHandshakes: Map<string, Promise<boolean>>
@@ -416,7 +416,7 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
      * @param feed Lambdadelta event feed object for this topic
      * @returns True if the peer was added successfully, false if the peer is not participating in the topic.
      */
-    private async syncTopicData(peerID: string, topicHash: string, feed: Lambdadelta) {
+    private async syncTopicData(peerID: string, topicHash: string, feed: Feed) {
         const peer = this.getPeer(peerID)
         const result = await peer.topicsBee?.get(topicHash)
         if (!result) {
@@ -433,7 +433,7 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
      * @param topicHash Hash for the topic
      * @param feed Lambdadelta event feed object for this topic
      */
-    private async addPeersToTopic(topicHash: string, feed: Lambdadelta) {
+    private async addPeersToTopic(topicHash: string, feed: Feed) {
         const addPromises: Promise<boolean>[] = []
         for (const [peerID, peer] of this.peers) {
             addPromises.push(this.syncTopicData(peerID, topicHash, feed))
@@ -448,13 +448,7 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
      * @param topicHash topich for this feed
      * @returns A new Lambdadelta instance
      */
-    protected newFeed(topicHash: string): Lambdadelta {
-        return new Lambdadelta(
-            topicHash,
-            this.corestore,
-            this.rln!
-        )
-    }
+    protected abstract newFeed(topicHash: string): Feed
 
     private async _join(topic: string) {
         if (topic.length == 0) return false
@@ -548,5 +542,15 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
             .update(this.groupID)
             .update(namespace)
             .update(topic).digest()
+    }
+}
+
+export class LDNode extends LDNodeBase<Lambdadelta> {
+    protected newFeed(topicHash: string) {
+        return new Lambdadelta(
+            topicHash,
+            this.corestore,
+            this.rln!
+        )
     }
 }
