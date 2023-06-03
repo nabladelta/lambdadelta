@@ -65,7 +65,7 @@ export class LDNode extends TypedEmitter<LDNodeEvents> {
     private log: Logger<unknown>
     private swarm: Hyperswarm
     public corestore: Corestore
-    private rln?: RLN
+    protected rln?: RLN
 
     private peers: Map<string, NodePeerData>
     private memberCIDs: Map<string, string> // MCID => peerID
