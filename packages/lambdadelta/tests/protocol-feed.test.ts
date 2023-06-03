@@ -48,7 +48,7 @@ describe('Event feed', () => {
         feedA = new Lambdadelta(topic, peerA.corestore, peerA.rln)
     })
 
-    const fakeFeed = async (topic: string, conf: { rln: RLN, mcid: string, corestore: Corestore}) => {
+    const createMockFeed = async (topic: string, conf: { rln: RLN, mcid: string, corestore: Corestore}) => {
         const core = conf.corestore.get({ name: `${topic}-received` })
         const drive = new Hyperdrive(conf.corestore.namespace('drive'))
         await core.ready()
@@ -79,14 +79,14 @@ describe('Event feed', () => {
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-        const fake = await fakeFeed(topic, peerB)
+        const mockFeed = await createMockFeed(topic, peerB)
         await feedA.newEvent(eventTypePost, Buffer.from("test1"))
         const [coreAkey, driveAkey] = feedA.getCoreIDs()
         const coreA = peerB.corestore.get(b4a.from(coreAkey, 'hex'))
         const entry0 = await coreA.get(0)
-        await fake.core.append(entry0)
-        await fake.core.append(entry0)
-        await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
+        await mockFeed.core.append(entry0)
+        await mockFeed.core.append(entry0)
+        await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         const entryData = deserializeFeedEntry(entry0)
         await sleep(5000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
@@ -98,19 +98,19 @@ describe('Event feed', () => {
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-        const fake = await fakeFeed(topic, peerB)
+        const mockFeed = await createMockFeed(topic, peerB)
         let id1, id2
         {
             const {entryBuf, eventID} = await createEvent("test1")
-            await fake.core.append(entryBuf)
+            await mockFeed.core.append(entryBuf)
             id1 = eventID
         }
         {
             const {entryBuf, eventID} = await createEvent("test2")
-            await fake.core.append(entryBuf)
+            await mockFeed.core.append(entryBuf)
             id2 = eventID
         }
-        await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
+        await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(1000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, HeaderVerificationError.UNAVAILABLE, undefined)
@@ -121,23 +121,23 @@ describe('Event feed', () => {
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-        const fake = await fakeFeed(topic, peerB)        
+        const mockFeed = await createMockFeed(topic, peerB)        
         let id1, id2
         {
             const {eventID, entryBuf, headerBuf, header} = await createEvent("test1")
-            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
-            await fake.core.append(entryBuf)
+            await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
+            await mockFeed.core.append(entryBuf)
             id1 = eventID
         }
         await sleep(1000)
         {
             const {eventID, entryBuf, headerBuf, header} = await createEvent("test2")
-            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
-            await fake.core.append(entryBuf)
+            await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
+            await mockFeed.core.append(entryBuf)
             id2 = eventID
         }
 
-        await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
+        await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
@@ -148,23 +148,23 @@ describe('Event feed', () => {
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-        const fake = await fakeFeed(topic, peerB)
+        const mockFeed = await createMockFeed(topic, peerB)
         const nullifiers = feedA['createNullifier'](eventTypePost)
         let id1, id2
         {
             const {eventID, entryBuf, headerBuf, header} = await createEvent("test1", nullifiers)
-            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
-            await fake.core.append(entryBuf)
+            await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
+            await mockFeed.core.append(entryBuf)
             id1 = eventID
         }
         {
             const {eventID, entryBuf, headerBuf, header} = await createEvent("test2", nullifiers)
-            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
-            await fake.core.append(entryBuf)
+            await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
+            await mockFeed.core.append(entryBuf)
             id2 = eventID
         }
 
-        await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
+        await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(3000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
@@ -175,18 +175,18 @@ describe('Event feed', () => {
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-        const fake = await fakeFeed(topic, peerB)
+        const mockFeed = await createMockFeed(topic, peerB)
         let id1
         {
             const {eventID, entryBuf, header} = await createEvent("test1")
             header.claimed = header.claimed - 50
             const headerBuf = serializeEvent(header)
-            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
-            await fake.core.append(entryBuf)
+            await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
+            await mockFeed.core.append(entryBuf)
             id1 = eventID
         }
 
-        await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
+        await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, HeaderVerificationError.HASH_MISMATCH, undefined)
@@ -196,17 +196,17 @@ describe('Event feed', () => {
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
-        const fake = await fakeFeed(topic, peerB)
+        const mockFeed = await createMockFeed(topic, peerB)
         let id1
         {
             const {eventID, entryBuf, headerBuf, header} = await createEvent("test1")
-            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
-            await fake.drive.put(`/events/${eventID}/content`, Buffer.from("test7"))
-            await fake.core.append(entryBuf)
+            await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
+            await mockFeed.drive.put(`/events/${eventID}/content`, Buffer.from("test7"))
+            await mockFeed.core.append(entryBuf)
             id1 = eventID
         }
 
-        await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
+        await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.HASH_MISMATCH)
@@ -216,18 +216,18 @@ describe('Event feed', () => {
         jest.spyOn(feedA, 'emit')
         // patchEmitter(feedA)
         feedA.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1)
-        const fake = await fakeFeed(topic, peerB)
+        const mockFeed = await createMockFeed(topic, peerB)
         let id1
         {
             const {eventID, entryBuf, headerBuf, header} = await createEvent("test6")
 
-            await fake.drive.put(`/events/${eventID}/header`, headerBuf)
-            await fake.drive.put(`/events/${eventID}/content`, Buffer.from("test6"))
-            await fake.core.append(entryBuf)
+            await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
+            await mockFeed.drive.put(`/events/${eventID}/content`, Buffer.from("test6"))
+            await mockFeed.core.append(entryBuf)
             id1 = eventID
         }
 
-        await feedA.addPeer(peerB.mcid, fake.ids[0], fake.ids[1])
+        await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.SIZE)
