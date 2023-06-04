@@ -9,8 +9,6 @@ const TYPE_THREAD = "THREAD"
 const TYPE_POST = "POST"
 const MAX_THREADS = 256
 
-
-
 export class BulletinBoard extends Lambdadelta {
     private threads: Map<string, Timeline>
     private lastModified: Timeline
