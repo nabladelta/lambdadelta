@@ -71,7 +71,7 @@ describe('LDNode', () => {
         let i = 0
 
         for (const feed of feeds) {
-            expect(await feeds[0].newEvent("POST", messages[i++]))
+            expect((await feeds[0].newEvent("POST", messages[i++])).result)
                 .toEqual(VerificationResult.VALID)
             expect(feed.getPeerList().length).toBe(2)
         }
@@ -106,11 +106,11 @@ describe('LDNode', () => {
         let n = 0
         for (const feed of feeds) {
             messages.push(Buffer.from(`test ${n++}`))
-            expect(await feeds[0].newEvent("POST", messages[n - 1]))
+            expect((await feeds[0].newEvent("POST", messages[n - 1])).result)
                 .toEqual(VerificationResult.VALID)
             await sleep(1100)
             messages.push(Buffer.from(`test ${n++}`))
-            expect(await feeds[0].newEvent("POST", messages[n - 1]))
+            expect((await feeds[0].newEvent("POST", messages[n - 1])).result)
             .toEqual(VerificationResult.VALID)
             expect(feed.getPeerList().length).toBe(2)
         }
