@@ -12,6 +12,7 @@ import { deserializeEvent, deserializeFeedEntry,
     serializeFeedEntry } from './utils'
 import Corestore from 'corestore'
 import Hypercore from 'hypercore'
+import { Timeline } from './timeline'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
@@ -128,8 +129,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     // RLN
     private rln: RLN
 
-    private timeline: BTree<number, string> // Timestamp (ms) => EventID
-    private eidTime: Map<string, number> // EventID => Timestamp (ms)
+    private timeline: Timeline
 
     private core: Hypercore // Hypercore
     private drive: Hyperdrive // Hyperdrive
@@ -149,12 +149,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.rln = rln
         this.oldestIndex = 0
 
-        this.timeline = new BTree()
         this.peers = new Map()
-        this.eidTime = new Map()
         this.nullifierSpecs = new Map()
         this.eventMetadata = new Map()
         this.maxContentSize = new Map()
+
+        this.timeline = new Timeline()
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
         this.core = this.corestore.get({ name: `${topic}-received` })
@@ -202,39 +202,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return peer
     }
 
-    /**
-     * Sets an event's timestamp in the internal timeline
-     * @param time The event's timestamp in seconds
-     * @param eventID ID of the event
-     * @returns The previously saved timestamp (ms), or undefined
-     */
-    private setTime(eventID: string, time: number) {
-        const prevTime = this.eidTime.get(eventID)
-        if (prevTime) { // Already existing key
-            this.timeline.delete(prevTime)
-        }
-        let newTime = time * 1000 // Convert to ms
-        while(!this.timeline.setIfNotPresent(newTime, eventID)) {
-            // Keep trying with a newer time until we find an empty spot
-            newTime++
-        }
-        this.eidTime.set(eventID, newTime)
-        return prevTime
-    }
-    /**
-     * Removes an event from the timeline
-     * @param eventID ID of the event
-     * @returns The previously set time or undefined
-     */
-    private unsetTime(eventID: string) {
-        const prevTime = this.eidTime.get(eventID)
-        if (prevTime !== undefined) { // Already existing key
-            this.timeline.delete(prevTime)
-        }
-        this.eidTime.delete(eventID)
-        return prevTime
-    }
-
+    
     /**
      * Get the IDs of the cores backing this instance
      * @returns [feedCore, driveCore]
@@ -770,7 +738,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         // if the consensus time differs too much from claimed time
         if (Math.abs(eventMetadata.claimed - consensusTime) > CLAIMED_TOLERANCE) {
             // Remove from timeline
-            const prevTime = this.unsetTime(eventID)
+            const prevTime = this.timeline.unsetTime(eventID)
             if (prevTime) {
                 const roundedTime = Math.floor(prevTime / 1000)
                 this.emit('timelineRemoveEvent', eventID, roundedTime, consensusTime)
@@ -780,10 +748,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return
         }
 
-        const currentEventTime = this.eidTime.get(eventID)
+        const currentEventTime = this.timeline.getTime(eventID)
         // Event is not in timeline yet
         if (!currentEventTime) {
-            this.setTime(eventID, eventMetadata.claimed)
+            this.timeline.setTime(eventID, eventMetadata.claimed)
             this.emit('timelineAddEvent', eventID, eventMetadata.claimed, consensusTime)
         }
     }
@@ -962,7 +930,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             const index = await this.publishReceived(eventID, event.claimed)
             eventMetadata.index = index
             this.eventMetadata.set(eventID, eventMetadata)
-            this.setTime(eventID, event.claimed)
+            this.timeline.setTime(eventID, event.claimed)
         }
         return result
     }
@@ -995,16 +963,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             header: FeedEventHeader,
             content: Buffer
         }[]> {
-
-        endTime = endTime || this.timeline.maxKey()
-        if (!endTime) return []
-        let returns = []
-        for (let [_, eventID] of this.timeline.getRange(startTime, endTime, true, maxLength)) {
-            const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
-            const eventHeader: FeedEventHeader = deserializeEvent(eventHeaderBuf!)
-            const contentBuf = await this.drive.get(`/events/${eventID}/content`)
-            returns.push({header: eventHeader, content: contentBuf!})
-        }
-        return returns
+            const events = (await Promise.all(this.timeline.getEvents(startTime, endTime, maxLength, true)
+                    .map(async ([time, eventID]) => await this.getEventByID(eventID))))
+                    .filter(e => e != null)
+            return events as {
+                header: FeedEventHeader,
+                content: Buffer
+            }[]
     }
 }

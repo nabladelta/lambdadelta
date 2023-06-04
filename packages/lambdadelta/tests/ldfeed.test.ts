@@ -9,6 +9,7 @@ import { Lambdadelta } from '../src'
 import Corestore from 'corestore'
 import ram from 'random-access-memory'
 import { NullifierSpec } from '../src/lambdadelta'
+import { Timeline } from '../src/timeline'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -112,11 +113,12 @@ describe('Event feed', () => {
     })
 
     it("Sets and unsets times", () => {
-        feedA['setTime']('test', 100)
-        feedA['setTime']('test2', 100)
-        feedA['unsetTime']('test1')
-        expect(feedA['timeline'].has(100000)).toEqual(true)
-        expect(feedA['timeline'].has(100001)).toEqual(true)
+        const timeline = new Timeline()
+        timeline.setTime('test', 100)
+        timeline.setTime('test2', 100)
+        timeline.unsetTime('test1')
+        expect(timeline['timeline'].has(100000)).toEqual(true)
+        expect(timeline['timeline'].has(100001)).toEqual(true)
     })
 
     it("Calls onInvalidInput with just undefined", () => {
