@@ -65,7 +65,28 @@ export class Timeline {
             .getRange(startTime, endTime, includeHigh, maxLength)
     }
 
+    public entriesReversed() {
+        return this.timeline.entriesReversed()
+    }
+
     public getTime(eventID: string) {
         return this.eidTime.get(eventID)
+    }
+
+    private getMinMax(max: boolean): [number | undefined, string | undefined]  {
+        const time = max ? this.timeline.maxKey() : this.timeline.maxKey()
+        return time ? [time, this.timeline.get(time)] : [undefined, undefined]
+    }
+
+    public getMostRecent(): [number | undefined, string | undefined] {
+        return this.getMinMax(true)
+    }
+
+    public getLeastRecent(): [number | undefined, string | undefined] {
+        return this.getMinMax(false)
+    }
+
+    public getSize() {
+        return this.timeline.size
     }
 }
