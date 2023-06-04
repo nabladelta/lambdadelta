@@ -132,8 +132,8 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
   const post: IPost = req.body.post
   try {
     const threadId = await client.newThread(post)
-    await processAttachment(filestore, req.body.attachments[0], post, threadId)
     if (!threadId) return FailedPost(res)
+    await processAttachment(filestore, req.body.attachments[0], post, threadId)
     const thread = await client.getThreadContent(threadId)
     res.send({success: true, op: threadId, thread: thread})
 
