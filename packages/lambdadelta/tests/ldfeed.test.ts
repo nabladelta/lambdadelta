@@ -115,6 +115,8 @@ describe('Event feed', () => {
     it("Sets and unsets times", () => {
         const timeline = new Timeline()
         timeline.setTime('test', 100)
+        // Should work twice
+        timeline.setTime('test', 100)
         timeline.setTime('test2', 100)
         timeline.unsetTime('test1')
         expect(timeline['timeline'].has(100000)).toEqual(true)
