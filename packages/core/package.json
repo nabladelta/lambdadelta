@@ -2,7 +2,11 @@
   "name": "@bernkastel/core",
   "version": "1.0.0",
   "description": "",
-  "main": "build/index.js",
+  "main": "src/index.ts",
+  "exports": {
+    "import": "./src/index.ts",
+    "require": "./dist/src/index.js"
+  },
   "scripts": {
     "build": "tsc --build"
   },

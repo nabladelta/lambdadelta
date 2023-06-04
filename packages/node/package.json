@@ -30,9 +30,10 @@
     "typescript": "^4.9.5"
   },
   "dependencies": {
+    "@bernkastel/core": "^1.0.0",
+    "@bernkastel/rln": "^1.0.0",
     "@hyperswarm/dht": "^6.5.0",
     "autobase": "github:holepunchto/autobase",
-    "@bernkastel/rln": "^1.0.0",
     "chalk": "^5.2.0",
     "corestore": "^6.5.1",
     "cors": "^2.8.5",
