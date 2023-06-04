@@ -78,7 +78,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
     private pendingHandshakes: Map<string, Promise<boolean>>
     private _ready: Promise<void>
 
-    constructor(secret: string, groupID: string, rln: RLN, {memstore, swarmOpts, logger}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>}) {
+    constructor(secret: string, groupID: string, rln: RLN, {memstore, swarmOpts, logger, dataFolder}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>, dataFolder?: string}) {
         super()
         this.secret = secret
         this.groupID = groupID
@@ -97,7 +97,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
             .update('USR>' + secret)
             .digest('hex')
         this.corestore = new Corestore(
-            memstore ? ram : path.join(DATA_FOLDER, 'users', secretDigest),
+            memstore ? ram : path.join(dataFolder || DATA_FOLDER, 'users', secretDigest),
             {primaryKey: Buffer.from(this.secret)})
         
         this.topicsBee = new Hyperbee(this.corestore.get({name: 'topics'}), {
