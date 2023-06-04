@@ -1,16 +1,19 @@
 import express, { Express, Request, Response } from 'express'
 import cors from 'cors'
-import { BBNode } from './core/node'
 import { fileExists, makeThumbnail, parseFileID, processAttachment } from './lib'
 import path from 'path'
 import fs from 'fs'
 import { DATA_FOLDER, PORT, REQ_SIZE_LIMIT, THUMB_FORMAT, TOPICS } from './constants'
 import { mainLogger } from './core/logger'
+import { nodeSetup } from './setup'
+import { BBNode } from '@bernkastel/core'
+import { Filestore } from './core/filestore'
 
 const log = mainLogger.getSubLogger({name: 'HTTP'})
 
-const node = new BBNode(process.env.SECRET!, process.env.MEMSTORE == 'true')
-node.join(TOPICS.split(',')).then(() => node.init())
+let node: BBNode
+let filestore: Filestore
+nodeSetup(mainLogger).then(n => {node = n.node; filestore = n.filestore})
 
 const app: Express = express()
 
@@ -35,7 +38,7 @@ function FailedException(res: express.Response, message: string) {
 }
 
 app.get('/api/:topic/thread/:id\.:ext?', async (req: Request, res: Response) => {
-    const client = node.boards.get(req.params.topic)
+    const client = node.getTopic(req.params.topic)
     if (!client) return NotFoundError(res)
 
     const thread = await client.getThreadContent(req.params.id)
@@ -44,7 +47,7 @@ app.get('/api/:topic/thread/:id\.:ext?', async (req: Request, res: Response) => 
 })
 
 app.get('/api/:topic/catalog\.:ext?', async (req: Request, res: Response) => {
-  const client = node.boards.get(req.params.topic)
+  const client = node.getTopic(req.params.topic)
   if (!client) return NotFoundError(res)
 
   const catalog = await client.getCatalog()
@@ -53,7 +56,7 @@ app.get('/api/:topic/catalog\.:ext?', async (req: Request, res: Response) => {
 
 app.get('/api/boards\.:ext?', async (req: Request, res: Response) => {
   const r: IBoardList = {boards: []}
-  for (let topic of node.boards.keys()) {
+  for (let topic of TOPICS.split(',')) {
     r.boards.push({board: topic, pages: 16, per_page: 16})
   }
   res.send(r)
@@ -61,7 +64,7 @@ app.get('/api/boards\.:ext?', async (req: Request, res: Response) => {
 
 app.get('/api/file/:id\.:ext?', async (req: Request, res: Response) => {
   const id = parseFileID(req.params.id)
-  const content = await node.filestore.retrieve(id.cid, id.blobId)
+  const content = await filestore.retrieve(id.cid, id.blobId)
 
   if (!content) return NotFoundError(res)
 
@@ -84,7 +87,7 @@ app.get(`/api/thumb/:id\.:ext?`, async (req: Request, res: Response) => {
   const filename = path.join(dir, `${req.params.id}.${THUMB_FORMAT}`)
 
   if (!await fileExists(filename)) {
-    const result = await makeThumbnail(node.filestore, req.params.id, filename)
+    const result = await makeThumbnail(filestore, req.params.id, filename)
     if (!result) return NotFoundError(res)
 
     log.info(`Generated ${THUMB_FORMAT} thumbnail for ${req.params.id}`)
@@ -104,14 +107,14 @@ app.get(`/api/thumb/:id\.:ext?`, async (req: Request, res: Response) => {
 })
 
 app.post('/api/:topic/thread/:id\.:ext?', async (req: Request, res: Response) => {
-    const client = node.boards.get(req.params.topic)
+    const client = node.getTopic(req.params.topic)
     if (!client) return NotFoundError(res)
     const post: IPost = req.body.post
     try {
       if (req.body.attachments && req.body.attachments[0]) {
-        await processAttachment(node.filestore, req.body.attachments[0], post, req.params.id)
+        await processAttachment(filestore, req.body.attachments[0], post, req.params.id)
       }
-      const core = await client.newMessage(req.params.id, post)
+      const core = await client.newPost(post)
   
       if (!core) return FailedPost(res)
   
@@ -124,17 +127,12 @@ app.post('/api/:topic/thread/:id\.:ext?', async (req: Request, res: Response) =>
 })
 
 app.post('/api/:topic', async (req: Request, res: Response) => {
-  const client = node.boards.get(req.params.topic)
+  const client = node.getTopic(req.params.topic)
   if (!client) return NotFoundError(res)
   const post: IPost = req.body.post
   try {
-    const threadId = await client.newThread(
-      async (tid) => {
-      if (req.body.attachments && req.body.attachments[0]) {
-          return await processAttachment(node.filestore, req.body.attachments[0], post, tid)
-      }
-      return post
-    })
+    const threadId = await client.newThread(post)
+    await processAttachment(filestore, req.body.attachments[0], post, threadId)
     if (!threadId) return FailedPost(res)
     const thread = await client.getThreadContent(threadId)
     res.send({success: true, op: threadId, thread: thread})
