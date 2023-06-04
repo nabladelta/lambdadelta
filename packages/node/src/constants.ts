@@ -29,3 +29,4 @@ const LOGLEVELS: {[name: string]: number | undefined} = {
 
 export const LOGLEVEL = LOGLEVELS[(process.env.LOGLEVEL || "INFO").toLowerCase()] || 3
 export const GROUP_FILE = process.env.GROUP_FILE || "groupData.json"
+export const GROUPID = 'AAA'
