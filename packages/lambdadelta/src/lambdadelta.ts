@@ -931,6 +931,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             eventMetadata.index = index
             this.eventMetadata.set(eventID, eventMetadata)
             this.timeline.setTime(eventID, event.claimed)
+            this.emit('timelineAddEvent', eventID, event.claimed, event.claimed)
         }
         return { result, eventID }
     }
