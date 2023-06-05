@@ -169,6 +169,8 @@ export class BulletinBoard extends Lambdadelta {
         const event = await this.getEventByID(eventID)
         if (!event) return undefined
         const content = deserializePost(event.content)
+        content.id = eventID
+        content.no = eventID.slice(0, 16)
         return content
     }
 
@@ -182,7 +184,7 @@ export class BulletinBoard extends Lambdadelta {
         let images = 0
         let op
         const thread: IThread = {posts: []}
-        for (const [time, eventID] of events) {
+        for (const [_, eventID] of events) {
             const post = await this.getPostByID(eventID)
             if (!post) continue
             if (post.tim) images++
