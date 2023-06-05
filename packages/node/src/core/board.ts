@@ -9,7 +9,7 @@ import BTree from 'sorted-btree'
 import { getTimestampInSeconds } from './utils/utils'
 import { FUTURE_TOLERANCE_SECONDS, UPDATE_STALE_SECONDS } from '../constants'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
-import { mainLogger } from './logger'
+import { mainLogger } from '../logger'
 
 const log = mainLogger.getSubLogger({name: 'board'})
 

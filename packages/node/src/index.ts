@@ -4,7 +4,7 @@ import { decodeMime, fileExists, makeThumbnail, parseFileID, processAttachment }
 import path from 'path'
 import fs from 'fs'
 import { DATA_FOLDER, PORT, REQ_SIZE_LIMIT, THUMB_FORMAT, TOPICS } from './constants'
-import { mainLogger } from './core/logger'
+import { mainLogger } from './logger'
 import { nodeSetup } from './setup'
 import { BBNode } from '@bernkastel/core'
 

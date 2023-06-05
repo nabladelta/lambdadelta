@@ -8,7 +8,7 @@ import { Keystorage } from './keystorage'
 import crypto from 'crypto'
 import { FILE_FETCH_TIMEOUT_MS, FUTURE_TOLERANCE_SECONDS } from '../constants'
 import { Readable } from 'streamx'
-import { mainLogger } from './logger'
+import { mainLogger } from '../logger'
 
 const log = mainLogger.getSubLogger({name: 'thread'})
 

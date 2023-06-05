@@ -5,7 +5,7 @@ import fs from 'fs'
 import mime from 'mime'
 import MediaInfo from 'mediainfo.js'
 import { FILE_SIZE_LIMIT_UPLOAD, THUMB_FORMAT, THUMB_SIZE } from './constants'
-import { mainLogger } from './core/logger'
+import { mainLogger } from './logger'
 import c from 'compact-encoding'
 
 const log = mainLogger.getSubLogger({name: 'HTTP'})

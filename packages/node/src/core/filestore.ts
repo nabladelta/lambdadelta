@@ -2,7 +2,7 @@ import Hyperblobs from 'hyperblobs'
 import b4a from 'b4a'
 import c from 'compact-encoding'
 import { FILE_FETCH_TIMEOUT_MS, FILE_SIZE_LIMIT_DOWNLOAD } from '../constants'
-import { mainLogger } from './logger'
+import { mainLogger } from '../logger'
 
 const log = mainLogger.getSubLogger({name: 'filestore'})
 export class Filestore {
