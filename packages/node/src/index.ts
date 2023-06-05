@@ -155,7 +155,7 @@ app.get('(/*)?', function (req, res) {
  })
 
  nodeSetup(mainLogger.getSubLogger({name: 'NODE'})).then(n => {
-  node = n.node;
+  node = n.node
   app.listen(PORT, () => {
     log.info(`⚡️API is running at http://localhost:${PORT}`)
   })

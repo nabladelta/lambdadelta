@@ -1,5 +1,4 @@
 import crypto from 'crypto'
-import { Filestore } from './core/filestore'
 import sharp from 'sharp'
 import fs from 'fs'
 import mime from 'mime'
