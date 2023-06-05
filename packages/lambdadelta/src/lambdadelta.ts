@@ -68,7 +68,7 @@ export interface TopicEvents {
             eventID: string,
             headerResult: VerificationResult | HeaderVerificationError,
             contentResult: ContentVerificationResult | undefined) => void
-    'syncContentResult': (peerID: string, contentResult: ContentVerificationResult) => void
+    'syncContentResult': (peerID: string, eventID: string, contentResult: ContentVerificationResult) => void
     'syncDuplicateEvent': (
             peerID: string,
             eventID: string,
@@ -132,7 +132,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private timeline: Timeline
 
     private core: Hypercore // Hypercore
-    private drive: Hyperdrive // Hyperdrive
+    protected drive: Hyperdrive // Hyperdrive
     private oldestIndex: number // Our oldest valid event index
 
     protected nullifierSpecs: Map<string, NullifierSpec[]>
@@ -163,6 +163,16 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.registerTypes()
         this.on('timelineAddEvent', this.onTimelineAddEvent)
         this.on('timelineRemoveEvent', this.onTimelineAddEvent)
+        this.on('syncContentResult', (peerID, eventID, contentResult) => {
+            if (contentResult === ContentVerificationResult.VALID) {
+                this.onSyncEvent(peerID, eventID)
+            }
+        })
+        this.on('syncEventResult', (peerID, eventID, headerResult, contentResult) => {
+            if (headerResult === VerificationResult.VALID, contentResult === ContentVerificationResult.VALID) {
+                this.onSyncEvent(peerID, eventID)
+            }
+        })
     }
 
     protected registerTypes() {
@@ -181,6 +191,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         
     }
 
+    protected onSyncEvent(peerID: string, eventID: string) {
+
+    }
+
     public async ready() {
         await this.core.ready()
         await this.drive.ready()
@@ -194,7 +208,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return Array.from(this.peers.keys())
     }
 
-    private getPeer(peerID: string) {
+    protected getPeer(peerID: string) {
         const peer = this.peers.get(peerID)
         if (!peer) {
             throw new Error("Unknown peer")
@@ -453,7 +467,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             contentResult = results.contentResult
             // We already verified this header previously
             headerResult = VerificationResult.VALID
-            this.emit('syncContentResult', peerID, results.contentResult)
+            this.emit('syncContentResult', peerID, eventID, results.contentResult)
         }
 
         let eventMetadata = this.eventMetadata.get(eventID)
