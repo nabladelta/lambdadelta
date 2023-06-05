@@ -110,7 +110,7 @@ export class BulletinBoard extends Lambdadelta {
     }
 
     public async newPost(post: IPost) {
-        const { result, eventID } = await this.newEvent(TYPE_THREAD, serializePost(post))
+        const { result, eventID } = await this.newEvent(TYPE_POST, serializePost(post))
         if (result !== VerificationResult.VALID) {
             return false
         }
