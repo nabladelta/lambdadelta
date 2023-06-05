@@ -13,7 +13,6 @@ const log = mainLogger.getSubLogger({name: 'HTTP'})
 
 let node: BBNode
 let filestore: Filestore
-nodeSetup(mainLogger).then(n => {node = n.node; filestore = n.filestore})
 
 const app: Express = express()
 
@@ -133,7 +132,9 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
   try {
     const threadId = await client.newThread(post)
     if (!threadId) return FailedPost(res)
-    await processAttachment(filestore, req.body.attachments[0], post, threadId)
+    if (req.body.attachments[0]) {
+      await processAttachment(filestore, req.body.attachments[0], post, threadId)
+    }
     const thread = await client.getThreadContent(threadId)
     res.send({success: true, op: threadId, thread: thread})
 
@@ -145,7 +146,10 @@ app.use(express.static(path.join(__dirname, '../../client/build')))
 app.get('(/*)?', function (req, res) {
    res.sendFile(path.join(__dirname, '../../client/build', 'index.html'));
  })
-
-app.listen(PORT, () => {
-  log.info(`⚡️API is running at http://localhost:${PORT}`)
+ nodeSetup(mainLogger).then(n => {
+  node = n.node;
+  filestore = n.filestore
+  app.listen(PORT, () => {
+    log.info(`⚡️API is running at http://localhost:${PORT}`)
+  })
 })
