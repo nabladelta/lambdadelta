@@ -1,5 +1,5 @@
 {
-  "name": "bernkastel-rln-circuits",
+  "name": "@bernkastel/rln-circuits",
   "version": "1.0.1",
   "description": "",
   "main": "index.js",
