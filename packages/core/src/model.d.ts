@@ -1,3 +1,4 @@
+declare module 'compact-encoding'
 interface IPost {
     id?: string, // The post's locator
     no?: string, // 16 hex digit ID

@@ -3,11 +3,12 @@ import { NullifierSpec } from "@bernkastel/lambdadelta"
 import { deserializePost, serializePost } from "./utils"
 import { RLN, RLNGFullProof, VerificationResult, nullifierInput } from '@bernkastel/rln'
 import { FeedEventHeader } from "@bernkastel/lambdadelta/src/lambdadelta"
-import BTree from 'sorted-btree'
+import crypto from 'crypto'
 
 const TYPE_THREAD = "THREAD"
 const TYPE_POST = "POST"
 const MAX_THREADS = 256
+const MAX_ATTACHMENT_SIZE = 5400000
 
 export class BulletinBoard extends Lambdadelta {
     private threads: Map<string, Timeline>
@@ -48,7 +49,7 @@ export class BulletinBoard extends Lambdadelta {
     protected async onTimelineAddEvent(eventID: string, _: number, __: number) {
         const event = await this.getEventByID(eventID)
         if (!event) throw new Error("Missing event")
-        switch(event.header.eventType) {
+        switch (event.header.eventType) {
             case TYPE_THREAD:
                 this.recvThread(eventID, event.header, deserializePost(event.content))
                 break
@@ -56,6 +57,37 @@ export class BulletinBoard extends Lambdadelta {
                 this.recvPost(eventID, event.header, deserializePost(event.content))
                 break
         }
+    }
+
+    protected async onSyncEvent(peerID: string, eventID: string) {
+        const {header, content} = await this.getEventByID(eventID) || {}
+        if (content) await this.syncAttachment(peerID, deserializePost(content).sha256)
+    }
+
+    private async syncAttachment(peerID: string, attachmentHash?: string) {
+        if (!attachmentHash) return false // No attachments
+        const ownEntry = await this.drive.entry(`/attachments/${attachmentHash}`)
+        if (ownEntry) {
+            return true  // We already have it
+        }
+        const peer = this.getPeer(peerID)
+        const entry = await peer.drive.entry(`/attachments/${attachmentHash}`)
+        if (!entry) {
+            return false  // Peer does not have attachment
+        }
+        if (entry.value.blob.byteLength > MAX_ATTACHMENT_SIZE!) {
+            return false // Attachment too big
+        }
+        const contentBuf: Buffer = await peer.drive.get(`/attachments/${attachmentHash}`)
+        if (!contentBuf) {
+            return false
+        }
+        const hash = crypto.createHash('sha256').update(contentBuf).digest('hex')
+        if (hash !== attachmentHash) {
+            return false // Attachhment wrong hash
+        }
+        await this.drive.put(`/attachments/${attachmentHash}`, contentBuf)
+        return true
     }
 
     private recvThread(eventID: string, header: FeedEventHeader, content: IPost) {
@@ -115,6 +147,22 @@ export class BulletinBoard extends Lambdadelta {
             return false
         }
         return eventID
+    }
+
+    public async saveAttachment(attachment: Buffer) {
+        if (attachment.length > MAX_ATTACHMENT_SIZE) {
+            throw new Error("Attachment too large")
+        }
+        const attachmentHash = crypto.createHash('sha256').update(attachment).digest('hex')
+        await this.drive.put(`/attachments/${attachmentHash}`, attachment)
+    }
+
+    public async retrieveAttachment(attachmentHash: string) {
+        const contentBuf: Buffer = await this.drive.get(`/attachments/${attachmentHash}`)
+        if (!contentBuf) {
+            return false
+        }
+        return contentBuf
     }
 
     public async getPostByID(eventID: string) {
