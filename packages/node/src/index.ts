@@ -1,6 +1,6 @@
 import express, { Express, Request, Response } from 'express'
 import cors from 'cors'
-import { fileExists, makeThumbnail, parseFileID, processAttachment } from './lib'
+import { decodeMime, fileExists, makeThumbnail, parseFileID, processAttachment } from './lib'
 import path from 'path'
 import fs from 'fs'
 import { DATA_FOLDER, PORT, REQ_SIZE_LIMIT, THUMB_FORMAT, TOPICS } from './constants'
@@ -12,7 +12,6 @@ import { Filestore } from './core/filestore'
 const log = mainLogger.getSubLogger({name: 'HTTP'})
 
 let node: BBNode
-let filestore: Filestore
 
 const app: Express = express()
 
@@ -62,18 +61,19 @@ app.get('/api/boards\.:ext?', async (req: Request, res: Response) => {
 })
 
 app.get('/api/file/:id\.:ext?', async (req: Request, res: Response) => {
-  const id = parseFileID(req.params.id)
-  const content = await filestore.retrieve(id.cid, id.blobId)
-
+  const {topic, attachmentHash} = parseFileID(req.params.id)
+  const client = node.getTopic(topic)
+  if (!client) return NotFoundError(res)
+  const content = await client.retrieveAttachment(attachmentHash)
   if (!content) return NotFoundError(res)
-
-  if (content.mime && content.mime.length > 0) {
-    res.contentType(content.mime)
+  const {mime, data} = decodeMime(content)
+  if (mime && mime.length > 0) {
+    res.contentType(mime)
   } else { // Fall back to extension in url if mime type is not set
     if (req.params.ext) res.contentType(req.params.ext)
     else res.contentType("application/octet-stream")
   }
-  res.send(content.data)
+  res.send(data)
 })
 
 app.get(`/api/thumb/:id\.:ext?`, async (req: Request, res: Response) => {
@@ -86,7 +86,13 @@ app.get(`/api/thumb/:id\.:ext?`, async (req: Request, res: Response) => {
   const filename = path.join(dir, `${req.params.id}.${THUMB_FORMAT}`)
 
   if (!await fileExists(filename)) {
-    const result = await makeThumbnail(filestore, req.params.id, filename)
+    const {topic, attachmentHash} = parseFileID(req.params.id)
+    const client = node.getTopic(topic)
+    if (!client) return NotFoundError(res)
+    const content = await client.retrieveAttachment(attachmentHash)
+    if (!content) return NotFoundError(res)
+    const { data } = decodeMime(content)
+    const result = await makeThumbnail(data, filename)
     if (!result) return NotFoundError(res)
 
     log.info(`Generated ${THUMB_FORMAT} thumbnail for ${req.params.id}`)
@@ -111,7 +117,8 @@ app.post('/api/:topic/thread/:id\.:ext?', async (req: Request, res: Response) =>
     const post: IPost = req.body.post
     try {
       if (req.body.attachments && req.body.attachments[0]) {
-        await processAttachment(filestore, req.body.attachments[0], post, req.params.id)
+        const {attachment} = await processAttachment(req.body.attachments[0], post, req.params.topic)
+        await client.saveAttachment(attachment)
       }
       const core = await client.newPost(post)
   
@@ -132,8 +139,9 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
   try {
     const threadId = await client.newThread(post)
     if (!threadId) return FailedPost(res)
-    if (req.body.attachments[0]) {
-      await processAttachment(filestore, req.body.attachments[0], post, threadId)
+    if (req.body.attachments && req.body.attachments[0]) {
+      const {attachment} = await processAttachment(req.body.attachments[0], post, req.params.topic)
+      await client.saveAttachment(attachment)
     }
     const thread = await client.getThreadContent(threadId)
     res.send({success: true, op: threadId, thread: thread})
@@ -146,9 +154,8 @@ app.use(express.static(path.join(__dirname, '../../client/build')))
 app.get('(/*)?', function (req, res) {
    res.sendFile(path.join(__dirname, '../../client/build', 'index.html'));
  })
- nodeSetup(mainLogger).then(n => {
+ nodeSetup(mainLogger.getSubLogger({name: 'NODE'})).then(n => {
   node = n.node;
-  filestore = n.filestore
   app.listen(PORT, () => {
     log.info(`⚡️API is running at http://localhost:${PORT}`)
   })

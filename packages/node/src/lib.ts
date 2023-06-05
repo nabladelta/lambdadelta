@@ -6,10 +6,28 @@ import mime from 'mime'
 import MediaInfo from 'mediainfo.js'
 import { FILE_SIZE_LIMIT_UPLOAD, THUMB_FORMAT, THUMB_SIZE } from './constants'
 import { mainLogger } from './core/logger'
+import c from 'compact-encoding'
 
 const log = mainLogger.getSubLogger({name: 'HTTP'})
 
-export async function processAttachment(filestore: Filestore, fileData: IFileData, post: IPost, tid: string) {
+export function encodeMime(data: Buffer, mime: string = ""): Buffer {
+    const state = c.state()
+    c.string.preencode(state, mime)
+    c.buffer.preencode(state, data)
+    state.buffer = Buffer.allocUnsafe(state.end)
+    c.string.encode(state, mime)
+    c.buffer.encode(state, data)
+    return state.buffer
+}
+
+export function decodeMime(buffer: Buffer): {mime: string, data: Buffer} {
+    const state = { start: 0, end: buffer.length, buffer, cache: null }
+    const mime = c.string.decode(state)
+    const data = c.buffer.decode(state)
+    return {mime, data}
+}
+
+export async function processAttachment(fileData: IFileData, post: IPost, topic: string) {
     const buf = Buffer.from(fileData.data, 'base64')
 
     if (buf.length > FILE_SIZE_LIMIT_UPLOAD) throw new Error(`File too large (FILE_SIZE_LIMIT_UPLOAD: ${buf.length} Bytes`)
@@ -34,8 +52,7 @@ export async function processAttachment(filestore: Filestore, fileData: IFileDat
         }
     }
 
-    const {cid, blobId} = await filestore.store(tid, buf, post.mime) || {}
-    if (!cid || !blobId) throw new Error(`Failed to store file (size: ${buf.length}, type: ${post.mime})`)
+    const encoded = encodeMime(buf, post.mime)
 
     // Where the period splits filename and ext
     const pos = (fileData.filename.lastIndexOf(".") - 1 >>> 0) + 1
@@ -43,23 +60,14 @@ export async function processAttachment(filestore: Filestore, fileData: IFileDat
     post.filename = fileData.filename.slice(0, pos)
     post.ext = fileData.filename.slice(pos) // Includes ., ex: ".jpg"
     post.fsize = buf.length
-    post.tim = cid + '-' + blobId.byteOffset.toString(16)
-        + '-' + blobId.blockOffset.toString(16)
-        + '-' + blobId.blockLength.toString(16)
-        + '-' + blobId.byteLength.toString(16)
-    return post
+    post.tim = topic + '-' + post.sha256
+    return { post, attachment: encoded }
 }
 
-export function parseFileID(fileID: string): { cid: string, blobId: BlobID } {
+export function parseFileID(fileID: string) {
     const id = fileID.split('.')[0]
-    const [cid, byteOffset, blockOffset, blockLength, byteLength] = id.split('-')
-
-    return {cid, blobId: {
-      byteOffset: parseInt(byteOffset, 16), 
-      blockOffset: parseInt(blockOffset, 16),
-      blockLength: parseInt(blockLength, 16), 
-      byteLength: parseInt(byteLength, 16)
-    }}
+    const [topic, attachmentHash] = id.split('-')
+    return {topic, attachmentHash}
 }
 
 async function processVideo(buf: Buffer) {
@@ -94,12 +102,9 @@ async function processVideo(buf: Buffer) {
 }
 
 
-export async function makeThumbnail(filestore: Filestore, fid: string, filename?: string) {
-    const {cid, blobId} = parseFileID(fid)
-    const content = await filestore.retrieve(cid, blobId)
-    if (!content) return false
+export async function makeThumbnail(data: Buffer, filename?: string) {
     try {
-        const i = sharp(content.data).resize(
+        const i = sharp(data).resize(
             THUMB_SIZE, THUMB_SIZE,
             {
                 fit: 'inside',
