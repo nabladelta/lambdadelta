@@ -7,7 +7,6 @@ import { DATA_FOLDER, PORT, REQ_SIZE_LIMIT, THUMB_FORMAT, TOPICS } from './const
 import { mainLogger } from './core/logger'
 import { nodeSetup } from './setup'
 import { BBNode } from '@bernkastel/core'
-import { Filestore } from './core/filestore'
 
 const log = mainLogger.getSubLogger({name: 'HTTP'})
 
@@ -137,12 +136,12 @@ app.post('/api/:topic', async (req: Request, res: Response) => {
   if (!client) return NotFoundError(res)
   const post: IPost = req.body.post
   try {
-    const threadId = await client.newThread(post)
-    if (!threadId) return FailedPost(res)
     if (req.body.attachments && req.body.attachments[0]) {
       const {attachment} = await processAttachment(req.body.attachments[0], post, req.params.topic)
       await client.saveAttachment(attachment)
     }
+    const threadId = await client.newThread(post)
+    if (!threadId) return FailedPost(res)
     const thread = await client.getThreadContent(threadId)
     res.send({success: true, op: threadId, thread: thread})
 
@@ -154,6 +153,7 @@ app.use(express.static(path.join(__dirname, '../../client/build')))
 app.get('(/*)?', function (req, res) {
    res.sendFile(path.join(__dirname, '../../client/build', 'index.html'));
  })
+
  nodeSetup(mainLogger.getSubLogger({name: 'NODE'})).then(n => {
   node = n.node;
   app.listen(PORT, () => {
