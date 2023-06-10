@@ -5,6 +5,9 @@
   "directories": {
     "doc": "docs"
   },
+  "scripts": {
+    "build": "tsc --build --verbose"
+  },
   "workspaces": [
     "./packages/*"
   ],

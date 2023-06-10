@@ -2,6 +2,7 @@ import { Identity } from '@semaphore-protocol/identity'
 import { MerkleProof } from "@zk-kit/incremental-merkle-tree"
 import { poseidon2 } from 'poseidon-lite'
 import { hashBigint, hashString } from "./utils/hash"
+// @ts-ignore
 import { plonk, groth16 } from 'snarkjs'
 import { BigNumberish, Group } from "@semaphore-protocol/group"
 

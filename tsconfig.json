@@ -9,8 +9,12 @@
       "esModuleInterop": true,
       "skipLibCheck": true,
       "forceConsistentCasingInFileNames": true,
-      "rootDir": "./src",
-      "outDir": "./build"
+      "rootDir": "./",
+      "outDir": "./dist",
+      "typeRoots": [
+        "./packages/rln/src/",
+        "./node_modules/@types"
+      ]
     },
     "files": [
     ],
