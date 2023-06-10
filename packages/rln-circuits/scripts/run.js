@@ -17,7 +17,9 @@ async function run(name, scheme, tauname) {
     const build = path.join(root, 'build')
     const circuitFile = path.join(root, 'circuits', name+'.circom')
     const setup = path.join(build, 'setup', scheme, name)
-    const dest = path.join(root, 'compiled', name)
+
+    const rlnlib = path.join(root, '..', 'rln')
+    const dest = path.join(rlnlib, 'compiled', name)
     if (!existsSync(tauFile)) {
         const tauURL = `https://hermez.s3-eu-west-1.amazonaws.com/${tauname}`
         mkdirSync(path.join(root, 'tau'), {recursive: true})
@@ -68,17 +70,17 @@ async function run(name, scheme, tauname) {
     rmSync(build, {recursive: true})
 }
 async function build() {
-    await run('rln', 'groth16', "powersOfTau28_hez_final_17.ptau")
-    await run('rln-multi', 'groth16', "powersOfTau28_hez_final_17.ptau")
-    await run('rln-same-dual', 'groth16', "powersOfTau28_hez_final_17.ptau")
-    await run('rln', 'plonk', "powersOfTau28_hez_final_17.ptau")
-    await run('rln-multi', 'plonk', "powersOfTau28_hez_final_17.ptau")
-    await run('rln-same-dual', 'plonk', "powersOfTau28_hez_final_17.ptau")
+    // await run('rln', 'groth16', "powersOfTau28_hez_final_17.ptau")
+    // await run('rln-multi', 'groth16', "powersOfTau28_hez_final_17.ptau")
+    // await run('rln-same-dual', 'groth16', "powersOfTau28_hez_final_17.ptau")
+    // await run('rln', 'plonk', "powersOfTau28_hez_final_17.ptau")
+    // await run('rln-multi', 'plonk', "powersOfTau28_hez_final_17.ptau")
+    // await run('rln-same-dual', 'plonk', "powersOfTau28_hez_final_17.ptau")
     await run('rln-multiplier-generic', 'groth16', "powersOfTau28_hez_final_17.ptau")
     process.exit()
 }
 
-function download (url, dest, cb, errcb) {
+function download(url, dest, cb, errcb) {
     const file = fs.createWriteStream(dest)
 
     const request = https.get(url, (response) => {
