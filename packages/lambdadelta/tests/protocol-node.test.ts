@@ -23,7 +23,7 @@ function topicHash(topic: string, namespace: string) {
         .update(topic).digest()
 }
 
-describe('LDNode', () => {
+describe('Node Protocol', () => {
     let anode: LDNode
     let bnode: LDNode
     let cnode: LDNode
