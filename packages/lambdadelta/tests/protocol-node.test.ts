@@ -23,8 +23,6 @@ function topicHash(topic: string, namespace: string) {
         .update(topic).digest()
 }
 
-
-
 describe('LDNode', () => {
     let anode: LDNode
     let bnode: LDNode
