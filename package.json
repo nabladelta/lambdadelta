@@ -1,7 +1,7 @@
 {
   "name": "nabladelta",
   "version": "0.3.0",
-  "description": "Lambdadelta Event Feed system",
+  "description": "Lambdadelta Event Feed Libraries",
   "directories": {
     "doc": "docs"
   },
