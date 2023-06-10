@@ -1,7 +1,7 @@
 import 'jest'
 import { Identity } from '@semaphore-protocol/identity'
 import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
-import poseidon from 'poseidon-lite'
+import { poseidon2 } from 'poseidon-lite'
 import { Group } from "@semaphore-protocol/group"
 import { RLNGFullProof } from '../src/rln'
 import { hashBigint } from '../src/utils/hash'
@@ -18,7 +18,7 @@ describe('RLN', () => {
         const identifier = "32"
         const TREE_DEPTH = 20
 
-        const tree = new IncrementalMerkleTree(poseidon, TREE_DEPTH, hashBigint(identifier), 2)
+        const tree = new IncrementalMerkleTree(poseidon2, TREE_DEPTH, hashBigint(identifier), 2)
         tree.insert(identity.commitment)
         const merkleProof = tree.createProof(tree.indexOf(identity.commitment))
 

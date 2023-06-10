@@ -1,6 +1,6 @@
 import { readFile, writeFile } from "fs/promises"
 import { GroupDataProvider, GroupEvent } from "./dataProvider"
-import poseidon from 'poseidon-lite'
+import { poseidon1 } from 'poseidon-lite'
 
 export interface GroupFile {
     id: string,
@@ -53,7 +53,7 @@ export class FileProvider extends GroupDataProvider {
         FileProvider.saveFile(groupData, filename)
     }
     public async slash(secretIdentity: bigint) {
-        const identityCommitment = poseidon([secretIdentity])
+        const identityCommitment = poseidon1([secretIdentity])
         const event = GroupDataProvider.createEvent(
             identityCommitment,
             this.getMultiplier(identityCommitment),

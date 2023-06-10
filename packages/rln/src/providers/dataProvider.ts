@@ -1,6 +1,6 @@
 import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
 import { hashBigint } from "../utils/hash"
-import poseidon from 'poseidon-lite'
+import { poseidon2 } from 'poseidon-lite'
 import { getTimestampInSeconds } from "../utils/time"
 
 export interface GroupEvent {
@@ -20,7 +20,7 @@ export abstract class GroupDataProvider {
     private lastEvent: number
 
     protected constructor(gid: string, treeDepth: number) {
-        this.members = new IncrementalMerkleTree(poseidon, treeDepth, hashBigint(gid), 2)
+        this.members = new IncrementalMerkleTree(poseidon2, treeDepth, hashBigint(gid), 2)
         this.gid = hashBigint(gid)
         this.pastRootsAdded = new Map()
         this.pastRootsRemoved = new Map()
@@ -57,7 +57,7 @@ export abstract class GroupDataProvider {
     }
 
     public static getRateCommitment(commitment: bigint, multiplier?: number) {
-        return poseidon([commitment, BigInt(multiplier || 1)])
+        return poseidon2([commitment, BigInt(multiplier || 1)])
     }
 
     public createMerkleProof(commitment: bigint, multiplier?: number) {

@@ -1,6 +1,6 @@
 import { Identity } from '@semaphore-protocol/identity'
 import { MerkleProof } from "@zk-kit/incremental-merkle-tree"
-import poseidon from 'poseidon-lite'
+import { poseidon2 } from 'poseidon-lite'
 import { hashBigint, hashString } from "./utils/hash"
 import { plonk, groth16 } from 'snarkjs'
 import { BigNumberish, Group } from "@semaphore-protocol/group"
@@ -17,7 +17,7 @@ export async function verifyProof(
     const { publicSignals, proof } = rlnFullProof.snarkProof
 
     for (let i = 0; i < publicSignals.externalNullifiers.length; i++) {
-        const expectedExtNullifier = poseidon([
+        const expectedExtNullifier = poseidon2([
             hashString(rlnFullProof.externalNullifiers[i].nullifier),
             hashString(rlnFullProof.rlnIdentifier)
         ])
@@ -89,7 +89,7 @@ export async function generateProof(
 
     if ("depth" in groupOrMerkleProof) {
         rlnIdentifier = groupOrMerkleProof.id.toString()
-        const index = groupOrMerkleProof.indexOf(poseidon([identity.commitment, BigInt(userMessageLimitMultiplier)]))
+        const index = groupOrMerkleProof.indexOf(poseidon2([identity.commitment, BigInt(userMessageLimitMultiplier)]))
         
         if (index === -1) {
             throw new Error("The identity is not part of the group")
@@ -101,12 +101,12 @@ export async function generateProof(
     }
 
     const witness: RLNGWitnessT = {
-        identitySecret: poseidon([identity.nullifier, identity.trapdoor]),
+        identitySecret: poseidon2([identity.nullifier, identity.trapdoor]),
         pathElements: merkleProof.siblings,
         identityPathIndex: merkleProof.pathIndices,
         x: hashString(signal),
         userMessageLimitMultiplier: BigInt(userMessageLimitMultiplier),
-        externalNullifiers: externalNullifiers.map(e => poseidon([
+        externalNullifiers: externalNullifiers.map(e => poseidon2([
             hashString(e.nullifier),
             hashString(rlnIdentifier)
         ])),
