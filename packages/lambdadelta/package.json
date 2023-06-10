@@ -24,7 +24,7 @@
     "@hyperswarm/dht": "^6.5.0",
     "@nabladelta/rln": "^1.0.0",
     "chalk": "^5.2.0",
-    "corestore": "^6.5.1",
+    "corestore": "6.5.1",
     "dotenv": "^16.0.3",
     "hyperbee": "^2.7.2",
     "hyperblobs": "^2.2.0",
