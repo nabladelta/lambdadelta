@@ -1,4 +1,4 @@
-import { RLN } from "@bernkastel/rln";
+import { RLN } from "@nabladelta/rln";
 import Corestore from "corestore";
 import { FeedEventHeader, NullifierSpec, TopicEvents } from "../lambdadelta";
 import { TypedEmitter } from "tiny-typed-emitter";

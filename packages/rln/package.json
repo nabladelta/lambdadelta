@@ -1,5 +1,5 @@
 {
-  "name": "@bernkastel/rln",
+  "name": "@nabladelta/rln",
   "version": "1.0.0",
   "description": "",
   "main": "src/index.ts",
@@ -25,7 +25,7 @@
   "dependencies": {
     "@semaphore-protocol/group": "^3.2.3",
     "@semaphore-protocol/identity": "^3.2.3",
-    "@bernkastel/rln-circuits": "^1.0.1",
+    "@nabladelta/rln-circuits": "^1.0.1",
     "dotenv": "^16.0.3",
     "rlnjs": "^2.0.6",
     "snarkjs": "^0.6.9",

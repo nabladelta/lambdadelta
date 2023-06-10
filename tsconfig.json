@@ -16,7 +16,7 @@
     ],
     "references": [
       {
-        "path": "./packages/core"
+        "path": "./packages/rln"
       },
       {
         "path": "./packages/lambdadelta"

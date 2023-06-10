@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
-import { RLN, nullifierInput, RLNGFullProof, VerificationResult } from '@bernkastel/rln'
+import { RLN, nullifierInput, RLNGFullProof, VerificationResult } from '@nabladelta/rln'
 import { getMemberCIDEpoch, getTimestampInSeconds } from '../src/utils'
 
 const RLN_IDENTIFIER = "1000"

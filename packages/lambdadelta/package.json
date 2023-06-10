@@ -1,5 +1,5 @@
 {
-  "name": "@bernkastel/lambdadelta",
+  "name": "@nabladelta/lambdadelta",
   "version": "0.1.0",
   "description": "",
   "main": "src/index.ts",
@@ -11,7 +11,7 @@
     "build": "tsc --build"
   },
   "author": "moot",
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "devDependencies": {
     "@hyperswarm/testnet": "^3.1.1",
     "@semaphore-protocol/identity": "^3.2.3",
@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@hyperswarm/dht": "^6.5.0",
-    "@bernkastel/rln": "^1.0.0",
+    "@nabladelta/rln": "^1.0.0",
     "chalk": "^5.2.0",
     "corestore": "^6.5.1",
     "dotenv": "^16.0.3",

@@ -1,7 +1,7 @@
 import 'jest'
 import { LDNode } from '../src/node'
 import { findMissingPeers, findMissingPeersInFeed, findMissingTopics, nodeSetup, sleep } from './utils'
-import { VerificationResult } from '@bernkastel/rln'
+import { VerificationResult } from '@nabladelta/rln'
 
 const TOPICS = ['a', 'b', 'c', 'd']
 

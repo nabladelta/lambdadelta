@@ -6,7 +6,7 @@ import path from 'path'
 import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
-import { RLN, deserializeProof, RLNGFullProof, serializeProof, VerificationResult } from '@bernkastel/rln'
+import { RLN, deserializeProof, RLNGFullProof, serializeProof, VerificationResult } from '@nabladelta/rln'
 import { ContentVerificationResult, HeaderVerificationError, Lambdadelta } from './lambdadelta'
 import { decrypt, deserializeTopicData, encrypt, getMemberCIDEpoch, serializeTopicData } from './utils'
 import { Logger } from "tslog"

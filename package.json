@@ -1,7 +1,7 @@
 {
-  "name": "bernkastel",
+  "name": "nabladelta",
   "version": "0.3.0",
-  "description": "Bernkastel",
+  "description": "Lambdadelta Event Feed system",
   "directories": {
     "doc": "docs"
   },
@@ -9,7 +9,7 @@
     "./packages/*"
   ],
   "author": "moot",
-  "license": "AGPL-3.0-or-later",
+  "license": "MIT",
   "dependencies": {
     "typescript": "^5.0.4"
   },

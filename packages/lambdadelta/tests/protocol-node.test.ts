@@ -1,7 +1,7 @@
 import 'jest'
 import { LDNode } from '../src/node'
 import { findMissingPeers, findMissingPeersInFeed, findMissingTopics, nodeSetup, sleep } from './utils'
-import { GroupData, RLN, VerificationResult, serializeProof } from '@bernkastel/rln'
+import { GroupData, RLN, VerificationResult, serializeProof } from '@nabladelta/rln'
 import crypto from 'crypto'
 import Hyperswarm, { PeerInfo } from 'hyperswarm'
 import Protomux from 'protomux'
