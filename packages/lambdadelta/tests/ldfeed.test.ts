@@ -96,7 +96,7 @@ describe('Event feed', () => {
         }
         await sleep(1000)
         const result = await feedA.newEvent(eventTypePost, Buffer.from("test3"))
-        expect(result).toEqual(VerificationResult.VALID)
+        expect(result.result).toEqual(VerificationResult.VALID)
         await sleep(1000)
         expect(await feedA.getCoreLength()).toEqual(3)
         expect(await feedB.getCoreLength()).toEqual(3)
