@@ -1,8 +1,8 @@
 pragma circom 2.1.0;
 
 include "./incrementalMerkleTree.circom";
-include "../node_modules/circomlib/circuits/poseidon.circom";
-include "../node_modules/circomlib/circuits/comparators.circom";
+include "../../../node_modules/circomlib/circuits/poseidon.circom";
+include "../../../node_modules/circomlib/circuits/comparators.circom";
 
 template IsInInterval(n) {
     signal input in[3];

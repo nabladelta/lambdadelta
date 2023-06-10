@@ -15,10 +15,5 @@
   "devDependencies": {
     "circomlib": "^2.0.5",
     "snarkjs": "^0.6.9"
-  },
-  "dependencies": {
-    "chalk": "^5.2.0",
-    "commander": "^10.0.0",
-    "conf": "^11.0.1"
   }
 }
