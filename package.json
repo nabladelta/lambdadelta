@@ -6,6 +6,7 @@
     "doc": "docs"
   },
   "scripts": {
+    "prepublish": "npm run build",
     "build": "tsc --build --verbose",
     "postbuild": "copyfiles -u 2 ./packages/rln/compiled/** ./packages/rln/dist"
   },

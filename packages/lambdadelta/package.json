@@ -1,11 +1,12 @@
 {
   "name": "@nabladelta/lambdadelta",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "",
   "main": "src/index.ts",
   "exports": {
     "import": "./src/index.ts",
-    "require": "./dist/src/index.js"
+    "require": "./dist/src/index.js",
+    "types": "./dist/src/index.d.ts"
   },
   "scripts": {
     "build": "tsc --build"
