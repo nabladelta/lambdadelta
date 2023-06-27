@@ -1,6 +1,6 @@
 {
   "name": "@nabladelta/lambdadelta",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "",
   "main": "src/index.ts",
   "exports": {
@@ -24,6 +24,7 @@
   "dependencies": {
     "@hyperswarm/dht": "^6.5.0",
     "@nabladelta/rln": "^1.0.0",
+    "b4a": "^1.6.4",
     "chalk": "^5.2.0",
     "corestore": "6.5.1",
     "dotenv": "^16.0.3",
