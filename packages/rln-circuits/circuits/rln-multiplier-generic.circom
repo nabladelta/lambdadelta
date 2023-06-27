@@ -1,19 +1,8 @@
 pragma circom 2.1.0;
 
-include "./incrementalMerkleTree.circom";
+include "./utils.circom";
 include "../../../node_modules/circomlib/circuits/poseidon.circom";
 include "../../../node_modules/circomlib/circuits/comparators.circom";
-
-template IsInInterval(n) {
-    signal input in[3];
-
-    signal output out;
-
-    signal let <== LessEqThan(n)([in[1], in[2]]);
-    signal get <== GreaterEqThan(n)([in[1], in[0]]);
-
-    out <== let * get;
-}
 
 template RLN(DEPTH, LIMIT_BIT_SIZE, NULLIFIERS) {
     // Private signals
@@ -39,13 +28,11 @@ template RLN(DEPTH, LIMIT_BIT_SIZE, NULLIFIERS) {
     root <== MerkleTreeInclusionProof(DEPTH)(rateCommitment, identityPathIndex, pathElements);
 
     signal userMessageLimits[NULLIFIERS];
-    signal checkIntervals[NULLIFIERS];
     signal a1[NULLIFIERS];
 
     for (var i = 0; i < NULLIFIERS; i++) {
         userMessageLimits[i] <== messageLimits[i] * userMessageLimitMultiplier;
-        checkIntervals[i] <== IsInInterval(LIMIT_BIT_SIZE)([1, messageIds[i], userMessageLimits[i]]);
-        checkIntervals[i] === 1;
+        RangeCheck(LIMIT_BIT_SIZE)(messageIds[i], userMessageLimits[i]);
         a1[i] <== Poseidon(4)([identitySecret, externalNullifiers[i], messageIds[i], i]);
         y[i] <== identitySecret + a1[i] * x;
         nullifiers[i] <== Poseidon(1)([a1[i]]);
