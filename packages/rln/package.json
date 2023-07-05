@@ -1,6 +1,6 @@
 {
   "name": "@nabladelta/rln",
-  "version": "1.0.3",
+  "version": "1.0.5",
   "description": "",
   "main": "src/index.ts",
   "repository": "https://github.com/nabladelta/lambdadelta",
@@ -23,6 +23,6 @@
     "@semaphore-protocol/identity": "^3.2.3",
     "dotenv": "^16.0.3",
     "poseidon-lite": "^0.2.0",
-    "snarkjs": "^0.6.9"
+    "snarkjs": "^0.7.0"
   }
 }
