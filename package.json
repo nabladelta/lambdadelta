@@ -16,7 +16,6 @@
   "author": "reilgun",
   "license": "MIT",
   "dependencies": {
-    
     "typescript": "^5.0.4"
   },
   "devDependencies": {

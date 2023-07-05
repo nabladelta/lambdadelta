@@ -3,6 +3,7 @@
   "version": "0.1.5",
   "description": "",
   "main": "src/index.ts",
+  "repository": "https://github.com/nabladelta/lambdadelta",
   "exports": {
     "import": "./src/index.ts",
     "require": "./dist/src/index.js",
