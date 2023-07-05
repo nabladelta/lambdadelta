@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@hyperswarm/dht": "^6.5.0",
-    "@nabladelta/rln": "^1.0.5",
+    "@nabladelta/rln": "^1.0.6",
     "b4a": "^1.6.4",
     "chalk": "^5.2.0",
     "corestore": "6.5.1",

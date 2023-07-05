@@ -8,7 +8,7 @@ const RLN_IDENTIFIER = "1000"
 export async function generateMemberCID(secret: string, stream: NoiseSecretStream, rln: RLN) {
     const externalNullifier: nullifierInput = {
         nullifier: `${getMemberCIDEpoch()}|${stream.remotePublicKey.toString('hex')}`,
-        messageId: 1,
+        messageId: 0,
         messageLimit: 1
     }
     const id = crypto.createHash('sha256').update(secret).update(externalNullifier.nullifier).digest('hex')

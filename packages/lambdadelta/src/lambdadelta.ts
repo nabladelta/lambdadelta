@@ -851,13 +851,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             const input = {
                 nullifier: `${getEpoch(specs[i].epoch)}|${eventType}`,
                 messageLimit: specs[i].messageLimit,
-                messageId: 1
+                messageId: 0
             }
             const lastId = this.lastUsedMessageId[eventType][i].get(input.nullifier)
             if (lastId) {
                 input.messageId = lastId + 1
             }
-            if (input.messageId > input.messageLimit) {
+            if (input.messageId >= input.messageLimit) {
                 throw new Error("Message limit reached")
             }
             nulls.push(input)
