@@ -854,7 +854,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 messageId: 0
             }
             const lastId = this.lastUsedMessageId[eventType][i].get(input.nullifier)
-            if (lastId) {
+            if (lastId !== undefined) {
                 input.messageId = lastId + 1
             }
             if (input.messageId >= input.messageLimit) {
