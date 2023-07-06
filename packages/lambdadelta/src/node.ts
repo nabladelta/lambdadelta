@@ -185,6 +185,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
     private async removePeer(peerID: string) {
         const peer = this.getPeer(peerID)
         this.peers.delete(peerID)
+        this.memberCIDs.delete(peer.memberCID || "")
 
         const removePromises: Promise<boolean>[] = []
         for (const topicHash of peer.topics) {
