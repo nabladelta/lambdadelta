@@ -10,6 +10,7 @@
     "types": "./dist/src/index.d.ts"
   },
   "scripts": {
+    "prepublish": "tsc --build",
     "build": "tsc --build"
   },
   "author": "moot",
