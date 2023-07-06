@@ -150,7 +150,6 @@ declare module 'hypercore' {
   import { NoiseSecretStream } from '@hyperswarm/secret-stream'
   import RandomAccessStorage from 'random-access-storage'
   import { Writable, Readable } from 'streamx'
-
   export interface KeyPair {
     publicKey: Buffer | Uint8Array
     secretKey: Buffer | Uint8Array
@@ -650,7 +649,7 @@ declare module 'hyperswarm' {
 
 declare module 'udx-native' {
   import { TypedEmitter } from 'tiny-typed-emitter'
-  import { Duplex, Duplex, Duplex } from 'streamx'
+  import { Duplex } from 'streamx'
 
   export interface Interface {
     name: string
