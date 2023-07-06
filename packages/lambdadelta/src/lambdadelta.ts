@@ -892,7 +892,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             .update(contentHash)
             .digest('hex')
 
-        const proof = await this.rln.createProof(eventID, nullifiers, this.topic)
+        const proof = await this.rln.createProof(eventID, nullifiers, this.topic, true)
         return [{
             eventType,
             proof,
