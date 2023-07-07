@@ -140,6 +140,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
     private peers: Map<string, PeerData> // peerID => Hypercore
+    private pendingPeers: Set<string>
 
     private lastUsedMessageId: { [type: string]: Map<string, number>[] } // EventType => [nullifier => messageId]
 
@@ -150,6 +151,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.oldestIndex = 0
 
         this.peers = new Map()
+        this.pendingPeers = new Set()
         this.nullifierSpecs = new Map()
         this.eventMetadata = new Map()
         this.maxContentSize = new Map()
@@ -247,10 +249,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns Whether or not the synchronization the peer was added and synced
      */
     public async addPeer(peerID: string, feedCoreID: string, driveID: string) {
-        if (this.peers.has(peerID)) {
+        if (this.peers.has(peerID) || this.pendingPeers.has(peerID)) {
             // Peer already added
             return false
         }
+        this.pendingPeers.add(peerID)
         const feedCore = this.corestore.get(b4a.from(feedCoreID, 'hex'))
         const drive = new Hyperdrive(this.corestore, b4a.from(driveID, 'hex'))
         await feedCore.ready()
@@ -274,6 +277,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         feedCore.on('append', peer._onappend)
         this.peers.set(peerID, peer)
+        this.pendingPeers.delete(peerID)
         this.emit('peerAdded', peerID)
         const completed = await this.syncPeer(peerID, true)
         if (!completed) return false // Sync did not complete successfully
