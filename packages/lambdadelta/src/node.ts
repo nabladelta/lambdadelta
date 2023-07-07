@@ -198,7 +198,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
                 continue
             }
             peer.topicsBee?.close()
-            removePromises.push(feed.removePeer(peer.memberCID!))
+            removePromises.push(feed.removePeer(peerID))
         }
         return (await Promise.all(removePromises)).map(r => r).length
     }
