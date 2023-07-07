@@ -9,7 +9,7 @@ import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, deserializeProof, RLNGFullProof, serializeProof, VerificationResult } from '@nabladelta/rln'
 import { ContentVerificationResult, HeaderVerificationError, Lambdadelta } from './lambdadelta'
 import { decrypt, deserializeTopicData, encrypt, getMemberCIDEpoch, serializeTopicData } from './utils'
-import { Logger } from "tslog"
+import { ISettingsParam, Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 import Hyperbee from 'hyperbee'
 import { TypedEmitter } from 'tiny-typed-emitter'
@@ -114,6 +114,10 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         this.swarm.on('connection', this.handlePeer.bind(this))
         this.peerId = this.swarm.keyPair.publicKey.toString('hex')
         this._ready = (async () => { this.rln = await rln })()
+    }
+
+    public getSubLogger(settings?: ISettingsParam<unknown>) {
+        return this.log.getSubLogger(settings)
     }
 
     public async destroy() {
