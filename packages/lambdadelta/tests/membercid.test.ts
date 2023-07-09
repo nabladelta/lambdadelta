@@ -1,9 +1,7 @@
 
 import crypto from 'crypto'
-import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, deserializeProof, FileProvider, GroupDataProvider, nullifierInput, RLNGFullProof, serializeProof, VerificationResult, MemoryProvider } from '@nabladelta/rln'
 import { getMemberCIDEpoch, getTimestampInSeconds } from '../src/utils'
-import { existsSync, rmSync } from "fs"
 import { Identity } from '@semaphore-protocol/identity'
 import { generateMemberCID, verifyMemberCIDProof } from '../src/membercid'
 
