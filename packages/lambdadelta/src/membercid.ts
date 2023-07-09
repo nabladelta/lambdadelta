@@ -3,22 +3,23 @@ import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, nullifierInput, RLNGFullProof, VerificationResult } from '@nabladelta/rln'
 import { getMemberCIDEpoch, getTimestampInSeconds } from '../src/utils'
 
-const RLN_IDENTIFIER = "1000"
-
-export async function generateMemberCID(secret: string, stream: NoiseSecretStream, rln: RLN) {
+export async function generateMemberCID(secret: string, remotePublicKey: Buffer, rln: RLN) {
     const externalNullifier: nullifierInput = {
-        nullifier: `${getMemberCIDEpoch()}|${stream.remotePublicKey.toString('hex')}`,
+        nullifier: getMemberCIDEpoch().toString(),
         messageId: 0,
         messageLimit: 1
     }
-    const id = crypto.createHash('sha256').update(secret).update(externalNullifier.nullifier).digest('hex')
-    return await rln.createProof(id, [externalNullifier, externalNullifier], RLN_IDENTIFIER)
+    const id = crypto.createHash('sha256')
+        .update(secret)
+        .update(externalNullifier.nullifier)
+        .update(remotePublicKey.toString('hex'))
+        .digest('hex')
+    return await rln.createProof(id, [externalNullifier, externalNullifier], remotePublicKey.toString('hex'))
 }
 
-export async function verifyMemberCIDProof(proof: RLNGFullProof, stream: NoiseSecretStream, rln: RLN) {
+export async function verifyMemberCIDProof(proof: RLNGFullProof, localPublicKey: Buffer, rln: RLN) {
     const nullifier = proof.externalNullifiers[0]
-    const expectedNullifier = `${getMemberCIDEpoch()}|${stream.publicKey.toString('hex')}`
-    if (expectedNullifier !== nullifier.nullifier) {
+    if (getMemberCIDEpoch().toString() !== nullifier.nullifier) {
         return false
     }
 
@@ -26,7 +27,7 @@ export async function verifyMemberCIDProof(proof: RLNGFullProof, stream: NoiseSe
         return false
     }
 
-    if (proof.rlnIdentifier !== RLN_IDENTIFIER) {
+    if (proof.rlnIdentifier !== localPublicKey.toString('hex')) {
         return false
     }
     const result = await rln.submitProof(proof, getTimestampInSeconds())

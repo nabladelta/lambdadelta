@@ -251,7 +251,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         const peer = this.getPeer(peerID)
         this.log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
 
-        const proof = await generateMemberCID(this.secret, peer.connection.stream, this.rln!)
+        const proof = await generateMemberCID(this.secret, peer.connection.stream.remotePublicKey, this.rln!)
         const proofBuf = serializeProof(proof)
         const topicsCoreKey: Buffer = this.topicsBee.core.key!
         peer.localMemberCID = proof.signal
@@ -300,7 +300,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         if (this.memberCIDs.has(proof.signal)) {
             throw new HandshakeError(`Received duplicate MemberCID from ${peerID.slice(-6)}`, HandshakeErrorCode.DuplicateMemberCID, peerID)
         }
-        const result = await verifyMemberCIDProof(proof, peer.connection.stream, this.rln!)
+        const result = await verifyMemberCIDProof(proof, peer.connection.stream.publicKey, this.rln!)
         if (!result) {
             throw new HandshakeError(`Received invalid MemberCID from ${peerID.slice(-6)}`, HandshakeErrorCode.InvalidProof, peerID)
         }
