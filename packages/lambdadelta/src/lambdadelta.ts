@@ -59,7 +59,8 @@ export interface TopicEvents {
     'peerAdded': (peerID: string) => void
     'peerRemoved': (peerID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
-    'syncEventStart': (peerID: string, index: number) => void
+    'syncEventStart': (peerID: string, index: number, initialSync: boolean) => void
+    'syncCompleted': (peerID: string, lastIndex: number) => void
     'syncFatalError': (
             peerID: string,
             error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
@@ -414,6 +415,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         await peer.feedCore.ready()
         if (peer.feedCore.length < 1) {
             peer.finishedInitialSync = true
+            this.emit('syncCompleted', peerID, peer.feedCore.length - 1)
             return true
         }
         let startFrom = peer.nextIndex
@@ -425,7 +427,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             startFrom = lastEntry.oldestIndex
         }
         for (let i = startFrom; i < peer.feedCore.length; i++) {
-            this.emit('syncEventStart', peerID, i)
+            this.emit('syncEventStart', peerID, i, initialSync)
             peer.nextIndex = i + 1
             const shouldContinue = await this.syncEntry(peerID, i, initialSync)
             // Interrupt synchronization from this peer immediately
@@ -433,6 +435,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         peer.finishedInitialSync = true
+        this.emit('syncCompleted', peerID, peer.nextIndex)
         this.peers.set(peerID, peer)
         return true
     }
@@ -502,7 +505,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             }
             // If event was received live, not from an initial peer sync
             if (!initialSync && currentTime) {
-                
+
                 // If our peer's received time is close to our current time, use their time
                 // This makes it harder to tell who first saw an event
                 eventMetadata.received = (Math.abs(currentTime - entry.received) <= TOLERANCE)
