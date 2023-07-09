@@ -59,6 +59,7 @@ export interface TopicEvents {
     'peerAdded': (peerID: string) => void
     'peerRemoved': (peerID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
+    'peerUpdate': (peerID: string, prevLength: number, newLength: number) => void
     'syncEventStart': (peerID: string, index: number, initialSync: boolean) => void
     'syncCompleted': (peerID: string, lastIndex: number) => void
     'syncFatalError': (
@@ -259,6 +260,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const drive = new Hyperdrive(this.corestore, b4a.from(driveID, 'hex'))
         await feedCore.ready()
         await drive.ready()
+        this.emit('peerUpdate', peerID, -1, feedCore.length)
         const peer = {
             feedCore,
             drive,
@@ -395,6 +397,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         for (let i = peer.knownLength; i < peer.feedCore.length; i++) {
             peer.indexReceived.set(i, currentTime)
         }
+        this.emit('peerUpdate', peerID, peer.knownLength, peer.feedCore.length)
         peer.knownLength = peer.feedCore.length
     }
 
