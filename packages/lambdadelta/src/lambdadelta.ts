@@ -256,10 +256,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return false
         }
         this.pendingPeers.add(peerID)
-        const feedCore = this.corestore.get(b4a.from(feedCoreID, 'hex'))
         const drive = new Hyperdrive(this.corestore, b4a.from(driveID, 'hex'))
-        await feedCore.ready()
         await drive.ready()
+
+        const feedCore = this.corestore.get(b4a.from(feedCoreID, 'hex'))
+        await feedCore.ready()
+        await feedCore.update({wait: true})
+
         this.emit('peerUpdate', peerID, -1, feedCore.length)
         const peer = {
             feedCore,
