@@ -1,7 +1,7 @@
 import { RLN, nullifierInput } from "@nabladelta/rln";
 import { FeedEventHeader } from "./lambdadelta";
 import crypto from 'crypto'
-import { getTimestampInSeconds } from "./utils";
+import { getTimestampInSeconds, rlnIdentifier } from "./utils";
 
 /**
  * Creates a new event from input values, including proof generation,
@@ -30,7 +30,7 @@ export async function createEvent(
         .update(contentHash)
         .digest('hex')
 
-    const proof = await rln.createProof(eventID, nullifiers, topic, true)
+    const proof = await rln.createProof(eventID, nullifiers, rlnIdentifier(topic, eventType), true)
     return [{
         eventType,
         proof,

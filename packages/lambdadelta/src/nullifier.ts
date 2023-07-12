@@ -69,7 +69,7 @@ export class NullifierRegistry {
         for (let i = 0; i < specs.length; i++) {
             
             const input = {
-                nullifier: `${getEpoch(specs[i].epoch)}|${eventType}`,
+                nullifier: getEpoch(specs[i].epoch).toFixed(),
                 messageLimit: specs[i].messageLimit,
                 messageId: 0
             }

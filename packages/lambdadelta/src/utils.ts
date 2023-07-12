@@ -146,3 +146,7 @@ export function serializeInteger(i: number) {
 export function deserializeInteger(buf: Buffer) {
     return parseInt(buf.toString('utf-8'))
 }
+
+export function rlnIdentifier(topic: string, eventType: string) {
+    return `${topic}.${eventType}`
+}

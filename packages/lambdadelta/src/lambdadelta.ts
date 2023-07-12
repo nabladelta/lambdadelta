@@ -9,7 +9,8 @@ import { deserializeEvent,
     getTimestampInSeconds,
     serializeEvent,
     deserializeLogEntry,
-    serializeLogEntry } from './utils'
+    serializeLogEntry, 
+    rlnIdentifier} from './utils'
 import Corestore from 'corestore'
 import Hypercore from 'hypercore'
 import { Timeline } from './timeline'
@@ -42,8 +43,8 @@ export interface FeedEventHeader {
  * @property {string} eventID The event's ID
  */
 export interface LogEntry {
-    received: number
     oldestIndex: number
+    received: number
     eventID: string
 }
 
@@ -114,6 +115,7 @@ export enum ContentVerificationResult {
 
 export enum HeaderVerificationError {
     HASH_MISMATCH = 16, // Make sure we don't overlap with other enums
+    UNKNOWN_EVENT_TYPE,
     UNEXPECTED_RLN_IDENTIFIER,
     UNEXPECTED_MESSAGE_LIMIT,
     UNEXPECTED_NULLIFIER,
@@ -775,18 +777,18 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     /**
-     * Verifies an event header, including the validity of its RLN zkProof
+     * Verifies an event header's RLN zkProof
      * @param event Header for an event
      * @returns Enum indicating the verification result
      */
-    private async verifyEvent(event: FeedEventHeader) {
+    private async verifyEventProof(event: FeedEventHeader) {
         const proof = event.proof
-        if (proof.rlnIdentifier !== this.topic) {
+        if (proof.rlnIdentifier !== rlnIdentifier(this.topic, event.eventType)) {
             return HeaderVerificationError.UNEXPECTED_RLN_IDENTIFIER
         }
         const specs = this.nullifierSpecs.get(event.eventType)
         if (!specs) {
-            throw new Error("Unknown event type")
+            return HeaderVerificationError.UNKNOWN_EVENT_TYPE
         }
         for (let i = 0; i < specs.length; i++) {
             if (proof.externalNullifiers[i].messageLimit
@@ -795,7 +797,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             }
 
             if (proof.externalNullifiers[i].nullifier
-                !== `${getEpoch(specs[i].epoch, event.claimed)}|${event.eventType}`) {
+                !== getEpoch(specs[i].epoch, event.claimed).toFixed(0)) {
                 return HeaderVerificationError.UNEXPECTED_NULLIFIER
             }
         }
@@ -815,7 +817,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (event.proof.signal !== eventID) {
             return HeaderVerificationError.HASH_MISMATCH
         }
-        const result = await this.verifyEvent(event)
+        const result = await this.verifyEventProof(event)
         if (result !== VerificationResult.VALID) {
             return result
         }
