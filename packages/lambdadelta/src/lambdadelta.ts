@@ -4,12 +4,13 @@ import Hyperdrive from 'hyperdrive'
 import crypto from 'crypto'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { RLN, RLNGFullProof, VerificationResult, nullifierInput } from '@nabladelta/rln'
-import { deserializeEvent, deserializeFeedEntry,
+import { deserializeEvent, 
     getEpoch, getMean, getStandardDeviation,
     getTimestampInSeconds,
     mostCommonElement,
     serializeEvent,
-    serializeFeedEntry } from './utils'
+    deserializeLogEntry,
+    serializeLogEntry } from './utils'
 import Corestore from 'corestore'
 import Hypercore from 'hypercore'
 import { Timeline } from './timeline'
@@ -34,12 +35,12 @@ export interface FeedEventHeader {
 }
 
 /**
- * @typedef FeedEntry An entry in our feed hypercore
+ * @typedef LogEntry An entry in our event log hypercore
  * @property {number} oldestIndex Index of the oldest still valid block
  * @property {number} received Timestamp in seconds
  * @property {string} eventID The event's ID
  */
-export interface FeedEntry {
+export interface LogEntry {
     received: number
     oldestIndex: number
     eventID: string
@@ -96,7 +97,7 @@ interface PeerData {
     events: Map<string, number> // All events we obtained from this peer => index on core
     knownLength: number // Current length of feed core
     indexReceived: Map<number, number> // index => time received
-    feedCore: Hypercore
+    eventLog: Hypercore
     drive: Hyperdrive
     finishedInitialSync: boolean,
     _onappend: () => Promise<void>
@@ -133,7 +134,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     private timeline: Timeline
 
-    private core: Hypercore // Hypercore
+    private eventLog: Hypercore // Event Log Hypercore
     protected drive: Hyperdrive // Hyperdrive
     private oldestIndex: number // Our oldest valid event index
 
@@ -161,7 +162,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.timeline = new Timeline()
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
-        this.core = this.corestore.get({ name: `${topic}-received` })
+        this.eventLog = this.corestore.get({ name: `${topic}-received` })
         this.drive = new Hyperdrive(this.corestore.namespace('drive'))
         this.lastUsedMessageId = {}
         this.registerTypes()
@@ -200,7 +201,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     public async ready() {
-        await this.core.ready()
+        await this.eventLog.ready()
         await this.drive.ready()
     }
 
@@ -223,34 +224,34 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     
     /**
      * Get the IDs of the cores backing this instance
-     * @returns [feedCore, driveCore]
+     * @returns [logCore, driveCore]
      */
     public getCoreIDs(): [string, string] {
-        return [this.core.key!.toString('hex'), this.drive.key.toString('hex')]
+        return [this.eventLog.key!.toString('hex'), this.drive.key.toString('hex')]
     }
 
     public async getCoreLength(): Promise<number> {
-        await this.core.ready()
-        return this.core.length
+        await this.eventLog.ready()
+        return this.eventLog.length
     }
 
     public async close() {
         for (let [_, peer] of this.peers) {
-            peer.feedCore.removeListener('append', peer._onappend)
+            peer.eventLog.removeListener('append', peer._onappend)
         }
         for (let [_, peer] of this.peers) {
             await peer.drive.close()
-            await peer.feedCore.close()
+            await peer.eventLog.close()
         }
     }
     /**
      * Add a new peer to this topic feed and synchronize
      * @param peerID ID of this peer
-     * @param feedCoreID ID of this peer's feed core which contains `received` times
+     * @param logCoreID ID of this peer's event log core which contains `received` times
      * @param driveID ID of this peer's Hyperdrive which contains the event headers and content
      * @returns Whether or not the synchronization the peer was added and synced
      */
-    public async addPeer(peerID: string, feedCoreID: string, driveID: string) {
+    public async addPeer(peerID: string, logCoreID: string, driveID: string) {
         if (this.peers.has(peerID) || this.pendingPeers.has(peerID)) {
             // Peer already added
             return false
@@ -259,18 +260,18 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const drive = new Hyperdrive(this.corestore, b4a.from(driveID, 'hex'))
         await drive.ready()
 
-        const feedCore = this.corestore.get(b4a.from(feedCoreID, 'hex'))
-        await feedCore.ready()
-        await feedCore.update({wait: true})
+        const logCore = this.corestore.get(b4a.from(logCoreID, 'hex'))
+        await logCore.ready()
+        await logCore.update({wait: true})
 
-        this.emit('peerUpdate', peerID, -1, feedCore.length)
+        this.emit('peerUpdate', peerID, -1, logCore.length)
         const peer = {
-            feedCore,
+            eventLog: logCore,
             drive,
             nextIndex: 0,
             events: new Map(),
             finishedInitialSync: false,
-            knownLength: feedCore.length,
+            knownLength: logCore.length,
             indexReceived: new Map(),
             _onappend: async () => {
                 this.updateIndexReceivedTime(peerID)
@@ -281,7 +282,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 }
             }
         }
-        feedCore.on('append', peer._onappend)
+        logCore.on('append', peer._onappend)
         this.peers.set(peerID, peer)
         this.pendingPeers.delete(peerID)
         this.emit('peerAdded', peerID)
@@ -296,10 +297,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             // Peer does not exist
             return false
         }
-        peer.feedCore.removeListener('append', peer._onappend)
+        peer.eventLog.removeListener('append', peer._onappend)
         this.peers.delete(peerID)
         // await peer.drive.close() TODO: investigate issues
-        await peer.feedCore.close()
+        await peer.eventLog.close()
         // Remove peer's received timestamps contributions
         for (let [eventID, _] of peer.events) {
             const eventMetadata = this.eventMetadata.get(eventID)
@@ -372,11 +373,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         const peer = this.getPeer(peerID)
 
-        const entryBufA: Buffer = await peer.feedCore.get(prevIndex, {timeout: TIMEOUT})
-        const entryA = deserializeFeedEntry(entryBufA)
+        const entryBufA: Buffer = await peer.eventLog.get(prevIndex, {timeout: TIMEOUT})
+        const entryA = deserializeLogEntry(entryBufA)
 
-        const entryBufB: Buffer = await peer.feedCore.get(index, {timeout: TIMEOUT})
-        const entryB = deserializeFeedEntry(entryBufB)
+        const entryBufB: Buffer = await peer.eventLog.get(index, {timeout: TIMEOUT})
+        const entryB = deserializeLogEntry(entryBufB)
 
         if (entryA.eventID == entryB.eventID) {
             this.emit('syncDuplicateEvent', peerID, eventID, index, prevIndex)
@@ -397,11 +398,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private updateIndexReceivedTime(peerID: string) {
         const peer = this.getPeer(peerID)
         const currentTime = getTimestampInSeconds()
-        for (let i = peer.knownLength; i < peer.feedCore.length; i++) {
+        for (let i = peer.knownLength; i < peer.eventLog.length; i++) {
             peer.indexReceived.set(i, currentTime)
         }
-        this.emit('peerUpdate', peerID, peer.knownLength, peer.feedCore.length)
-        peer.knownLength = peer.feedCore.length
+        this.emit('peerUpdate', peerID, peer.knownLength, peer.eventLog.length)
+        peer.knownLength = peer.eventLog.length
     }
 
     /**
@@ -418,21 +419,21 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return false
         }
 
-        await peer.feedCore.ready()
-        if (peer.feedCore.length < 1) {
+        await peer.eventLog.ready()
+        if (peer.eventLog.length < 1) {
             peer.finishedInitialSync = true
-            this.emit('syncCompleted', peerID, peer.feedCore.length - 1)
+            this.emit('syncCompleted', peerID, peer.eventLog.length - 1)
             return true
         }
         let startFrom = peer.nextIndex
 
         if (initialSync && peer.nextIndex == 0) {
             // Find the first valid entry
-            const lastEntryBuf: Buffer = await peer.feedCore.get(peer.feedCore.length - 1, {timeout: TIMEOUT})
-            const lastEntry = deserializeFeedEntry(lastEntryBuf)
+            const lastEntryBuf: Buffer = await peer.eventLog.get(peer.eventLog.length - 1, {timeout: TIMEOUT})
+            const lastEntry = deserializeLogEntry(lastEntryBuf)
             startFrom = lastEntry.oldestIndex
         }
-        for (let i = startFrom; i < peer.feedCore.length; i++) {
+        for (let i = startFrom; i < peer.eventLog.length; i++) {
             this.emit('syncEventStart', peerID, i, initialSync)
             peer.nextIndex = i + 1
             const shouldContinue = await this.syncEntry(peerID, i, initialSync)
@@ -456,8 +457,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private async syncEntry(peerID: string, i: number, initialSync: boolean): Promise<boolean> {
         const peer = this.getPeer(peerID)
 
-        const entryBuf: Buffer = await peer.feedCore.get(i, {timeout: TIMEOUT})
-        const entry = deserializeFeedEntry(entryBuf)
+        const entryBuf: Buffer = await peer.eventLog.get(i, {timeout: TIMEOUT})
+        const entry = deserializeLogEntry(entryBuf)
         const eventID = entry.eventID
 
         let claimedTime: number | undefined
@@ -676,8 +677,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             throw new Error("Trying to publish received time twice")
         }
         try {
-            await this.core.ready()
-            const {length, byteLength} = await this.core.append(serializeFeedEntry({
+            await this.eventLog.ready()
+            const {length, byteLength} = await this.eventLog.append(serializeLogEntry({
                 eventID,
                 received: received,
                 oldestIndex: this.oldestIndex

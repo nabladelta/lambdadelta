@@ -1,5 +1,5 @@
 import { Logger } from "tslog"
-import { FeedEntry, FeedEventHeader } from "./lambdadelta"
+import { LogEntry, FeedEventHeader } from "./lambdadelta"
 import crypto from 'crypto'
 
 export function getTimestampInSeconds() {
@@ -56,11 +56,11 @@ export function deserializeEvent(eventBuf: Buffer): FeedEventHeader {
     return event
 }
 
-export function serializeFeedEntry(event: FeedEntry): Buffer {
+export function serializeLogEntry(event: LogEntry): Buffer {
     return Buffer.from(JSON.stringify(event), 'utf-8')
 }
 
-export function deserializeFeedEntry(eventBuf: Buffer): FeedEntry {
+export function deserializeLogEntry(eventBuf: Buffer): LogEntry {
     return JSON.parse(eventBuf.toString('utf-8'))
 }
 
