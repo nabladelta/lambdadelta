@@ -10,6 +10,7 @@ import Corestore from 'corestore'
 import ram from 'random-access-memory'
 import { NullifierSpec } from '../src/lambdadelta'
 import { Timeline } from '../src/timeline'
+import { calculateConsensusTime } from '../src/consensusTime'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -133,8 +134,8 @@ describe('Event feed', () => {
     })
 
     it("Consensus time calculation", () => {
-        expect(Math.floor(feedA['calculateConsensusTime']([10, 100, 1000, 0], 4))).toEqual(36)
-        expect(feedA['calculateConsensusTime']([0, 1, 1000, 1001], 4)).toEqual(500.5)
+        expect(Math.floor(calculateConsensusTime([10, 100, 1000, 0], 4))).toEqual(36)
+        expect(calculateConsensusTime([0, 1, 1000, 1001], 4)).toEqual(500.5)
     })
 
 })

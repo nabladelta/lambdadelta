@@ -3,11 +3,10 @@ import b4a from 'b4a'
 import Hyperdrive from 'hyperdrive'
 import crypto from 'crypto'
 import { TypedEmitter } from 'tiny-typed-emitter'
-import { RLN, RLNGFullProof, VerificationResult, nullifierInput } from '@nabladelta/rln'
+import { RLN, RLNGFullProof, VerificationResult } from '@nabladelta/rln'
 import { deserializeEvent, 
-    getEpoch, getMean, getStandardDeviation,
+    getEpoch,
     getTimestampInSeconds,
-    mostCommonElement,
     serializeEvent,
     deserializeLogEntry,
     serializeLogEntry } from './utils'
@@ -15,11 +14,12 @@ import Corestore from 'corestore'
 import Hypercore from 'hypercore'
 import { Timeline } from './timeline'
 import { NullifierRegistry } from './nullifier'
+import { createEvent } from './create'
+import { calculateConsensusTime } from './consensusTime'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
 const TIMEOUT = 5000
-const QUORUM = 66/100
 
 /**
  * @typedef FeedEventHeader Our main Event type
@@ -550,6 +550,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         return true
     }
+
     /**
      * Download and verify the content attached to a particular event
      * @param peerID The peer we received this event from
@@ -642,7 +643,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         const eventHeader = deserializeEvent(eventHeaderBuf)
 
-        const headerResult = await this.addEvent(eventHeader)
+        const headerResult = await this.insertEventHeader(eventHeader)
         if (headerResult !== VerificationResult.VALID) {
             return { headerResult, claimedTime: eventHeader.claimed }
         }
@@ -699,39 +700,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     /**
-     * Calculates the consensus timestamp for an event,
-     * taking all the `received` timestamps published by our peers as input.
-     * @param timestamps peer contributed timestamps for an event
-     * @param totalPeers total number of peers connected to this instance
-     * @returns The time the event was created according to the peer consensus
-     */
-    private calculateConsensusTime(timestamps: number[], totalPeers: number): number {
-        if ((timestamps.length / totalPeers) < QUORUM) {
-            // We do not have a quorum to decide on the correct time yet
-            return -1
-        }
-        // Find the most common received time
-        const [mostCommon, occurences] = mostCommonElement(timestamps)
-        // If we have a ~2/3rds majority for one timestamp, use it
-        if ((occurences / timestamps.length) >= QUORUM) {
-            return mostCommon
-        }
-        // Fallback method: use mean timestamp
-
-        // Filter out the timestamps that are more than one std.dev away from the mean
-        const stdDev = getStandardDeviation(timestamps)
-        const rawMean = getMean(timestamps)
-        const filteredTimes = timestamps.filter(n => Math.abs(rawMean - n) <= stdDev)
-
-        // If we still have more than one timestamp left, use these for the mean
-        if (filteredTimes.length > 1) {
-            return getMean(filteredTimes)
-        }
-        // Otherwise just return the regular mean
-        return rawMean
-    }
-
-    /**
      * To be called whenever we add another peer's `received` time to an event
      * It recalculates our consensus timestamp and then acts appropriately
      * @param eventID The event's ID
@@ -749,7 +717,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         const totalPeers = this.peers.size
             + (eventMetadata.index !== -1 ? 1 : 0) // Adding our own timestamp if it's been published
-        const consensusTime = this.calculateConsensusTime(collectedTimestamps, totalPeers)
+        const consensusTime = calculateConsensusTime(collectedTimestamps, totalPeers)
 
         if (consensusTime == -1) {
             return
@@ -790,6 +758,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             this.emit('timelineAddEvent', eventID, eventMetadata.claimed, consensusTime)
         }
     }
+
     /**
      * Calculates the hash for an event header.
      * This is used as the ID for events.
@@ -838,7 +807,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @param event Header of an event
      * @returns Enum indicating the verification result
      */
-    private async addEvent(event: FeedEventHeader) {
+    private async insertEventHeader(event: FeedEventHeader) {
         if (await this.drive.entry(`/events/${event.proof.signal}/header`)) {
             throw new Error("Event already added")
         }
@@ -857,41 +826,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     /**
-     * Creates a new event from input values, including proof generation,
-     * and returns it without storing it anywhere.
-     * @param eventType Type for this event
-     * @param nullifiers Nullifiers for the RLN proof
-     * @param content Event content buffer
-     * @returns [EventHeader, EventID]
-     */
-    private async createEvent(
-            eventType: string,
-            nullifiers: nullifierInput[],
-            content: Buffer
-        ): Promise<[FeedEventHeader, string]> {
-        const claimed = getTimestampInSeconds()
-        const contentHash = crypto.createHash('sha256')
-            .update(content)
-            .digest('hex')
-
-        const eventID = crypto.createHash('sha256')
-            .update(this.topic)
-            .update(eventType)
-            .update(claimed.toString())
-            .update(contentHash)
-            .digest('hex')
-
-        const proof = await this.rln.createProof(eventID, nullifiers, this.topic, true)
-        return [{
-            eventType,
-            proof,
-            claimed,
-            contentHash
-        },
-        eventID]
-    }
-
-    /**
      * Register a new event type for this feed 
      * @param eventType Name for this type
      * @param specs Specifications for the nullifiers used in this event
@@ -903,18 +837,17 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     /**
-     * Public API for the creation and publication of a new event.
-     * @param eventType Type for this event
+     * Public API for the publication of a new event
+     * @param eventID ID for this event
+     * @param header Event header
      * @param content Buffer containing the event's payload content
-     * @returns Enum indicating the result of the process.
      */
-    public async newEvent(eventType: string, content: Buffer) {
-        const [event, eventID] = await this.createEvent(eventType, await this.nullifierRegistry.createNullifier(eventType), content)
-        if (!(await this.validateContent(eventID, eventType, content))) {
+    public async addEvent(eventID: string, header: FeedEventHeader, content: Buffer) {
+        if (!(await this.validateContent(eventID, header.eventType, content))) {
             return { result: false, eventID }
         }
         await this.drive.put(`/events/${eventID}/content`, content)
-        const result = await this.addEvent(event)
+        const result = await this.insertEventHeader(header)
         if (result == VerificationResult.VALID) {
             let eventMetadata = this.eventMetadata.get(eventID)
             if (eventMetadata) {
@@ -923,19 +856,31 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
             eventMetadata = {
                 index: -1,
-                received: event.claimed,
+                received: header.claimed,
                 consensus: -1,
-                claimed: event.claimed,
+                claimed: header.claimed,
                 membersReceived: new Map()
             }
             this.eventMetadata.set(eventID, eventMetadata)
-            const index = await this.publishReceived(eventID, event.claimed)
+            const index = await this.publishReceived(eventID, header.claimed)
             eventMetadata.index = index
             this.eventMetadata.set(eventID, eventMetadata)
-            this.timeline.setTime(eventID, event.claimed)
-            this.emit('timelineAddEvent', eventID, event.claimed, event.claimed)
+            this.timeline.setTime(eventID, header.claimed)
+            this.emit('timelineAddEvent', eventID, header.claimed, header.claimed)
         }
         return { result, eventID }
+    }
+
+    /**
+     * Public API for the creation and publication of a new event
+     * @param eventType Type for this event
+     * @param content Buffer containing the event's payload content
+     * @returns Enum indicating the result of the process.
+     */
+    public async newEvent(eventType: string, content: Buffer) {
+        const nullifiers = await this.nullifierRegistry.createNullifier(eventType)
+        const [eventHeader, eventID] = await createEvent(this.rln, this.topic, eventType, nullifiers, content)
+        return await this.addEvent(eventID, eventHeader, content)
     }
 
     /**
