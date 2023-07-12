@@ -26,6 +26,8 @@
   "dependencies": {
     "@hyperswarm/dht": "^6.5.0",
     "@nabladelta/rln": "^1.0.6",
+    "@types/async-lock": "^1.4.0",
+    "async-lock": "^1.4.0",
     "b4a": "^1.6.4",
     "chalk": "^5.2.0",
     "corestore": "6.5.1",

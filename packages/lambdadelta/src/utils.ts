@@ -138,3 +138,11 @@ export function deserializeTopicData(dataBuf: Buffer): { feedCore: string, drive
 export function serializeTopicData(data: { feedCore: string, drive: string }): Buffer {
     return Buffer.from(JSON.stringify(data))
 }
+
+export function serializeInteger(i: number) {
+    return Buffer.from(i.toFixed(0), 'utf-8')
+}
+
+export function deserializeInteger(buf: Buffer) {
+    return parseInt(buf.toString('utf-8'))
+}

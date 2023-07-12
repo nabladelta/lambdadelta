@@ -162,7 +162,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.timeline = new Timeline()
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
-        this.eventLog = this.corestore.get({ name: `${topic}-received` })
+        this.eventLog = this.corestore.get({ name: `eventLog` })
         this.drive = new Hyperdrive(this.corestore.namespace('drive'))
         this.lastUsedMessageId = {}
         this.registerTypes()
@@ -186,6 +186,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             messageLimit: 1
         }
         this.addEventType("POST", [spec, spec], 4096)
+    }
+
+    public getNullifierSpecs(eventType: string) {
+        return this.nullifierSpecs.get(eventType)
     }
 
     protected onTimelineAddEvent(eventID: string, time: number, consensusTime: number) {
