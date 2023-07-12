@@ -45,7 +45,7 @@ export interface FeedEventHeader {
 export interface LogEntry {
     oldestIndex: number
     received: number
-    eventID: string
+    header: FeedEventHeader
 }
 
 /**
@@ -148,6 +148,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private peers: Map<string, PeerData> // peerID => Hypercore
     private pendingPeers: Set<string>
 
+    private eventHeaders: Map<string, FeedEventHeader> // EventID => Header
+
     private nullifierRegistry: NullifierRegistry
 
     constructor(topic: string, corestore: Corestore, rln: RLN) {
@@ -161,6 +163,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.nullifierSpecs = new Map()
         this.eventMetadata = new Map()
         this.maxContentSize = new Map()
+        this.eventHeaders = new Map()
 
         this.timeline = new Timeline()
 
@@ -388,7 +391,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const entryBufB: Buffer = await peer.eventLog.get(index, {timeout: TIMEOUT})
         const entryB = deserializeLogEntry(entryBufB)
 
-        if (entryA.eventID == entryB.eventID) {
+        if (entryA.header.proof.signal == entryB.header.proof.signal) {
             this.emit('syncDuplicateEvent', peerID, eventID, index, prevIndex)
             await this.removePeer(peerID)
             return false
@@ -468,15 +471,15 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         const entryBuf: Buffer = await peer.eventLog.get(i, {timeout: TIMEOUT})
         const entry = deserializeLogEntry(entryBuf)
-        const eventID = entry.eventID
+        const eventID = entry.header.proof.signal
 
         let claimedTime: number | undefined
         let headerResult: HeaderVerificationError | VerificationResult | undefined
         let contentResult: ContentVerificationResult | undefined
 
-        if (!(await this.drive.entry(`/events/${eventID}/header`))) {
+        if (!this.eventHeaders.get(eventID)) {
             // We never encountered this event before
-            const results = await this.syncEvent(peerID, eventID)
+            const results = await this.syncEvent(peerID, eventID, entry.header)
             headerResult = results.headerResult
             contentResult = results.contentResult
             claimedTime = results.claimedTime
@@ -573,11 +576,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         let claimedTime
         // Retrieve info from header if not provided
         if (!eventType || !contentHash) {
-            const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
-            if (!eventHeaderBuf) {
+            const eventHeader = this.eventHeaders.get(eventID)
+            if (!eventHeader) {
                 throw new Error("Missing header while trying to fetch content")
             }
-            const eventHeader = deserializeEvent(eventHeaderBuf)
             eventType = eventHeader.eventType
             contentHash = eventHeader.contentHash
             claimedTime = eventHeader.claimed
@@ -621,30 +623,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      */
     private async syncEvent(
         peerID: string,
-        eventID: string
+        eventID: string,
+        eventHeader: FeedEventHeader
         ): Promise<{
             headerResult: HeaderVerificationError | VerificationResult,
             contentResult?: ContentVerificationResult,
             claimedTime?: number
         }> {
-
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unkown peer")
-        }
-        const headerEntry = await peer.drive.entry(`/events/${eventID}/header`)
-        if (!(headerEntry)) {
-            // Header cannot be retrieved
-            return { headerResult: HeaderVerificationError.UNAVAILABLE }
-        }
-        // TODO: Check header size before retrieving
-        const eventHeaderBuf = await peer.drive.get(`/events/${eventID}/header`)
-        if (!(eventHeaderBuf)) {
-            return { headerResult: HeaderVerificationError.UNAVAILABLE }
-        }
-
-        const eventHeader = deserializeEvent(eventHeaderBuf)
-
         const headerResult = await this.insertEventHeader(eventHeader)
         if (headerResult !== VerificationResult.VALID) {
             return { headerResult, claimedTime: eventHeader.claimed }
@@ -686,10 +671,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (eventMetadata && eventMetadata.index !== -1) {
             throw new Error("Trying to publish received time twice")
         }
+        const header = this.eventHeaders.get(eventID)
+        if (!header) {
+            throw new Error("Header unavailable")
+        }
         try {
             await this.eventLog.ready()
             const {length, byteLength} = await this.eventLog.append(serializeLogEntry({
-                eventID,
+                header,
                 received: received,
                 oldestIndex: this.oldestIndex
             }))
@@ -782,7 +771,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns Enum indicating the verification result
      */
     private async verifyEventProof(event: FeedEventHeader) {
+        const eventID = this.getEventHash(event)
         const proof = event.proof
+        if (proof.signal !== eventID) {
+            return HeaderVerificationError.HASH_MISMATCH
+        }
         if (proof.rlnIdentifier !== rlnIdentifier(this.topic, event.eventType)) {
             return HeaderVerificationError.UNEXPECTED_RLN_IDENTIFIER
         }
@@ -810,20 +803,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns Enum indicating the verification result
      */
     private async insertEventHeader(event: FeedEventHeader) {
-        if (await this.drive.entry(`/events/${event.proof.signal}/header`)) {
-            throw new Error("Event already added")
-        }
-        const eventID = this.getEventHash(event)
-        if (event.proof.signal !== eventID) {
-            return HeaderVerificationError.HASH_MISMATCH
+        if (this.eventHeaders.get(event.proof.signal)) {
+            throw new Error("Event already exists")
         }
         const result = await this.verifyEventProof(event)
-        if (result !== VerificationResult.VALID) {
-            return result
+        if (result === VerificationResult.VALID) {
+            this.eventHeaders.set(event.proof.signal, event)
         }
-
-        const eventBuf = serializeEvent(event)
-        await this.drive.put(`/events/${eventID}/header`, eventBuf)
         return result
     }
 
@@ -891,10 +877,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns Event data or `null` if the event is not available
      */
     public async getEventByID(eventID: string) {
-        const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
+        const eventHeader = this.eventHeaders.get(eventID)
         const contentBuf = await this.drive.get(`/events/${eventID}/content`)
-        if (!contentBuf || !eventHeaderBuf) return null
-        const eventHeader: FeedEventHeader = deserializeEvent(eventHeaderBuf)
+        if (!contentBuf || !eventHeader) return null
         return {header: eventHeader, content: contentBuf}
     }
 
