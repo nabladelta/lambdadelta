@@ -10,7 +10,7 @@ interface SpecsProvider {
 }
 
 export class NullifierRegistry {
-    private registry: Hyperbee<string,Buffer>
+    private registry: Hyperbee<string, Buffer>
     private feed: SpecsProvider
     private lock: AsyncLock
 
@@ -84,16 +84,16 @@ export class NullifierRegistry {
                         input.messageId = lastId + 1
                     }
                     if (input.messageId >= input.messageLimit) {
-                        return false
+                        return true
                     }
                     nulls.push(input)
 
                     await this.setLastUsedMessageId(eventType, i, input.nullifier, input.messageId)
 
-                    return true
+                    return false
             })
 
-            if (limitReached) throw new Error("Message limit reached")
+            if (limitReached) throw new Error(`Message limit reached: ID ${input.messageId} Limit ${input.messageLimit}`)
         }
         return nulls
     }

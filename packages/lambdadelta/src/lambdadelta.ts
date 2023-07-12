@@ -14,6 +14,7 @@ import { deserializeEvent,
 import Corestore from 'corestore'
 import Hypercore from 'hypercore'
 import { Timeline } from './timeline'
+import { NullifierRegistry } from './nullifier'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
@@ -145,7 +146,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private peers: Map<string, PeerData> // peerID => Hypercore
     private pendingPeers: Set<string>
 
-    private lastUsedMessageId: { [type: string]: Map<string, number>[] } // EventType => [nullifier => messageId]
+    private nullifierRegistry: NullifierRegistry
 
     constructor(topic: string, corestore: Corestore, rln: RLN) {
         super()
@@ -164,7 +165,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
         this.eventLog = this.corestore.get({ name: `eventLog` })
         this.drive = new Hyperdrive(this.corestore.namespace('drive'))
-        this.lastUsedMessageId = {}
+
+        this.nullifierRegistry = new NullifierRegistry(this.corestore, this)
+
         this.registerTypes()
         this.on('timelineAddEvent', this.onTimelineAddEvent)
         this.on('timelineRemoveEvent', this.onTimelineAddEvent)
@@ -854,38 +857,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     /**
-     * Creates a set of valid nullifiers for a given event type.
-     * @param eventType Type for an event
-     * @returns Valid nullifiers for this event type
-     */
-    private createNullifier(eventType: string): nullifierInput[] {
-        const specs = this.nullifierSpecs.get(eventType)
-        if (!specs) {
-            throw new Error("Unknown event type")
-        }
-        const nulls: nullifierInput[] = []
-        for (let i = 0; i < specs.length; i++) {
-            
-            const input = {
-                nullifier: `${getEpoch(specs[i].epoch)}|${eventType}`,
-                messageLimit: specs[i].messageLimit,
-                messageId: 0
-            }
-            const lastId = this.lastUsedMessageId[eventType][i].get(input.nullifier)
-            if (lastId !== undefined) {
-                input.messageId = lastId + 1
-            }
-            if (input.messageId >= input.messageLimit) {
-                throw new Error("Message limit reached")
-            }
-            nulls.push(input)
-
-            this.lastUsedMessageId[eventType][i].set(input.nullifier, input.messageId)
-        }
-        return nulls
-    }
-
-    /**
      * Creates a new event from input values, including proof generation,
      * and returns it without storing it anywhere.
      * @param eventType Type for this event
@@ -929,7 +900,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     public addEventType(eventType: string, specs: NullifierSpec[], maxContentSize: number) {
         this.nullifierSpecs.set(eventType, specs)
         this.maxContentSize.set(eventType, maxContentSize)
-        this.lastUsedMessageId[eventType] = specs.map((_) => new Map())
     }
 
     /**
@@ -939,7 +909,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns Enum indicating the result of the process.
      */
     public async newEvent(eventType: string, content: Buffer) {
-        const [event, eventID] = await this.createEvent(eventType, this.createNullifier(eventType), content)
+        const [event, eventID] = await this.createEvent(eventType, await this.nullifierRegistry.createNullifier(eventType), content)
         if (!(await this.validateContent(eventID, eventType, content))) {
             return { result: false, eventID }
         }
