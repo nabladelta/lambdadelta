@@ -1,6 +1,6 @@
 {
   "name": "@nabladelta/lambdadelta",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "P2P Event Feed",
   "main": "src/index.ts",
   "repository": "https://github.com/nabladelta/lambdadelta",
