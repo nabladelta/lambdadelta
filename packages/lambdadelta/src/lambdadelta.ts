@@ -23,6 +23,34 @@ const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
 const TIMEOUT = 5000
 
+export interface TopicEvents {
+    'peerAdded': (peerID: string) => void
+    'peerRemoved': (peerID: string) => void
+    'publishReceivedTime': (eventID: string, time: number) => void
+    'peerUpdate': (peerID: string, prevLength: number, newLength: number) => void
+    'syncEventStart': (peerID: string, index: number, receivedTime: number | null) => void
+    'syncCompleted': (peerID: string, lastIndex: number) => void
+    'syncFatalError': (
+            peerID: string,
+            error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
+    'syncEventResult': (
+            peerID: string,
+            eventID: string,
+            headerResult: VerificationResult | HeaderVerificationError,
+            contentResult: ContentVerificationResult | undefined) => void
+    'syncContentResult': (peerID: string, eventID: string, contentResult: ContentVerificationResult) => void
+    'syncDuplicateEvent': (
+            peerID: string,
+            eventID: string,
+            index: number,
+            prevIndex: number | undefined) => void
+    'syncEventReceivedTime': (peerID: string, eventID: string, received: number) => void
+    'timelineAddEvent': (eventID: string, time: number, consensusTime: number) => void
+    'timelineRemoveEvent': (eventID: string, prevTime: number, consensusTime: number) => void
+    'timelineRejectedEvent': (eventID: string, claimedTime: number, consensusTime: number) => void
+    'consensusTimeChanged': (eventID: string, prevTime: number, newTime: number) => void
+}
+
 /**
  * @typedef FeedEventHeader Our main Event type
  * @property {string} eventType Event type
@@ -73,34 +101,6 @@ export interface NullifierSpec {
 
 enum QueueControl {
     STOP
-}
-
-export interface TopicEvents {
-    'peerAdded': (peerID: string) => void
-    'peerRemoved': (peerID: string) => void
-    'publishReceivedTime': (eventID: string, time: number) => void
-    'peerUpdate': (peerID: string, prevLength: number, newLength: number) => void
-    'syncEventStart': (peerID: string, index: number, receivedTime: number | null) => void
-    'syncCompleted': (peerID: string, lastIndex: number) => void
-    'syncFatalError': (
-            peerID: string,
-            error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
-    'syncEventResult': (
-            peerID: string,
-            eventID: string,
-            headerResult: VerificationResult | HeaderVerificationError,
-            contentResult: ContentVerificationResult | undefined) => void
-    'syncContentResult': (peerID: string, eventID: string, contentResult: ContentVerificationResult) => void
-    'syncDuplicateEvent': (
-            peerID: string,
-            eventID: string,
-            index: number,
-            prevIndex: number | undefined) => void
-    'syncEventReceivedTime': (peerID: string, eventID: string, received: number) => void
-    'timelineAddEvent': (eventID: string, time: number, consensusTime: number) => void
-    'timelineRemoveEvent': (eventID: string, prevTime: number, consensusTime: number) => void
-    'timelineRejectedEvent': (eventID: string, claimedTime: number, consensusTime: number) => void
-    'consensusTimeChanged': (eventID: string, prevTime: number, newTime: number) => void
 }
 
 interface EventMetadata {
