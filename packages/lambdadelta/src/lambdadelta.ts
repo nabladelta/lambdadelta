@@ -271,6 +271,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             for (let i = update.fromIndex; i < update.toIndex; i++) {
                 await this.syncEntry(peerID, peer, i, update.timestamp)
             }
+            this.emit('syncCompleted', peerID, update.toIndex - 1)
         }
     }
 
@@ -323,7 +324,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.peers.set(peerID, peer)
         this.pendingPeers.delete(peerID)
         this.emit('peerAdded', peerID)
-        this.processLogUpdates(peerID, peer)
+        this.processLogUpdates(peerID, peer).catch((e) => {
+            console.error(e)
+        })
         return true
     }
 
@@ -530,6 +533,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         peer.events.set(eventID, i)
         this.peers.set(peerID, peer)
+
         await this.onMemberReceivedTime(eventID)
 
         return true
