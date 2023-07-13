@@ -38,6 +38,7 @@
     "hyperswarm": "^4.3.7",
     "random-access-memory": "^6.1.0",
     "sorted-btree": "^1.8.1",
-    "tslog": "^4.8.2"
+    "tslog": "^4.8.2",
+    "wait-queue": "^1.1.4"
   }
 }
