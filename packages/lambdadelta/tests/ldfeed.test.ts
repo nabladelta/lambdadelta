@@ -11,32 +11,9 @@ import ram from 'random-access-memory'
 import { NullifierSpec } from '../src/lambdadelta'
 import { Timeline } from '../src/timeline'
 import { calculateConsensusTime } from '../src/consensusTime'
+import { printer } from './utils'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
-
-const printer = (feed: Lambdadelta, fname: string) => {
-    const eventNames = [
-        'peerAdded',
-        'peerRemoved',
-        'publishReceivedTime',
-        'syncEventStart',
-        'syncFatalError',
-        'syncEventResult',
-        'syncContentResult',
-        'syncDuplicateEvent',
-        'syncEventReceivedTime',
-        'timelineAddEvent',
-        'timelineRemoveEvent',
-        'timelineRejectedEvent',
-        'consensusTimeChanged',
-        'syncCompleted',
-        'peerUpdate'
-    ] as const
-
-    for (let name of eventNames) {
-        feed.on(name, (...args: any[]) => console.log(`${fname}: [${name}] ${args.join(' | ')}`))
-    }
-}
 
 jest.setTimeout(120000)
 describe('Event feed', () => {

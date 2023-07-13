@@ -4,6 +4,7 @@ import { Identity } from "@semaphore-protocol/identity";
 import { existsSync, rmSync } from "fs";
 import createTestnet from "@hyperswarm/testnet";
 import { Logger } from "tslog";
+import { Lambdadelta } from "../src";
 
 export const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -112,4 +113,28 @@ export function findMissingPeers(peers: LDNode[]) {
         }
     }
     return missing
+}
+
+export const printer = (feed: Lambdadelta, fname: string) => {
+    const eventNames = [
+        'peerAdded',
+        'peerRemoved',
+        'publishReceivedTime',
+        'syncEventStart',
+        'syncFatalError',
+        'syncEventResult',
+        'syncContentResult',
+        'syncDuplicateEvent',
+        'syncEventReceivedTime',
+        'timelineAddEvent',
+        'timelineRemoveEvent',
+        'timelineRejectedEvent',
+        'consensusTimeChanged',
+        'syncCompleted',
+        'peerUpdate'
+    ] as const
+
+    for (let name of eventNames) {
+        feed.on(name, (...args: any[]) => console.log(`${fname}: [${name}] ${args.join(' | ')}`))
+    }
 }
