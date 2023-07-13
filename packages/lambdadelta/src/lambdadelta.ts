@@ -314,7 +314,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         this.emit('peerUpdate', peerID, -1, logCore.length)
-        const firstIndex = await this.getOldestIndex(peer)
+        const firstIndex = logCore.length > 0 ? await this.getOldestIndex(peer) : 0
         peer.logUpdateQueue.push({
             fromIndex: firstIndex,
             toIndex: logCore.length,

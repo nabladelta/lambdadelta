@@ -31,7 +31,7 @@ describe('LDNode', () => {
 
     jest.setTimeout(1200000000)
 
-    it.only('Join a topic and post', async () => {
+    it('Join a topic and post', async () => {
         await anode.join([T])
         await bnode.join([T])
         const a = anode.getTopic(T)!
