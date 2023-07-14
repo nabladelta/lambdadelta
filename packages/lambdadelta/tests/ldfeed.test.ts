@@ -112,10 +112,6 @@ describe('Event feed', () => {
         expect(timeline['timeline'].has(100001)).toEqual(true)
     })
 
-    it("Calls onInvalidInput with just undefined", () => {
-        expect(feedA['onInvalidInput']('test', undefined, undefined)).toBe(true)
-    })
-
     it("Consensus time calculation", () => {
         expect(Math.floor(calculateConsensusTime([10, 100, 1000, 0], 4))).toEqual(36)
         expect(calculateConsensusTime([0, 1, 1000, 1001], 4)).toEqual(500.5)
