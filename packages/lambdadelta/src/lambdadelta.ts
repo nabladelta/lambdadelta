@@ -467,7 +467,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * Synchronizes an individual entry from a peer's feed hypercore
      * @param peerID ID of the peer
      * @param i index of this entry on the hypercore
-     * @param initialSync Whether this is the initial sync or a new event
+     * @param timeReceived When we received this event. `null` if it was already present
      * @returns boolean indicating whether we should continue synchronizing events from this peer or stop
      */
     private async syncEntry(
