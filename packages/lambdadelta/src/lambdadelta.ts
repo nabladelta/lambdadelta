@@ -115,7 +115,7 @@ interface EventMetadata {
     membersReceived: Map<string, number> // peerID => time received
 }
 
-interface PeerData {
+export interface PeerData {
     id: string // PeerID
     events: Map<string, number> // All events we obtained from this peer => index on core
     knownLength: number // Current length of feed core
@@ -389,12 +389,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return false
         }
         if (code === VerificationResult.VALID && payloadCode === PayloadVerificationResult.VALID) {
-            await this.onEventSyncComplete(eventID!)
+            await this.onEventSyncComplete(peer, eventID!)
         }
         return true
     }
 
-    protected async onEventSyncComplete(eventID: string) {
+    protected async onEventSyncComplete(peer: PeerData, eventID: string) {
 
     }
 
@@ -797,6 +797,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             await this.onTimelineAdd(eventID, header.claimed, -1)
         }
         return { result, eventID }
+    }
+
+    public isEventInTimeline(eventID: string) {
+        return !!this.timeline.getTime(eventID)
     }
 
     /**
