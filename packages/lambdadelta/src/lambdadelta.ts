@@ -171,6 +171,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private eventHeaders: Map<string, FeedEventHeader> // EventID => Header
 
     private nullifierRegistry: NullifierRegistry
+    private logReloaded: boolean
 
     constructor(topic: string, corestore: Corestore, rln: RLN) {
         super()
@@ -186,6 +187,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.eventHeaders = new Map()
 
         this.timeline = new Timeline()
+        this.logReloaded = false;
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
         this.eventLog = this.corestore.get({ name: `eventLog` })
@@ -219,6 +221,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     public async ready() {
         await this.eventLog.ready()
         await this.drive.ready()
+        await this.reloadEventLog()
     }
 
     public hasPeer(peerID: string) {
@@ -252,9 +255,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
     }
 
-    private async getOldestIndex(peer: PeerData) {
+    private async getOldestIndex(eventLog: Hypercore) {
+        if (eventLog.length == 0) {
+            return 0
+        }
         // Find the first valid entry
-        const lastEntryBuf: Buffer = await peer.eventLog.get(peer.eventLog.length - 1, {timeout: TIMEOUT})
+        const lastEntryBuf: Buffer = await eventLog.get(eventLog.length - 1, {timeout: TIMEOUT})
         const lastEntry = deserializeLogEntry(lastEntryBuf)
         return lastEntry.oldestIndex
     }
@@ -292,7 +298,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         this.emit('peerUpdate', peerID, -1, logCore.length)
-        const firstIndex = logCore.length > 0 ? await this.getOldestIndex(peer) : 0
+        const firstIndex = await this.getOldestIndex(peer.eventLog)
         peer.logUpdateQueue.push({
             fromIndex: firstIndex,
             toIndex: logCore.length,
@@ -461,6 +467,32 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         return true
+    }
+
+    private async reloadEventLog() {
+        if (this.logReloaded) return
+        this.logReloaded = true
+
+        if (this.eventLog.length == 0) return
+
+        const oldestIndex = await this.getOldestIndex(this.eventLog)
+        for (let i = oldestIndex; i < this.eventLog.length; i++) {
+            const entryBuf = await this.eventLog.get(i, {timeout: TIMEOUT})
+            const entry = deserializeLogEntry(entryBuf)
+            const eventID = entry.header.proof.signal
+            this.eventHeaders.set(eventID, entry.header)
+            const eventMetadata = {
+                payloadInvalid: false,
+                index: i,
+                received: entry.received,
+                consensus: -1,
+                claimed: entry.header.claimed,
+                membersReceived: new Map()
+            }
+            this.eventMetadata.set(eventID, eventMetadata)
+
+            await this.onMemberReceivedTime(eventID)
+        }
     }
 
     /**
@@ -792,7 +824,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             this.eventMetadata.set(eventID, eventMetadata)
             const index = await this.publishReceived(eventID, header.claimed)
             eventMetadata.index = index
-            this.eventMetadata.set(eventID, eventMetadata)
             this.timeline.setTime(eventID, header.claimed)
             await this.onTimelineAdd(eventID, header.claimed, -1)
         }
