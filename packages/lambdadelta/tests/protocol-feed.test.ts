@@ -8,7 +8,7 @@ import { generateMemberCID, verifyMemberCIDProof } from '../src/membercid'
 import { Lambdadelta } from '../src'
 import Corestore from 'corestore'
 import ram from 'random-access-memory'
-import { ContentVerificationResult, HeaderVerificationError, NullifierSpec } from '../src/lambdadelta'
+import { PayloadVerificationResult, HeaderVerificationError, NullifierSpec } from '../src/lambdadelta'
 import Hyperdrive from 'hyperdrive'
 import b4a from 'b4a'
 import { TypedEmitter } from 'tiny-typed-emitter'
@@ -65,10 +65,10 @@ describe('Event feed', () => {
         return {core, drive, ids: [core.key!.toString('hex'), drive.key.toString('hex')]}
     }
 
-    const createEvent = async(content: string, eventType: string = eventTypePost, nullifiers?: nullifierInput[]) => {
+    const createEvent = async(payload: string, eventType: string = eventTypePost, nullifiers?: nullifierInput[]) => {
         nullifiers = nullifiers || feedA['createNullifier'](eventType)
         const [header,
-        eventID] = await feedA['createEvent'](eventType, nullifiers, Buffer.from(content))
+        eventID] = await feedA['createEvent'](eventType, nullifiers, Buffer.from(payload))
         const headerBuf = serializeEvent(header)
         const entryBuf = serializeFeedEntry({eventID, received: header.claimed, oldestIndex: 0})
         return {header, headerBuf, entryBuf, eventID}
@@ -119,7 +119,7 @@ describe('Event feed', () => {
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id2, HeaderVerificationError.UNAVAILABLE, undefined)
     })
 
-    it('Handles missing content gracefully', async () => {
+    it('Handles missing payload gracefully', async () => {
         const mockFeed = await createMockFeed(topic, peerB)        
         let id1, id2
         {
@@ -139,8 +139,8 @@ describe('Event feed', () => {
         await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
-        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
-        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id2, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
+        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, PayloadVerificationResult.UNAVAILABLE)
+        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id2, VerificationResult.VALID, PayloadVerificationResult.UNAVAILABLE)
     })
 
     it('Handles reused nullifier', async () => {
@@ -162,7 +162,7 @@ describe('Event feed', () => {
         await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(3000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
-        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
+        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, PayloadVerificationResult.UNAVAILABLE)
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id2, HeaderVerificationError.UNEXPECTED_NULLIFIER, undefined)
     })
 
@@ -183,12 +183,12 @@ describe('Event feed', () => {
         expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, HeaderVerificationError.HASH_MISMATCH, undefined)
     })
 
-    it('Handles content hash mismatch', async () => {
+    it('Handles payload hash mismatch', async () => {
         let id1
         {
             const {eventID, entryBuf, headerBuf, header} = await createEvent("test1")
             await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
-            await mockFeed.drive.put(`/events/${eventID}/content`, Buffer.from("test7"))
+            await mockFeed.drive.put(`/events/${eventID}/payload`, Buffer.from("test7"))
             await mockFeed.core.append(entryBuf)
             id1 = eventID
         }
@@ -196,17 +196,17 @@ describe('Event feed', () => {
         await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
-        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.HASH_MISMATCH)
+        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, PayloadVerificationResult.HASH_MISMATCH)
     })
 
-    it('Handles content size mismatch', async () => {
+    it('Handles payload size mismatch', async () => {
         feedA.addEventType("SHORTPOST", [postNullifierSpec, postNullifierSpec], 1)
         let id1
         {
             const {eventID, entryBuf, headerBuf, header} = await createEvent("test6", "SHORTPOST")
 
             await mockFeed.drive.put(`/events/${eventID}/header`, headerBuf)
-            await mockFeed.drive.put(`/events/${eventID}/content`, Buffer.from("test6"))
+            await mockFeed.drive.put(`/events/${eventID}/payload`, Buffer.from("test6"))
             await mockFeed.core.append(entryBuf)
             id1 = eventID
         }
@@ -214,10 +214,10 @@ describe('Event feed', () => {
         await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
         await sleep(2000)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
-        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.SIZE)
+        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, PayloadVerificationResult.SIZE)
     })
 
-    it('Can fetch content and header separately', async () => {
+    it('Can fetch payload and header separately', async () => {
         let id1
         {
             const {eventID, entryBuf, headerBuf} = await createEvent("test6")
@@ -225,7 +225,7 @@ describe('Event feed', () => {
             await mockFeed.core.append(entryBuf)
             await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
             await sleep(1500)
-            await mockFeed.drive.put(`/events/${eventID}/content`, Buffer.from("test6"))
+            await mockFeed.drive.put(`/events/${eventID}/payload`, Buffer.from("test6"))
             await feedA.removePeer(peerB.mcid)
             await sleep(1500)
             await feedA.addPeer(peerB.mcid, mockFeed.ids[0], mockFeed.ids[1])
@@ -233,8 +233,8 @@ describe('Event feed', () => {
         }
         await sleep(1500)
         expect(feedA.emit).toHaveBeenCalledWith('peerAdded', peerB.mcid)
-        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, ContentVerificationResult.UNAVAILABLE)
+        expect(feedA.emit).toHaveBeenCalledWith('syncEventResult', peerB.mcid, id1, VerificationResult.VALID, PayloadVerificationResult.UNAVAILABLE)
         expect(feedA.emit).toHaveBeenCalledWith('peerRemoved', peerB.mcid)
-        expect(feedA.emit).toHaveBeenCalledWith('syncContentResult', peerB.mcid, ContentVerificationResult.VALID)
+        expect(feedA.emit).toHaveBeenCalledWith('syncPayloadResult', peerB.mcid, PayloadVerificationResult.VALID)
     })
 })

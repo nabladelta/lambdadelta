@@ -7,7 +7,7 @@ import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, deserializeProof, RLNGFullProof, serializeProof, VerificationResult } from '@nabladelta/rln'
-import { ContentVerificationResult, HeaderVerificationError, Lambdadelta, SyncError } from './lambdadelta'
+import { PayloadVerificationResult, HeaderVerificationError, Lambdadelta, SyncError } from './lambdadelta'
 import { decrypt, deserializeTopicData, encrypt, getMemberCIDEpoch, serializeTopicData } from './utils'
 import { ISettingsParam, Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
@@ -69,7 +69,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
 
     private peers: Map<string, NodePeerData>
     private memberCIDs: Map<string, string> // MCID => peerID
-    private bannedMCIDs: Map<string, VerificationResult | HeaderVerificationError | ContentVerificationResult | undefined | SyncError>
+    private bannedMCIDs: Map<string, VerificationResult | HeaderVerificationError | PayloadVerificationResult | undefined | SyncError>
 
     private topicsBee: Hyperbee<string, Buffer>
     public topicFeeds: Map<string, Feed> // Topic => feed
@@ -355,7 +355,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
      * @param peerID ID of the peer
      * @param error The fatal error that triggered this handler
      */
-    private async fatalSyncError(peerID: string, error: VerificationResult | HeaderVerificationError | ContentVerificationResult | SyncError) {
+    private async fatalSyncError(peerID: string, error: VerificationResult | HeaderVerificationError | PayloadVerificationResult | SyncError) {
         const peer = this.getPeer(peerID)
         if (error !== HeaderVerificationError.UNAVAILABLE) {
             this.bannedMCIDs.set(peerID, error)

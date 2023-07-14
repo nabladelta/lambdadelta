@@ -123,7 +123,7 @@ export const printer = (feed: Lambdadelta, fname: string) => {
         'syncEventStart',
         'syncFatalError',
         'syncEventResult',
-        'syncContentResult',
+        'syncPayloadResult',
         'syncDuplicateEvent',
         'syncEventReceivedTime',
         'timelineAddEvent',

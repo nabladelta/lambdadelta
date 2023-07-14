@@ -8,7 +8,7 @@ import { getTimestampInSeconds, rlnIdentifier } from "./utils";
  * and returns it without storing it anywhere.
  * @param eventType Type for this event
  * @param nullifiers Nullifiers for the RLN proof
- * @param content Event content buffer
+ * @param payload Event payload buffer
  * @returns [EventHeader, EventID]
  */
 export async function createEvent(
@@ -16,18 +16,18 @@ export async function createEvent(
     topic: string,
     eventType: string,
     nullifiers: nullifierInput[],
-    content: Buffer
+    payload: Buffer
 ): Promise<[FeedEventHeader, string]> {
     const claimed = getTimestampInSeconds()
-    const contentHash = crypto.createHash('sha256')
-        .update(content)
+    const payloadHash = crypto.createHash('sha256')
+        .update(payload)
         .digest('hex')
 
     const eventID = crypto.createHash('sha256')
         .update(topic)
         .update(eventType)
         .update(claimed.toString())
-        .update(contentHash)
+        .update(payloadHash)
         .digest('hex')
 
     const proof = await rln.createProof(eventID, nullifiers, rlnIdentifier(topic, eventType), true)
@@ -35,7 +35,7 @@ export async function createEvent(
         eventType,
         proof,
         claimed,
-        contentHash
+        payloadHash
     },
     eventID]
 }

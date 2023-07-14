@@ -43,11 +43,11 @@ describe('LDNode', () => {
         await sleep(10000)
         const events = 
         (await b.getEvents())
-                .map(e => e.content.toString())
+                .map(e => e.payload.toString())
 
         const events2 = 
         (await a.getEvents())
-                .map(e => e.content.toString())
+                .map(e => e.payload.toString())
         expect(events[0]).toEqual(events2[0])
     })
 
@@ -76,7 +76,7 @@ describe('LDNode', () => {
         const messageLists = []
         for (const feed of feeds) {
             const messages = (await feed.getEvents())
-                                .map(e => e.content.toString())
+                                .map(e => e.payload.toString())
             messageLists.push(messages)
         }
 
@@ -115,7 +115,7 @@ describe('LDNode', () => {
         const messageLists = []
         for (const feed of feeds) {
             const feedMessages = (await feed.getEvents())
-                                .map(e => e.content.toString())
+                                .map(e => e.payload.toString())
             expect(feedMessages.length).toEqual(n)
             messageLists.push(feedMessages)
         }

@@ -32,12 +32,12 @@ export interface TopicEvents {
     'syncCompleted': (peerID: string, lastIndex: number) => void
     'syncFatalError': (
             peerID: string,
-            error: VerificationResult | HeaderVerificationError | ContentVerificationResult | SyncError) => void
+            error: VerificationResult | HeaderVerificationError | PayloadVerificationResult | SyncError) => void
     'syncEventResult': (
             peerID: string,
             eventID: string | null,
             headerResult: VerificationResult | HeaderVerificationError | SyncError) => void
-    'syncContentResult': (peerID: string, eventID: string, contentResult: ContentVerificationResult) => void
+    'syncPayloadResult': (peerID: string, eventID: string, payloadResult: PayloadVerificationResult) => void
     'syncDuplicateEvent': (
             peerID: string,
             eventID: string,
@@ -55,13 +55,13 @@ export interface TopicEvents {
  * @property {string} eventType Event type
  * @property {number} claimed Time the event author claims
  * @property {RLNGFullProof} proof RLN proof for this event
- * @property {string} contentHash Hash of content
+ * @property {string} payloadHash Hash of payload
  */
 export interface FeedEventHeader {
     eventType: string
     claimed: number
     proof: RLNGFullProof
-    contentHash: string
+    payloadHash: string
 }
 
 /**
@@ -106,10 +106,8 @@ enum QueueControl {
     STOP
 }
 
-
-
 interface EventMetadata {
-    contentInvalid: boolean // Do not try to fetch the content again. It's invalid.
+    payloadInvalid: boolean // Do not try to fetch the payload again. It's invalid.
     index: number // Index on own hypercore
     received: number // Time received for us
     claimed: number // Time the event was supposedly produced
@@ -127,7 +125,7 @@ interface PeerData {
     _onappend: () => Promise<void>
 }
 
-export enum ContentVerificationResult {
+export enum PayloadVerificationResult {
     VALID,
     UNAVAILABLE,
     SIZE,
@@ -164,7 +162,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private oldestIndex: number // Our oldest valid event index
 
     protected nullifierSpecs: Map<string, NullifierSpec[]>
-    protected maxContentSize: Map<string, number>
+    protected maxPayloadSize: Map<string, number>
 
     private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
     private peers: Map<string, PeerData> // peerID => Hypercore
@@ -184,7 +182,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.pendingPeers = new Set()
         this.nullifierSpecs = new Map()
         this.eventMetadata = new Map()
-        this.maxContentSize = new Map()
+        this.maxPayloadSize = new Map()
         this.eventHeaders = new Map()
 
         this.timeline = new Timeline()
@@ -265,7 +263,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * Add a new peer to this topic feed and synchronize
      * @param peerID ID of this peer
      * @param logCoreID ID of this peer's event log core which contains `received` times
-     * @param driveID ID of this peer's Hyperdrive which contains the event headers and content
+     * @param driveID ID of this peer's Hyperdrive which contains the event headers and payload
      * @returns Whether or not the synchronization the peer was added and synced
      */
     public async addPeer(peerID: string, logCoreID: string, driveID: string) {
@@ -380,17 +378,17 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     private async onSyncResult(
         peer: PeerData,
-        {eventID, code, contentCode}: {
+        {eventID, code, payloadCode}: {
             eventID: string | null,
             code: VerificationResult | HeaderVerificationError | SyncError,
-            contentCode?: ContentVerificationResult}) {
+            payloadCode?: PayloadVerificationResult}) {
         if (!this.onLogEntrySyncResult(peer, eventID, code)) {
             return false
         }
-        if (contentCode !== undefined && !this.onContentSyncResult(peer, eventID!, contentCode)) {
+        if (payloadCode !== undefined && !this.onPayloadSyncResult(peer, eventID!, payloadCode)) {
             return false
         }
-        if (code === VerificationResult.VALID && contentCode === ContentVerificationResult.VALID) {
+        if (code === VerificationResult.VALID && payloadCode === PayloadVerificationResult.VALID) {
             await this.onEventSyncComplete(eventID!)
         }
         return true
@@ -418,9 +416,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return true
     }
 
-    protected onContentSyncResult(peer: PeerData, eventID: string, result: ContentVerificationResult) {
-        this.emit('syncContentResult', peer.id, eventID, result)
-        if (result !== ContentVerificationResult.VALID && result !== ContentVerificationResult.UNAVAILABLE) {
+    protected onPayloadSyncResult(peer: PeerData, eventID: string, result: PayloadVerificationResult) {
+        this.emit('syncPayloadResult', peer.id, eventID, result)
+        if (result !== PayloadVerificationResult.VALID && result !== PayloadVerificationResult.UNAVAILABLE) {
             this.removePeer(peer.id)
             this.emit('syncFatalError', peer.id, result)
             return false
@@ -476,7 +474,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             peer: PeerData,
             i: number,
             timeReceived: number | null
-        ): Promise<{ code: VerificationResult | HeaderVerificationError | SyncError, contentCode?: ContentVerificationResult, eventID: string | null} > {
+        ): Promise<{ code: VerificationResult | HeaderVerificationError | SyncError, payloadCode?: PayloadVerificationResult, eventID: string | null} > {
         const peerID = peer.id
 
         this.emit('syncEventStart', peerID, i, timeReceived)
@@ -496,12 +494,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return { code: headerResult, eventID }
         }
 
-        const contentCode = await this.syncContent(peer, entry.header)
+        const payloadCode = await this.syncPayload(peer, entry.header)
 
         let eventMetadata = this.eventMetadata.get(eventID)
         if (!eventMetadata) { // Is a new event
             eventMetadata = {
-                contentInvalid: false,
+                payloadInvalid: false,
                 index: -1,
                 received: -1,
                 consensus: -1,
@@ -524,7 +522,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         } else if (eventMetadata.membersReceived.has(peerID)) {
             if (await this.onDuplicateInput(peerID, peer, eventID, i, peer.events.get(eventID))) {
-                return { code: SyncError.DUPLICATE_ENTRY, eventID, contentCode }
+                return { code: SyncError.DUPLICATE_ENTRY, eventID, payloadCode }
             }
         }
 
@@ -536,74 +534,74 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         await this.onMemberReceivedTime(eventID)
 
         // Make sure we do not fetch this again if it's invalid
-        if (contentCode === ContentVerificationResult.INVALID) {
-            eventMetadata.contentInvalid == true
+        if (payloadCode === PayloadVerificationResult.INVALID) {
+            eventMetadata.payloadInvalid == true
         }
     
-        return {code: VerificationResult.VALID, eventID, contentCode}
+        return {code: VerificationResult.VALID, eventID, payloadCode}
     }
 
     /**
-     * Download and verify the content attached to a particular event
+     * Download and verify the payload attached to a particular event
      * @param peerID The peer we received this event from
      * @param eventID ID of the event
      * @param eventType Type of the event
-     * @param contentHash Expected hash of the content
+     * @param payloadHash Expected hash of the payload
      * @returns Result of the verification process
      */
-    private async syncContent(
+    private async syncPayload(
             peer: PeerData,
             eventHeader: FeedEventHeader,
-            ): Promise<ContentVerificationResult> {
+            ): Promise<PayloadVerificationResult> {
         
         const eventID = eventHeader.proof.signal
         const event = this.eventMetadata.get(eventID)
-        if (event?.contentInvalid) {
+        if (event?.payloadInvalid) {
             // Do not bother refetching
-            ContentVerificationResult.UNAVAILABLE
+            PayloadVerificationResult.UNAVAILABLE
         }
-        // Skip content if it exists already
-        if (await this.drive.entry(`/events/${eventID}/content`)) {
-            return ContentVerificationResult.VALID
+        // Skip payload if it exists already
+        if (await this.drive.entry(`/events/${eventID}/payload`)) {
+            return PayloadVerificationResult.VALID
         }
-        const entry = await peer.drive.entry(`/events/${eventID}/content`)
+        const entry = await peer.drive.entry(`/events/${eventID}/payload`)
         if (!entry) {
-            return ContentVerificationResult.UNAVAILABLE 
+            return PayloadVerificationResult.UNAVAILABLE 
         }
-        if (entry.value.blob.byteLength > this.maxContentSize.get(eventHeader.eventType)!) {
-            return ContentVerificationResult.SIZE 
-        }
-
-        const contentBuf = await peer.drive.get(`/events/${eventID}/content`)
-        if (!contentBuf) {
-            return ContentVerificationResult.UNAVAILABLE 
-        }
-        if (contentBuf.length > this.maxContentSize.get(eventHeader.eventType)!) {
-            return ContentVerificationResult.SIZE 
-        }
-        const hash = crypto.createHash('sha256').update(contentBuf).digest('hex')
-        if (hash !== eventHeader.contentHash) {
-            return ContentVerificationResult.HASH_MISMATCH 
+        if (entry.value.blob.byteLength > this.maxPayloadSize.get(eventHeader.eventType)!) {
+            return PayloadVerificationResult.SIZE 
         }
 
-        if (!(await this.validateContent(eventID, eventHeader.eventType, contentBuf))){
-            return ContentVerificationResult.INVALID
+        const payloadBuf = await peer.drive.get(`/events/${eventID}/payload`)
+        if (!payloadBuf) {
+            return PayloadVerificationResult.UNAVAILABLE 
+        }
+        if (payloadBuf.length > this.maxPayloadSize.get(eventHeader.eventType)!) {
+            return PayloadVerificationResult.SIZE 
+        }
+        const hash = crypto.createHash('sha256').update(payloadBuf).digest('hex')
+        if (hash !== eventHeader.payloadHash) {
+            return PayloadVerificationResult.HASH_MISMATCH 
         }
 
-        await this.drive.put(`/events/${eventID}/content`, contentBuf)
+        if (!(await this.validatePayload(eventID, eventHeader.eventType, payloadBuf))){
+            return PayloadVerificationResult.INVALID
+        }
 
-        return ContentVerificationResult.VALID
+        await this.drive.put(`/events/${eventID}/payload`, payloadBuf)
+
+        return PayloadVerificationResult.VALID
     }
 
     /**
-     * Validates the data inside an event's attached content Buffer
+     * Validates the data inside an event's attached payload Buffer
      * (To be overridden by an application using this library).
      * @param eventID ID of the event
      * @param eventType Type of the event
-     * @param buf Content buffer
+     * @param buf Payload buffer
      * @returns boolean indicating the result of the verification process
      */
-    protected async validateContent(eventID: string, eventType: string, buf: Buffer) {
+    protected async validatePayload(eventID: string, eventType: string, buf: Buffer) {
         return true
     }
 
@@ -708,7 +706,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             .update(this.topic)
             .update(event.eventType)
             .update(event.claimed.toString())
-            .update(event.contentHash)
+            .update(event.payloadHash)
             .digest('hex')
     }
 
@@ -758,24 +756,24 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * Register a new event type for this feed 
      * @param eventType Name for this type
      * @param specs Specifications for the nullifiers used in this event
-     * @param maxContentSize Maximum size for the attached content buffer
+     * @param maxPayloadSize Maximum size for the attached payload buffer
      */
-    public addEventType(eventType: string, specs: NullifierSpec[], maxContentSize: number) {
+    public addEventType(eventType: string, specs: NullifierSpec[], maxPayloadSize: number) {
         this.nullifierSpecs.set(eventType, specs)
-        this.maxContentSize.set(eventType, maxContentSize)
+        this.maxPayloadSize.set(eventType, maxPayloadSize)
     }
 
     /**
      * Public API for the publication of a new event
      * @param eventID ID for this event
      * @param header Event header
-     * @param content Buffer containing the event's payload content
+     * @param payload Buffer containing the event's payload payload
      */
-    public async addEvent(eventID: string, header: FeedEventHeader, content: Buffer) {
-        if (!(await this.validateContent(eventID, header.eventType, content))) {
+    public async addEvent(eventID: string, header: FeedEventHeader, payload: Buffer) {
+        if (!(await this.validatePayload(eventID, header.eventType, payload))) {
             return { result: false, eventID }
         }
-        await this.drive.put(`/events/${eventID}/content`, content)
+        await this.drive.put(`/events/${eventID}/payload`, payload)
         const result = await this.insertEventHeader(header)
         if (result == VerificationResult.VALID) {
             let eventMetadata = this.eventMetadata.get(eventID)
@@ -784,7 +782,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             }
 
             eventMetadata = {
-                contentInvalid: false,
+                payloadInvalid: false,
                 index: -1,
                 received: header.claimed,
                 consensus: -1,
@@ -804,13 +802,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     /**
      * Public API for the creation and publication of a new event
      * @param eventType Type for this event
-     * @param content Buffer containing the event's payload content
+     * @param payload Buffer containing the event's payload payload
      * @returns Enum indicating the result of the process.
      */
-    public async newEvent(eventType: string, content: Buffer) {
+    public async newEvent(eventType: string, payload: Buffer) {
         const nullifiers = await this.nullifierRegistry.createNullifier(eventType)
-        const [eventHeader, eventID] = await createEvent(this.rln, this.topic, eventType, nullifiers, content)
-        return await this.addEvent(eventID, eventHeader, content)
+        const [eventHeader, eventID] = await createEvent(this.rln, this.topic, eventType, nullifiers, payload)
+        return await this.addEvent(eventID, eventHeader, payload)
     }
 
     /**
@@ -820,9 +818,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      */
     public async getEventByID(eventID: string) {
         const eventHeader = this.eventHeaders.get(eventID)
-        const contentBuf = await this.drive.get(`/events/${eventID}/content`)
-        if (!contentBuf || !eventHeader) return null
-        return {header: eventHeader, content: contentBuf}
+        const payloadBuf = await this.drive.get(`/events/${eventID}/payload`)
+        if (!payloadBuf || !eventHeader) return null
+        return {header: eventHeader, payload: payloadBuf}
     }
 
     /**
@@ -838,14 +836,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         maxLength?: number
         ): Promise<{
             header: FeedEventHeader,
-            content: Buffer
+            payload: Buffer
         }[]> {
             const events = (await Promise.all(this.timeline.getEvents(startTime, endTime, maxLength, true)
                     .map(async ([time, eventID]) => await this.getEventByID(eventID))))
                     .filter(e => e != null)
             return events as {
                 header: FeedEventHeader,
-                content: Buffer
+                payload: Buffer
             }[]
     }
 }
