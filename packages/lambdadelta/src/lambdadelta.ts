@@ -18,6 +18,7 @@ import { NullifierRegistry } from './nullifier'
 import { createEvent } from './create'
 import { calculateConsensusTime } from './consensusTime'
 import WaitQueue from 'wait-queue'
+import AsyncLock from 'async-lock'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
@@ -143,6 +144,19 @@ export enum HeaderVerificationError {
     UNAVAILABLE
 }
 
+function acquireLock(lock: AsyncLock, key: string) {
+    return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+        const original = target[propertyKey];
+        return {
+            ...descriptor,
+            async value(...args: any[]) {
+                return await lock.acquire(key, async () => await original.apply(this, args))
+            }
+        }
+    };
+    return (target: any) =>  {return async () => {return } }
+}
+
 /**
  * Decentralized Multi-writer event feed for a `topic`
  * with timestamps based on local consensus
@@ -159,7 +173,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     private eventLog: Hypercore // Event Log Hypercore
     protected drive: Hyperdrive // Hyperdrive
-    private oldestIndex: number // Our oldest valid event index
 
     protected nullifierSpecs: Map<string, NullifierSpec[]>
     protected maxPayloadSize: Map<string, number>
@@ -173,11 +186,21 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private nullifierRegistry: NullifierRegistry
     private logReloaded: boolean
 
-    constructor(topic: string, corestore: Corestore, rln: RLN) {
+    private lock = new AsyncLock()
+
+    protected expireTime: number
+
+    constructor(topic: string, corestore: Corestore, rln: RLN,
+        settings: { 
+            expireEventsAfter: number
+        } = {
+            expireEventsAfter: 86400
+        }
+        ) {
         super()
         this.topic = topic
         this.rln = rln
-        this.oldestIndex = 0
+        this.expireTime = settings.expireEventsAfter
 
         this.peers = new Map()
         this.pendingPeers = new Set()
@@ -189,6 +212,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.timeline = new Timeline()
         this.logReloaded = false;
 
+
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
         this.eventLog = this.corestore.get({ name: `eventLog` })
         this.drive = new Hyperdrive(this.corestore.namespace('drive'))
@@ -196,6 +220,58 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.nullifierRegistry = new NullifierRegistry(this.corestore, this)
 
         this.registerTypes()
+    }
+
+    protected async onEventGarbageCollected(eventID: string) {
+        await this.deleteEventResources(eventID)
+    }
+
+    protected async markEventsForDeletion() {
+        const oldestTimeAllowed = getTimestampInSeconds() - this.expireTime
+        const eventsToDelete = new Set<string>()
+        for (let [_, eventID] of this.timeline.getEvents(0, oldestTimeAllowed)) {
+            eventsToDelete.add(eventID)
+            await this.onEventGarbageCollected(eventID)
+        }
+        return eventsToDelete
+    }
+
+    protected async sweepMarkedEvents(markedEvents: Set<string>, previousOldestIndex: number) {
+        let newOldestIndex = previousOldestIndex
+        for (let i = newOldestIndex; i < this.eventLog.length; i++) {
+            let entryBuf: Buffer
+            try {
+                entryBuf = await this.eventLog.get(i, {timeout: TIMEOUT})
+            } catch (e) {
+                continue
+            }
+            const entry = deserializeLogEntry(entryBuf)
+            const eventID = entry.header.proof.signal
+
+            newOldestIndex = i
+            // Stop as soon as we find the first event that is not to be deleted yet
+            if (!markedEvents.has(eventID)) {
+                break
+            }
+            markedEvents.delete(eventID)
+        }
+
+        return {previousOldestIndex, newOldestIndex}
+    }
+
+    protected async clearSweptEvents(sweepStartIndex: number, oldestIndex: number) {
+        await this.eventLog.clear(sweepStartIndex, oldestIndex)
+    }
+
+    protected async deleteEventResources(eventID: string) {
+        const res = await this.getEventResources(eventID)
+        for (let path of res) {
+            this.drive.del(path)
+        }
+    }
+
+    protected async getEventResources(eventID: string) {
+        return [`/events/${eventID}/payload`]
     }
 
     protected registerTypes() {
@@ -284,6 +360,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const logCore = this.corestore.get(b4a.from(logCoreID, 'hex'))
         await logCore.ready()
         await logCore.update({wait: true})
+        this.emit('peerUpdate', peerID, -1, logCore.length)
 
         const peer = {
             id: peerID,
@@ -296,21 +373,20 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 this.enqueueEventLogUpdate(peer)
             }
         }
-
-        this.emit('peerUpdate', peerID, -1, logCore.length)
-        const firstIndex = await this.getOldestIndex(peer.eventLog)
-        peer.logUpdateQueue.push({
-            fromIndex: firstIndex,
-            toIndex: logCore.length,
-            timestamp: null
-        })
+        
         logCore.on('append', peer._onappend)
         this.peers.set(peerID, peer)
         this.pendingPeers.delete(peerID)
         this.emit('peerAdded', peerID)
-        this.processLogUpdates(peer).catch((e) => {
-            console.error(e)
-        })
+
+        const firstIndex = await this.getOldestIndex(peer.eventLog)
+        await this.processLogUpdate(peer, 
+            {
+                fromIndex: firstIndex,
+                toIndex: logCore.length,
+                timestamp: null
+            })
+        this.processLogUpdateQueue(peer).catch((e)=> console.error(e))
         return true
     }
 
@@ -365,21 +441,28 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @param peer 
      * @returns 
      */
-    private async processLogUpdates(peer: PeerData) {
+    private async processLogUpdateQueue(peer: PeerData) {
         while (true) {
             const update = await peer.logUpdateQueue.shift()
             if (update == QueueControl.STOP) return
 
-            for (let i = update.fromIndex; i < update.toIndex; i++) {
-                const result = await this.syncEntry(peer, i, update.timestamp)
-                
-                if (!await this.onSyncResult(peer, result)) {
-                    // Stop processing events from this peer in case of a fatal error
-                    return
-                }
+            if (!await this.processLogUpdate(peer, update)) {
+                return
             }
-            this.emit('syncCompleted', peer.id, update.toIndex - 1)
         }
+    }
+
+    private async processLogUpdate(peer: PeerData, update: LogAppendEvent) {
+        for (let i = update.fromIndex; i < update.toIndex; i++) {
+            const result = await this.syncEntry(peer, i, update.timestamp)
+            
+            if (!await this.onSyncResult(peer, result)) {
+                // Stop processing events from this peer in case of a fatal error
+                return false
+            }
+        }
+        this.emit('syncCompleted', peer.id, update.toIndex - 1)
+        return true
     }
 
     private async onSyncResult(
@@ -644,6 +727,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns The index of the resulting feed entry for this event
      */
     private async publishReceived(eventID: string, received: number) {
+        const prevOldestIndex = await this.getOldestIndex(this.eventLog)
+        const marked = await this.markEventsForDeletion()
+        const {newOldestIndex} = await this.sweepMarkedEvents(marked, prevOldestIndex)
+
         const eventMetadata = this.eventMetadata.get(eventID)
         if (eventMetadata && eventMetadata.index !== -1) {
             throw new Error("Trying to publish received time twice")
@@ -657,9 +744,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             const {length, byteLength} = await this.eventLog.append(serializeLogEntry({
                 header,
                 received: received,
-                oldestIndex: this.oldestIndex
+                oldestIndex: newOldestIndex
             }))
             this.emit('publishReceivedTime', eventID, received)
+            await this.clearSweptEvents(prevOldestIndex, newOldestIndex)
             return length - 1
         } catch (e) {
             console.error("ERROR", e)
