@@ -157,6 +157,11 @@ function acquireLock(lock: AsyncLock, key: string) {
     return (target: any) =>  {return async () => {return } }
 }
 
+interface Settings {
+    expireEventsAfter: number // Events older than this will be subject to deletion by the GC
+    minEventsBeforeGC: number // The GC will only delete events as long as there are more events than this
+}
+
 /**
  * Decentralized Multi-writer event feed for a `topic`
  * with timestamps based on local consensus
@@ -188,19 +193,17 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     private lock = new AsyncLock()
 
-    protected expireTime: number
+    protected settings: Settings
 
     constructor(topic: string, corestore: Corestore, rln: RLN,
-        settings: { 
-            expireEventsAfter: number
-        } = {
-            expireEventsAfter: 86400
-        }
-        ) {
+        settings: Settings = {
+            expireEventsAfter: 86400,
+            minEventsBeforeGC: 0
+        }) {
         super()
         this.topic = topic
         this.rln = rln
-        this.expireTime = settings.expireEventsAfter
+        this.settings = settings
 
         this.peers = new Map()
         this.pendingPeers = new Set()
@@ -210,8 +213,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.eventHeaders = new Map()
 
         this.timeline = new Timeline()
-        this.logReloaded = false;
-
+        this.logReloaded = false
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
         this.eventLog = this.corestore.get({ name: `eventLog` })
@@ -227,9 +229,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     protected async markEventsForDeletion() {
-        const oldestTimeAllowed = getTimestampInSeconds() - this.expireTime
+        
+        const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
         const eventsToDelete = new Set<string>()
         for (let [_, eventID] of this.timeline.getEvents(0, oldestTimeAllowed)) {
+            // Only reduce to the minimum size
+            if (this.timeline.getSize() < this.settings.minEventsBeforeGC) {
+                break
+            }
             eventsToDelete.add(eventID)
             await this.onEventGarbageCollected(eventID)
         }
