@@ -144,19 +144,6 @@ export enum HeaderVerificationError {
     UNAVAILABLE
 }
 
-function acquireLock(lock: AsyncLock, key: string) {
-    return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-        const original = target[propertyKey];
-        return {
-            ...descriptor,
-            async value(...args: any[]) {
-                return await lock.acquire(key, async () => await original.apply(this, args))
-            }
-        }
-    };
-    return (target: any) =>  {return async () => {return } }
-}
-
 interface Settings {
     expireEventsAfter: number // Events older than this will be subject to deletion by the GC
     minEventsBeforeGC: number // The GC will only delete events as long as there are more events than this
