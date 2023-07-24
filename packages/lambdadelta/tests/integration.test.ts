@@ -1,6 +1,6 @@
 import 'jest'
 import { LDNode } from '../src/node'
-import { findMissingPeers, findMissingPeersInFeed, findMissingTopics, nodeSetup, sleep } from './utils'
+import { findMissingPeers, findMissingPeersInFeed, findMissingTopics, nodeSetup, printer, sleep } from './utils'
 import { VerificationResult } from '@nabladelta/rln'
 
 const TOPICS = ['a', 'b', 'c', 'd']
@@ -36,22 +36,18 @@ describe('LDNode', () => {
         await bnode.join([T])
         const a = anode.getTopic(T)!
         const b = bnode.getTopic(T)!
-        a.on('syncEventStart', (peerID, index) => {{
-            console.log(`[A] SYNCING ${peerID} ${index}`)
-        }})
-        b.on('syncEventStart', (peerID, index) => {{
-            console.log(`[B] SYNCING ${peerID} ${index}`)
-        }})
+        printer(a, "[A]")
+        printer(b, "[A]")
         await sleep(10000)
         await a.newEvent("POST", Buffer.from("TEST"))
         await sleep(10000)
         const events = 
         (await b.getEvents())
-                .map(e => e.content.toString())
+                .map(e => e.payload.toString())
 
         const events2 = 
         (await a.getEvents())
-                .map(e => e.content.toString())
+                .map(e => e.payload.toString())
         expect(events[0]).toEqual(events2[0])
     })
 
@@ -80,7 +76,7 @@ describe('LDNode', () => {
         const messageLists = []
         for (const feed of feeds) {
             const messages = (await feed.getEvents())
-                                .map(e => e.content.toString())
+                                .map(e => e.payload.toString())
             messageLists.push(messages)
         }
 
@@ -119,7 +115,7 @@ describe('LDNode', () => {
         const messageLists = []
         for (const feed of feeds) {
             const feedMessages = (await feed.getEvents())
-                                .map(e => e.content.toString())
+                                .map(e => e.payload.toString())
             expect(feedMessages.length).toEqual(n)
             messageLists.push(feedMessages)
         }

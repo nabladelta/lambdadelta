@@ -53,6 +53,6 @@ After a while events propagate to all nodes that have joined the topic:
 
 ``` ts
 const events = (await b.getEvents())
-                .map(e => e.content.toString())
+                .map(e => e.payload.toString())
 console.log(events)
 ```

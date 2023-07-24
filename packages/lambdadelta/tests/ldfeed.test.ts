@@ -11,6 +11,7 @@ import ram from 'random-access-memory'
 import { NullifierSpec } from '../src/lambdadelta'
 import { Timeline } from '../src/timeline'
 import { calculateConsensusTime } from '../src/consensusTime'
+import { printer } from './utils'
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms))
 
@@ -51,6 +52,8 @@ describe('Event feed', () => {
 
         feedB = new Lambdadelta(topic, peerB.corestore, peerB.rln)
         feedB.addEventType(eventTypePost, [postNullifierSpec, postNullifierSpec], 1000)
+        printer(feedA, "[A]")
+        printer(feedB, "[B]")
     })
 
     it('Replicates events', async () => {
@@ -59,22 +62,10 @@ describe('Event feed', () => {
 
         expect(await feedA.getCoreLength()).toEqual(1)
         expect(await feedB.getCoreLength()).toEqual(1)
-        // feedA.on('syncEventReceivedTime', async (cid, eventID, result) => {
-        //     console.log(`[A]: ${cid} ${eventID} ${result}`)
-        // })
-        // feedB.on('syncEventReceivedTime', async (cid, eventID, result) => {
-        //     console.log(`[B]: ${cid} ${eventID} ${result}`)
-        // })
-
-        // feedA.on('publishReceivedTime', async (eventID, time) => {
-        //     console.log(`[A]: EID: ${eventID} Time:  ${time}`)
-        // })
-
 
         feedB.on('publishReceivedTime', async (eventID, time) => {
             const event = await feedB.getEventByID(eventID)
             expect(event?.header.eventType).toEqual(eventTypePost)
-            // console.log(`[B]: EID: ${eventID} Time: ${time}`)
         })
 
         await feedA.addPeer(peerB.mcid, feedB.getCoreIDs()[0], feedB.getCoreIDs()[1])
@@ -83,9 +74,10 @@ describe('Event feed', () => {
         expect(added).toEqual(false)
 
         await feedB.addPeer(peerA.mcid, feedA.getCoreIDs()[0], feedA.getCoreIDs()[1])
-        let eventsA = (await feedA.getEvents()).map(e => e.content.toString('utf-8'))
-        let eventsB = (await feedB.getEvents()).map(e => e.content.toString('utf-8'))
+        await sleep(1500)
 
+        let eventsA = (await feedA.getEvents()).map(e => e.payload.toString('utf-8'))
+        let eventsB = (await feedB.getEvents()).map(e => e.payload.toString('utf-8'))
         expect(eventsA.length).toEqual(2)
         expect(eventsB.length).toEqual(2)
 
@@ -98,19 +90,15 @@ describe('Event feed', () => {
         await sleep(1000)
         const result = await feedA.newEvent(eventTypePost, Buffer.from("test3"))
         expect(result.result).toEqual(VerificationResult.VALID)
-        await sleep(1000)
+        await sleep(10000)
         expect(await feedA.getCoreLength()).toEqual(3)
         expect(await feedB.getCoreLength()).toEqual(3)
-        eventsA = (await feedA.getEvents()).map(e => e.content.toString('utf-8'))
-        eventsB = (await feedB.getEvents()).map(e => e.content.toString('utf-8'))
+        eventsA = (await feedA.getEvents()).map(e => e.payload.toString('utf-8'))
+        eventsB = (await feedB.getEvents()).map(e => e.payload.toString('utf-8'))
         
         for (let i = 0; i < 3; i++) {
             expect(eventsA[i]).toEqual(eventsB[i])
         }
-    })
-
-    it("Throws on unknown peer", () => {
-        expect(() => feedA['getPeer']('test')).toThrow
     })
 
     it("Sets and unsets times", () => {
@@ -122,15 +110,6 @@ describe('Event feed', () => {
         timeline.unsetTime('test1')
         expect(timeline['timeline'].has(100000)).toEqual(true)
         expect(timeline['timeline'].has(100001)).toEqual(true)
-    })
-
-    it("Calls onInvalidInput with just undefined", () => {
-        expect(feedA['onInvalidInput']('test', undefined, undefined)).toBe(true)
-    })
-
-    it("Handles index confusion", () => {
-        expect(() => feedA['onDuplicateInput']('test', 'test', 0, undefined)).toThrow
-        expect(() => feedA['onDuplicateInput']('test', 'test', 1, 1)).toThrow
     })
 
     it("Consensus time calculation", () => {

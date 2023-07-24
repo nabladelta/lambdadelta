@@ -35,11 +35,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return this.peers.has(memberCID)
     }
 
-    public addEventType(eventType: string, specs: NullifierSpec[], maxContentSize: number) {
+    public addEventType(eventType: string, specs: NullifierSpec[], maxPayloadSize: number) {
 
     }
 
-    public async newEvent(eventType: string, content: Buffer) {
+    public async newEvent(eventType: string, payload: Buffer) {
 
     }
 
@@ -49,7 +49,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         maxLength?: number
         ): Promise<{
             header: FeedEventHeader,
-            content: Buffer
+            payload: Buffer
         }[]> {
             return []
     }

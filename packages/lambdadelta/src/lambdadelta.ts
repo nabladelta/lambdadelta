@@ -17,63 +17,28 @@ import { Timeline } from './timeline'
 import { NullifierRegistry } from './nullifier'
 import { createEvent } from './create'
 import { calculateConsensusTime } from './consensusTime'
+import WaitQueue from 'wait-queue'
+import AsyncLock from 'async-lock'
 
 const TOLERANCE = 10
 const CLAIMED_TOLERANCE = 60
 const TIMEOUT = 5000
-
-/**
- * @typedef FeedEventHeader Our main Event type
- * @property {string} eventType Event type
- * @property {number} claimed Time the event author claims
- * @property {RLNGFullProof} proof RLN proof for this event
- * @property {string} contentHash Hash of content
- */
-export interface FeedEventHeader {
-    eventType: string
-    claimed: number
-    proof: RLNGFullProof
-    contentHash: string
-}
-
-/**
- * @typedef LogEntry An entry in our event log hypercore
- * @property {number} oldestIndex Index of the oldest still valid block
- * @property {number} received Timestamp in seconds
- * @property {string} eventID The event's ID
- */
-export interface LogEntry {
-    oldestIndex: number
-    received: number
-    eventID: string
-}
-
-/**
- * @typedef NullifierSpec Spec for a nullifier
- * @property {number} epoch Epoch length in seconds
- * @property {number} messageLimit Message limit per epoch
- */
-export interface NullifierSpec {
-    epoch: number
-    messageLimit: number
-}
 
 export interface TopicEvents {
     'peerAdded': (peerID: string) => void
     'peerRemoved': (peerID: string) => void
     'publishReceivedTime': (eventID: string, time: number) => void
     'peerUpdate': (peerID: string, prevLength: number, newLength: number) => void
-    'syncEventStart': (peerID: string, index: number, initialSync: boolean) => void
+    'syncEventStart': (peerID: string, index: number, receivedTime: number | null) => void
     'syncCompleted': (peerID: string, lastIndex: number) => void
     'syncFatalError': (
             peerID: string,
-            error: VerificationResult | HeaderVerificationError | ContentVerificationResult) => void
+            error: VerificationResult | HeaderVerificationError | PayloadVerificationResult | SyncError) => void
     'syncEventResult': (
             peerID: string,
-            eventID: string,
-            headerResult: VerificationResult | HeaderVerificationError,
-            contentResult: ContentVerificationResult | undefined) => void
-    'syncContentResult': (peerID: string, eventID: string, contentResult: ContentVerificationResult) => void
+            eventID: string | null,
+            headerResult: VerificationResult | HeaderVerificationError | SyncError) => void
+    'syncPayloadResult': (peerID: string, eventID: string, payloadResult: PayloadVerificationResult) => void
     'syncDuplicateEvent': (
             peerID: string,
             eventID: string,
@@ -86,7 +51,64 @@ export interface TopicEvents {
     'consensusTimeChanged': (eventID: string, prevTime: number, newTime: number) => void
 }
 
+/**
+ * @typedef FeedEventHeader Our main Event type
+ * @property {string} eventType Event type
+ * @property {number} claimed Time the event author claims
+ * @property {RLNGFullProof} proof RLN proof for this event
+ * @property {string} payloadHash Hash of payload
+ */
+export interface FeedEventHeader {
+    eventType: string
+    claimed: number
+    proof: RLNGFullProof
+    payloadHash: string
+}
+
+/**
+ * @typedef LogEntry An entry in our event log hypercore
+ * @property {number} oldestIndex Index of the oldest still valid block
+ * @property {number} received Timestamp in seconds
+ * @property {string} eventID The event's ID
+ */
+export interface LogEntry {
+    oldestIndex: number
+    received: number
+    header: FeedEventHeader
+}
+
+/**
+ * @typedef LogAppendEvent An update from a peer
+ * @property {number} oldestIndex Index of the oldest still valid block
+ * @property {number} received Timestamp in seconds
+ * @property {string} eventID The event's ID
+ */
+export type LogAppendEvent = {
+    fromIndex: number
+    toIndex: number // NON inclusive
+    timestamp: number | null
+}
+
+/**
+ * @typedef NullifierSpec Spec for a nullifier
+ * @property {number} epoch Epoch length in seconds
+ * @property {number} messageLimit Message limit per epoch
+ */
+export interface NullifierSpec {
+    epoch: number
+    messageLimit: number
+}
+
+export enum SyncError {
+    DUPLICATE_ENTRY
+}
+
+enum QueueControl {
+    STOP
+}
+
 interface EventMetadata {
+    payloadInvalid: boolean // Do not try to fetch the payload again. It's invalid.
     index: number // Index on own hypercore
     received: number // Time received for us
     claimed: number // Time the event was supposedly produced
@@ -94,18 +116,17 @@ interface EventMetadata {
     membersReceived: Map<string, number> // peerID => time received
 }
 
-interface PeerData {
-    nextIndex: number // Last index we scanned
+export interface PeerData {
+    id: string // PeerID
     events: Map<string, number> // All events we obtained from this peer => index on core
     knownLength: number // Current length of feed core
-    indexReceived: Map<number, number> // index => time received
     eventLog: Hypercore
     drive: Hyperdrive
-    finishedInitialSync: boolean,
+    logUpdateQueue: WaitQueue<LogAppendEvent | QueueControl.STOP>,
     _onappend: () => Promise<void>
 }
 
-export enum ContentVerificationResult {
+export enum PayloadVerificationResult {
     VALID,
     UNAVAILABLE,
     SIZE,
@@ -119,8 +140,13 @@ export enum HeaderVerificationError {
     UNEXPECTED_RLN_IDENTIFIER,
     UNEXPECTED_MESSAGE_LIMIT,
     UNEXPECTED_NULLIFIER,
-    UNAVAILABLE,
-    SIZE
+    SIZE,
+    UNAVAILABLE
+}
+
+interface Settings {
+    expireEventsAfter: number // Events older than this will be subject to deletion by the GC
+    minEventsBeforeGC: number // The GC will only delete events as long as there are more events than this
 }
 
 /**
@@ -139,30 +165,42 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     private eventLog: Hypercore // Event Log Hypercore
     protected drive: Hyperdrive // Hyperdrive
-    private oldestIndex: number // Our oldest valid event index
 
     protected nullifierSpecs: Map<string, NullifierSpec[]>
-    protected maxContentSize: Map<string, number>
+    protected maxPayloadSize: Map<string, number>
 
     private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
     private peers: Map<string, PeerData> // peerID => Hypercore
     private pendingPeers: Set<string>
 
-    private nullifierRegistry: NullifierRegistry
+    private eventHeaders: Map<string, FeedEventHeader> // EventID => Header
 
-    constructor(topic: string, corestore: Corestore, rln: RLN) {
+    private nullifierRegistry: NullifierRegistry
+    private logReloaded: boolean
+
+    private lock = new AsyncLock()
+
+    protected settings: Settings
+
+    constructor(topic: string, corestore: Corestore, rln: RLN,
+        settings: Settings = {
+            expireEventsAfter: 86400,
+            minEventsBeforeGC: 0
+        }) {
         super()
         this.topic = topic
         this.rln = rln
-        this.oldestIndex = 0
+        this.settings = settings
 
         this.peers = new Map()
         this.pendingPeers = new Set()
         this.nullifierSpecs = new Map()
         this.eventMetadata = new Map()
-        this.maxContentSize = new Map()
+        this.maxPayloadSize = new Map()
+        this.eventHeaders = new Map()
 
         this.timeline = new Timeline()
+        this.logReloaded = false
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
         this.eventLog = this.corestore.get({ name: `eventLog` })
@@ -171,18 +209,63 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.nullifierRegistry = new NullifierRegistry(this.corestore, this)
 
         this.registerTypes()
-        this.on('timelineAddEvent', this.onTimelineAddEvent)
-        this.on('timelineRemoveEvent', this.onTimelineAddEvent)
-        this.on('syncContentResult', (peerID, eventID, contentResult) => {
-            if (contentResult === ContentVerificationResult.VALID) {
-                this.onSyncEvent(peerID, eventID)
+    }
+
+    protected async onEventGarbageCollected(eventID: string) {
+        await this.deleteEventResources(eventID)
+    }
+
+    protected async markEventsForDeletion() {
+        
+        const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
+        const eventsToDelete = new Set<string>()
+        for (let [_, eventID] of this.timeline.getEvents(0, oldestTimeAllowed)) {
+            // Only reduce to the minimum size
+            if (this.timeline.getSize() < this.settings.minEventsBeforeGC) {
+                break
             }
-        })
-        this.on('syncEventResult', (peerID, eventID, headerResult, contentResult) => {
-            if (headerResult === VerificationResult.VALID, contentResult === ContentVerificationResult.VALID) {
-                this.onSyncEvent(peerID, eventID)
+            eventsToDelete.add(eventID)
+            await this.onEventGarbageCollected(eventID)
+        }
+        return eventsToDelete
+    }
+
+    protected async sweepMarkedEvents(markedEvents: Set<string>, previousOldestIndex: number) {
+        let newOldestIndex = previousOldestIndex
+        for (let i = newOldestIndex; i < this.eventLog.length; i++) {
+            let entryBuf: Buffer
+            try {
+                entryBuf = await this.eventLog.get(i, {timeout: TIMEOUT})
+            } catch (e) {
+                continue
             }
-        })
+            const entry = deserializeLogEntry(entryBuf)
+            const eventID = entry.header.proof.signal
+
+            newOldestIndex = i
+            // Stop as soon as we find the first event that is not to be deleted yet
+            if (!markedEvents.has(eventID)) {
+                break
+            }
+            markedEvents.delete(eventID)
+        }
+
+        return {previousOldestIndex, newOldestIndex}
+    }
+
+    protected async clearSweptEvents(sweepStartIndex: number, oldestIndex: number) {
+        await this.eventLog.clear(sweepStartIndex, oldestIndex)
+    }
+
+    protected async deleteEventResources(eventID: string) {
+        const res = await this.getEventResources(eventID)
+        for (let path of res) {
+            this.drive.del(path)
+        }
+    }
+
+    protected async getEventResources(eventID: string) {
+        return [`/events/${eventID}/payload`]
     }
 
     protected registerTypes() {
@@ -197,21 +280,18 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return this.nullifierSpecs.get(eventType)
     }
 
-    protected onTimelineAddEvent(eventID: string, time: number, consensusTime: number) {
-
+    protected async onTimelineAdd(eventID: string, time: number, consensusTime: number) {
+        this.emit('timelineAddEvent', eventID, time, consensusTime)
     }
 
-    protected onTimelineRemoveEvent(eventID: string, time: number, consensusTime: number) {
-        
-    }
-
-    protected onSyncEvent(peerID: string, eventID: string) {
-
+    protected async onTimelineRemove(eventID: string, time: number, consensusTime: number) {
+        this.emit('timelineRemoveEvent', eventID, time, consensusTime)
     }
 
     public async ready() {
         await this.eventLog.ready()
         await this.drive.ready()
+        await this.reloadEventLog()
     }
 
     public hasPeer(peerID: string) {
@@ -221,15 +301,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     public getPeerList() {
         return Array.from(this.peers.keys())
     }
-
-    protected getPeer(peerID: string) {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unknown peer")
-        }
-        return peer
-    }
-
     
     /**
      * Get the IDs of the cores backing this instance
@@ -253,11 +324,22 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             await peer.eventLog.close()
         }
     }
+
+    private async getOldestIndex(eventLog: Hypercore) {
+        if (eventLog.length == 0) {
+            return 0
+        }
+        // Find the first valid entry
+        const lastEntryBuf: Buffer = await eventLog.get(eventLog.length - 1, {timeout: TIMEOUT})
+        const lastEntry = deserializeLogEntry(lastEntryBuf)
+        return lastEntry.oldestIndex
+    }
+
     /**
      * Add a new peer to this topic feed and synchronize
      * @param peerID ID of this peer
      * @param logCoreID ID of this peer's event log core which contains `received` times
-     * @param driveID ID of this peer's Hyperdrive which contains the event headers and content
+     * @param driveID ID of this peer's Hyperdrive which contains the event headers and payload
      * @returns Whether or not the synchronization the peer was added and synced
      */
     public async addPeer(peerID: string, logCoreID: string, driveID: string) {
@@ -272,31 +354,33 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const logCore = this.corestore.get(b4a.from(logCoreID, 'hex'))
         await logCore.ready()
         await logCore.update({wait: true})
-
         this.emit('peerUpdate', peerID, -1, logCore.length)
+
         const peer = {
+            id: peerID,
             eventLog: logCore,
             drive,
-            nextIndex: 0,
             events: new Map(),
-            finishedInitialSync: false,
             knownLength: logCore.length,
-            indexReceived: new Map(),
+            logUpdateQueue: new WaitQueue<LogAppendEvent>(),
             _onappend: async () => {
-                this.updateIndexReceivedTime(peerID)
-                try {
-                    await this.syncPeer(peerID, false)
-                } catch (e) {
-                    console.error(e)
-                }
+                this.enqueueEventLogUpdate(peer)
             }
         }
+        
         logCore.on('append', peer._onappend)
         this.peers.set(peerID, peer)
         this.pendingPeers.delete(peerID)
         this.emit('peerAdded', peerID)
-        const completed = await this.syncPeer(peerID, true)
-        if (!completed) return false // Sync did not complete successfully
+
+        const firstIndex = await this.getOldestIndex(peer.eventLog)
+        await this.processLogUpdate(peer, 
+            {
+                fromIndex: firstIndex,
+                toIndex: logCore.length,
+                timestamp: null
+            })
+        this.processLogUpdateQueue(peer).catch((e)=> console.error(e))
         return true
     }
 
@@ -321,44 +405,110 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             await this.onMemberReceivedTime(eventID)
         }
         this.emit('peerRemoved', peerID)
+        peer.logUpdateQueue.push(QueueControl.STOP)
         return true
     }
 
     /**
-     * Called whenever an event fetched from a peer fails to validate.
-     * Should decide what course of action to take, up to and including
-     * removing and banning the peer responsible.
-     * @param peerID The peer responsible for sending us this event
-     * @param headerResult The result of the event header verification process
-     * @param contentResult The result of the event content verification process
-     * @returns True if we should skip this event and continue, false if we are to stop altogether.
+     * Called on an `append` event from a peer's event log.
+     * This records when the new log entries were added immediately,
+     * ensuring we don't wait until we get to synchronize that event.
+     * This allows us to establish reliable `received` times.
+     * @param peerID The peer we received an update from
      */
-    protected onInvalidInput(
-            peerID: string,
-            headerResult: VerificationResult | HeaderVerificationError | undefined,
-            contentResult: ContentVerificationResult | undefined
-        ) {
+    private enqueueEventLogUpdate(peer: PeerData) {
+        const currentTime = getTimestampInSeconds()
 
-        if (headerResult !== undefined && headerResult !== VerificationResult.VALID) {
-            if (headerResult === HeaderVerificationError.UNAVAILABLE) {
-                return true
+        peer.logUpdateQueue.push({
+            fromIndex: peer.knownLength,
+            toIndex: peer.eventLog.length,
+            timestamp: currentTime,
+        })
+        this.emit('peerUpdate', peer.id, peer.knownLength, peer.eventLog.length)
+
+        peer.knownLength = peer.eventLog.length
+    }
+
+    /**
+     * Wait for a peer's new log entries and processes them
+     * @param peerID 
+     * @param peer 
+     * @returns 
+     */
+    private async processLogUpdateQueue(peer: PeerData) {
+        while (true) {
+            const update = await peer.logUpdateQueue.shift()
+            if (update == QueueControl.STOP) return
+
+            if (!await this.processLogUpdate(peer, update)) {
+                return
             }
-            this.removePeer(peerID)
-            this.emit('syncFatalError', peerID, headerResult)
-            return false
         }
+    }
 
-        if (contentResult !== undefined && contentResult !== ContentVerificationResult.VALID) {
-            if (contentResult === ContentVerificationResult.UNAVAILABLE) {
-                return true
+    private async processLogUpdate(peer: PeerData, update: LogAppendEvent) {
+        for (let i = update.fromIndex; i < update.toIndex; i++) {
+            const result = await this.syncEntry(peer, i, update.timestamp)
+            
+            if (!await this.onSyncResult(peer, result)) {
+                // Stop processing events from this peer in case of a fatal error
+                return false
             }
-            this.removePeer(peerID)
-            this.emit('syncFatalError', peerID, contentResult)
-            return false
         }
-
+        this.emit('syncCompleted', peer.id, update.toIndex - 1)
         return true
     }
+
+    private async onSyncResult(
+        peer: PeerData,
+        {eventID, code, payloadCode}: {
+            eventID: string | null,
+            code: VerificationResult | HeaderVerificationError | SyncError,
+            payloadCode?: PayloadVerificationResult}) {
+        if (!this.onLogEntrySyncResult(peer, eventID, code)) {
+            return false
+        }
+        if (payloadCode !== undefined && !this.onPayloadSyncResult(peer, eventID!, payloadCode)) {
+            return false
+        }
+        if (code === VerificationResult.VALID && payloadCode === PayloadVerificationResult.VALID) {
+            await this.onEventSyncComplete(peer, eventID!)
+        }
+        return true
+    }
+
+    protected async onEventSyncComplete(peer: PeerData, eventID: string) {
+
+    }
+
+    /**
+     * Called whenever an event has been processed.
+     * Should decide what course of action to take, up to and including
+     * removing and banning the peer responsible if the event was invalid.
+     * @param peer The peer responsible for sending us this event
+     * @param headerResult The result of the event header verification process
+     * @returns True if we should continue, false if we are to stop altogether
+     */
+    protected onLogEntrySyncResult(peer: PeerData, eventID: string | null, result: VerificationResult | HeaderVerificationError | SyncError): boolean {
+        this.emit('syncEventResult', peer.id, eventID, result)
+        if (result !== VerificationResult.VALID) {
+            this.removePeer(peer.id)
+            this.emit('syncFatalError', peer.id, result)
+            return false
+        }
+        return true
+    }
+
+    protected onPayloadSyncResult(peer: PeerData, eventID: string, result: PayloadVerificationResult) {
+        this.emit('syncPayloadResult', peer.id, eventID, result)
+        if (result !== PayloadVerificationResult.VALID && result !== PayloadVerificationResult.UNAVAILABLE) {
+            this.removePeer(peer.id)
+            this.emit('syncFatalError', peer.id, result)
+            return false
+        }
+        return true
+    }
+
     /**
      * Called whenever we find the same event twice in a peer's event feed.
      * It verifies whether the event is actually stored twice in the peer's feed,
@@ -371,6 +521,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      */
     protected async onDuplicateInput(
             peerID: string,
+            peer: PeerData,
             eventID: string,
             index: number,
             prevIndex: number | undefined) {
@@ -380,7 +531,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (prevIndex === undefined) {
             throw new Error("Index confusion")
         }
-        const peer = this.getPeer(peerID)
 
         const entryBufA: Buffer = await peer.eventLog.get(prevIndex, {timeout: TIMEOUT})
         const entryA = deserializeLogEntry(entryBufA)
@@ -388,290 +538,179 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const entryBufB: Buffer = await peer.eventLog.get(index, {timeout: TIMEOUT})
         const entryB = deserializeLogEntry(entryBufB)
 
-        if (entryA.eventID == entryB.eventID) {
+        if (entryA.header.proof.signal == entryB.header.proof.signal) {
             this.emit('syncDuplicateEvent', peerID, eventID, index, prevIndex)
-            await this.removePeer(peerID)
-            return false
-        }
-
-        return false
-    }
-
-    /**
-     * Called on an `append` event from a peer's feed.
-     * This records when the new feed entries were added immediately,
-     * ensuring we don't wait until we get to synchronize that event.
-     * This allows us to establish reliable `received` times.
-     * @param peerID The peer we received an update from
-     */
-    private updateIndexReceivedTime(peerID: string) {
-        const peer = this.getPeer(peerID)
-        const currentTime = getTimestampInSeconds()
-        for (let i = peer.knownLength; i < peer.eventLog.length; i++) {
-            peer.indexReceived.set(i, currentTime)
-        }
-        this.emit('peerUpdate', peerID, peer.knownLength, peer.eventLog.length)
-        peer.knownLength = peer.eventLog.length
-    }
-
-    /**
-     * Synchronizes all events from a peer,
-     * starting from the oldest entry we haven't scanned yet
-     * @param peerID ID of the peer
-     * @param initialSync Whether this is the initial sync for this peer or we are reacting to newly added events
-     * @returns boolean indicating whether the synchronization completed successfully
-     */
-    private async syncPeer(peerID: string, initialSync: boolean): Promise<boolean> {
-        const peer = this.getPeer(peerID)
-
-        if (!initialSync && !peer.finishedInitialSync) {
-            return false
-        }
-
-        await peer.eventLog.ready()
-        if (peer.eventLog.length < 1) {
-            peer.finishedInitialSync = true
-            this.emit('syncCompleted', peerID, peer.eventLog.length - 1)
             return true
         }
-        let startFrom = peer.nextIndex
 
-        if (initialSync && peer.nextIndex == 0) {
-            // Find the first valid entry
-            const lastEntryBuf: Buffer = await peer.eventLog.get(peer.eventLog.length - 1, {timeout: TIMEOUT})
-            const lastEntry = deserializeLogEntry(lastEntryBuf)
-            startFrom = lastEntry.oldestIndex
-        }
-        for (let i = startFrom; i < peer.eventLog.length; i++) {
-            this.emit('syncEventStart', peerID, i, initialSync)
-            peer.nextIndex = i + 1
-            const shouldContinue = await this.syncEntry(peerID, i, initialSync)
-            // Interrupt synchronization from this peer immediately
-            if (!shouldContinue) return false
-        }
-
-        peer.finishedInitialSync = true
-        this.emit('syncCompleted', peerID, peer.nextIndex)
-        this.peers.set(peerID, peer)
         return true
+    }
+
+    private async reloadEventLog() {
+        if (this.logReloaded) return
+        this.logReloaded = true
+
+        if (this.eventLog.length == 0) return
+
+        const oldestIndex = await this.getOldestIndex(this.eventLog)
+        for (let i = oldestIndex; i < this.eventLog.length; i++) {
+            const entryBuf = await this.eventLog.get(i, {timeout: TIMEOUT})
+            const entry = deserializeLogEntry(entryBuf)
+            const eventID = entry.header.proof.signal
+            this.eventHeaders.set(eventID, entry.header)
+            const eventMetadata = {
+                payloadInvalid: false,
+                index: i,
+                received: entry.received,
+                consensus: -1,
+                claimed: entry.header.claimed,
+                membersReceived: new Map()
+            }
+            this.eventMetadata.set(eventID, eventMetadata)
+
+            await this.onMemberReceivedTime(eventID)
+        }
     }
 
     /**
      * Synchronizes an individual entry from a peer's feed hypercore
      * @param peerID ID of the peer
      * @param i index of this entry on the hypercore
-     * @param initialSync Whether this is the initial sync or a new event
+     * @param timeReceived When we received this event. `null` if it was already present
      * @returns boolean indicating whether we should continue synchronizing events from this peer or stop
      */
-    private async syncEntry(peerID: string, i: number, initialSync: boolean): Promise<boolean> {
-        const peer = this.getPeer(peerID)
+    private async syncEntry(
+            peer: PeerData,
+            i: number,
+            timeReceived: number | null
+        ): Promise<{ code: VerificationResult | HeaderVerificationError | SyncError, payloadCode?: PayloadVerificationResult, eventID: string | null} > {
+        const peerID = peer.id
 
-        const entryBuf: Buffer = await peer.eventLog.get(i, {timeout: TIMEOUT})
-        const entry = deserializeLogEntry(entryBuf)
-        const eventID = entry.eventID
-
-        let claimedTime: number | undefined
-        let headerResult: HeaderVerificationError | VerificationResult | undefined
-        let contentResult: ContentVerificationResult | undefined
-
-        if (!(await this.drive.entry(`/events/${eventID}/header`))) {
-            // We never encountered this event before
-            const results = await this.syncEvent(peerID, eventID)
-            headerResult = results.headerResult
-            contentResult = results.contentResult
-            claimedTime = results.claimedTime
-            this.emit('syncEventResult', peerID, eventID, results.headerResult, results.contentResult)
-
-        } else if (!(await this.drive.entry(`/events/${eventID}/content`))) {
-            // In this case we have the header, but we are missing the content
-            // Probably from a previous peer not having it, or having an invalid version of it, etc
-            const results = await this.syncContent(peerID, eventID)
-            claimedTime = results.claimedTime
-            contentResult = results.contentResult
-            // We already verified this header previously
-            headerResult = VerificationResult.VALID
-            this.emit('syncContentResult', peerID, eventID, results.contentResult)
+        this.emit('syncEventStart', peerID, i, timeReceived)
+        
+        let entryBuf: Buffer
+        try {
+            entryBuf = await peer.eventLog.get(i, {timeout: TIMEOUT})
+        } catch (e) {
+            return { code: HeaderVerificationError.UNAVAILABLE, eventID: null }
         }
+
+        const entry = deserializeLogEntry(entryBuf)
+        const eventID = entry.header.proof.signal
+
+        const headerResult = await this.insertEventHeader(entry.header)
+        if (headerResult !== VerificationResult.VALID) {
+            return { code: headerResult, eventID }
+        }
+
+        const payloadCode = await this.syncPayload(peer, entry.header)
 
         let eventMetadata = this.eventMetadata.get(eventID)
         if (!eventMetadata) { // Is a new event
-            if (headerResult !== VerificationResult.VALID
-                || contentResult !== ContentVerificationResult.VALID) {
-                // Either the header or the content for this event did not validate.
-                // The event is invalid or the data is unavailable, and we have to skip it
-                // Decides whether to continue syncing the next events from this peer or stop
-                const shouldContinue = this.onInvalidInput(peerID, headerResult, contentResult)
-                return shouldContinue
-            }
-            if (!claimedTime) {
-                throw new Error("Invalid claimed time")
-            }
             eventMetadata = {
+                payloadInvalid: false,
                 index: -1,
                 received: -1,
                 consensus: -1,
-                claimed: claimedTime,
+                claimed: entry.header.claimed,
                 membersReceived: new Map()
             }
-            // We use the time we actually received this update from our peer
-            const currentTime = peer.indexReceived.get(i)
-            if (!initialSync && !currentTime) {
-                // Every event past initial sync should have a recorded time
-                throw new Error("No recorded received time for index")
-            }
-            // If event was received live, not from an initial peer sync
-            if (!initialSync && currentTime) {
-
+            this.eventMetadata.set(eventID, eventMetadata)
+            /**
+             * We use the time we actually received this update from our peer
+             * if event was received live, not from an initial peer sync
+             */
+            if (timeReceived) {
                 // If our peer's received time is close to our current time, use their time
                 // This makes it harder to tell who first saw an event
-                eventMetadata.received = (Math.abs(currentTime - entry.received) <= TOLERANCE)
-                                                ? entry.received : currentTime
-
-                // Need to set this before awaiting
-                // Avoid concurrent addition of events
-                this.eventMetadata.set(eventID, eventMetadata)
+                eventMetadata.received = (Math.abs(timeReceived - entry.received) <= TOLERANCE)
+                                                ? entry.received : timeReceived
                 const index = await this.publishReceived(eventID, eventMetadata.received)
                 eventMetadata.index = index
-                this.eventMetadata.set(eventID, eventMetadata)
             }
 
         } else if (eventMetadata.membersReceived.has(peerID)) {
-            return await this.onDuplicateInput(peerID, eventID, i, peer.events.get(eventID))
+            if (await this.onDuplicateInput(peerID, peer, eventID, i, peer.events.get(eventID))) {
+                return { code: SyncError.DUPLICATE_ENTRY, eventID, payloadCode }
+            }
         }
 
         // Add peer's received timestamp
         this.emit('syncEventReceivedTime', peerID, eventID, entry.received)
         eventMetadata.membersReceived.set(peerID, entry.received)
-        this.eventMetadata.set(eventID, eventMetadata)
-
         peer.events.set(eventID, i)
-        this.peers.set(peerID, peer)
-        // No longer needed
-        peer.indexReceived.delete(i)
+
         await this.onMemberReceivedTime(eventID)
 
-        return true
+        // Make sure we do not fetch this again if it's invalid
+        if (payloadCode === PayloadVerificationResult.INVALID) {
+            eventMetadata.payloadInvalid == true
+        }
+    
+        return {code: VerificationResult.VALID, eventID, payloadCode}
     }
 
     /**
-     * Download and verify the content attached to a particular event
+     * Download and verify the payload attached to a particular event
      * @param peerID The peer we received this event from
      * @param eventID ID of the event
      * @param eventType Type of the event
-     * @param contentHash Expected hash of the content
+     * @param payloadHash Expected hash of the payload
      * @returns Result of the verification process
      */
-    private async syncContent(
-            peerID: string,
-            eventID: string,
-            eventType?: string,
-            contentHash?: string
-            ): Promise<{
-                contentResult: ContentVerificationResult,
-                claimedTime?: number
-            }> {
-        let claimedTime
-        // Retrieve info from header if not provided
-        if (!eventType || !contentHash) {
-            const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
-            if (!eventHeaderBuf) {
-                throw new Error("Missing header while trying to fetch content")
-            }
-            const eventHeader = deserializeEvent(eventHeaderBuf)
-            eventType = eventHeader.eventType
-            contentHash = eventHeader.contentHash
-            claimedTime = eventHeader.claimed
+    private async syncPayload(
+            peer: PeerData,
+            eventHeader: FeedEventHeader,
+            ): Promise<PayloadVerificationResult> {
+        
+        const eventID = eventHeader.proof.signal
+        const event = this.eventMetadata.get(eventID)
+        if (event?.payloadInvalid) {
+            // Do not bother refetching
+            PayloadVerificationResult.UNAVAILABLE
         }
-        const peer = this.getPeer(peerID)
-        const entry = await peer.drive.entry(`/events/${eventID}/content`)
+        // Skip payload if it exists already
+        if (await this.drive.entry(`/events/${eventID}/payload`)) {
+            return PayloadVerificationResult.VALID
+        }
+        const entry = await peer.drive.entry(`/events/${eventID}/payload`)
         if (!entry) {
-            return { contentResult: ContentVerificationResult.UNAVAILABLE, claimedTime }
+            return PayloadVerificationResult.UNAVAILABLE 
         }
-        if (entry.value.blob.byteLength > this.maxContentSize.get(eventType)!) {
-            return { contentResult: ContentVerificationResult.SIZE, claimedTime }
-        }
-
-        const contentBuf = await peer.drive.get(`/events/${eventID}/content`)
-        if (!contentBuf) {
-            return { contentResult: ContentVerificationResult.UNAVAILABLE, claimedTime }
-        }
-        if (contentBuf.length > this.maxContentSize.get(eventType)!) {
-            return { contentResult: ContentVerificationResult.SIZE, claimedTime }
-        }
-        const hash = crypto.createHash('sha256').update(contentBuf).digest('hex')
-        if (hash !== contentHash) {
-            return { contentResult: ContentVerificationResult.HASH_MISMATCH, claimedTime }
+        if (entry.value.blob.byteLength > this.maxPayloadSize.get(eventHeader.eventType)!) {
+            return PayloadVerificationResult.SIZE 
         }
 
-        if (!(await this.validateContent(eventID, eventType, contentBuf))){
-            return { contentResult: ContentVerificationResult.INVALID, claimedTime }
+        const payloadBuf = await peer.drive.get(`/events/${eventID}/payload`)
+        if (!payloadBuf) {
+            return PayloadVerificationResult.UNAVAILABLE 
+        }
+        if (payloadBuf.length > this.maxPayloadSize.get(eventHeader.eventType)!) {
+            return PayloadVerificationResult.SIZE 
+        }
+        const hash = crypto.createHash('sha256').update(payloadBuf).digest('hex')
+        if (hash !== eventHeader.payloadHash) {
+            return PayloadVerificationResult.HASH_MISMATCH 
         }
 
-        await this.drive.put(`/events/${eventID}/content`, contentBuf)
+        if (!(await this.validatePayload(eventID, eventHeader.eventType, payloadBuf))){
+            return PayloadVerificationResult.INVALID
+        }
 
-        return { contentResult: ContentVerificationResult.VALID, claimedTime}
+        await this.drive.put(`/events/${eventID}/payload`, payloadBuf)
+
+        return PayloadVerificationResult.VALID
     }
 
     /**
-     * Download and verify an event, including the header and content
-     * @param peerID Peer we received this event from
-     * @param eventID ID of the event
-     * @returns Result of the verification process for content and header, 
-     * as well as the event's internal timestamp
-     */
-    private async syncEvent(
-        peerID: string,
-        eventID: string
-        ): Promise<{
-            headerResult: HeaderVerificationError | VerificationResult,
-            contentResult?: ContentVerificationResult,
-            claimedTime?: number
-        }> {
-
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            throw new Error("Unkown peer")
-        }
-        const headerEntry = await peer.drive.entry(`/events/${eventID}/header`)
-        if (!(headerEntry)) {
-            // Header cannot be retrieved
-            return { headerResult: HeaderVerificationError.UNAVAILABLE }
-        }
-        // TODO: Check header size before retrieving
-        const eventHeaderBuf = await peer.drive.get(`/events/${eventID}/header`)
-        if (!(eventHeaderBuf)) {
-            return { headerResult: HeaderVerificationError.UNAVAILABLE }
-        }
-
-        const eventHeader = deserializeEvent(eventHeaderBuf)
-
-        const headerResult = await this.insertEventHeader(eventHeader)
-        if (headerResult !== VerificationResult.VALID) {
-            return { headerResult, claimedTime: eventHeader.claimed }
-        }
-
-        // If we can't fetch the content, or the content is invalid, we keep the header (which is already verified) saved
-        // But we do not add the event anywhere else. We skip it later in the sync flow.
-        // We will ignore the `received` for this event from this peer (and possibly ban the peer)
-        // But if we find this event again on another peer we'll just try fetching the content again from them
-        const { contentResult } = await this.syncContent(
-                peerID,
-                eventID,
-                eventHeader.eventType,
-                eventHeader.contentHash)
-
-        return { headerResult, contentResult, claimedTime: eventHeader.claimed }
-    }
-
-    /**
-     * Validates the data inside an event's attached content Buffer
+     * Validates the data inside an event's attached payload Buffer
      * (To be overridden by an application using this library).
      * @param eventID ID of the event
      * @param eventType Type of the event
-     * @param buf Content buffer
+     * @param buf Payload buffer
      * @returns boolean indicating the result of the verification process
      */
-    protected async validateContent(eventID: string, eventType: string, buf: Buffer) {
+    protected async validatePayload(eventID: string, eventType: string, buf: Buffer) {
         return true
     }
 
@@ -682,18 +721,27 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns The index of the resulting feed entry for this event
      */
     private async publishReceived(eventID: string, received: number) {
+        const prevOldestIndex = await this.getOldestIndex(this.eventLog)
+        const marked = await this.markEventsForDeletion()
+        const {newOldestIndex} = await this.sweepMarkedEvents(marked, prevOldestIndex)
+
         const eventMetadata = this.eventMetadata.get(eventID)
         if (eventMetadata && eventMetadata.index !== -1) {
             throw new Error("Trying to publish received time twice")
         }
+        const header = this.eventHeaders.get(eventID)
+        if (!header) {
+            throw new Error("Header unavailable")
+        }
         try {
             await this.eventLog.ready()
             const {length, byteLength} = await this.eventLog.append(serializeLogEntry({
-                eventID,
+                header,
                 received: received,
-                oldestIndex: this.oldestIndex
+                oldestIndex: newOldestIndex
             }))
             this.emit('publishReceivedTime', eventID, received)
+            await this.clearSweptEvents(prevOldestIndex, newOldestIndex)
             return length - 1
         } catch (e) {
             console.error("ERROR", e)
@@ -746,7 +794,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             const prevTime = this.timeline.unsetTime(eventID)
             if (prevTime) {
                 const roundedTime = Math.floor(prevTime / 1000)
-                this.emit('timelineRemoveEvent', eventID, roundedTime, consensusTime)
+                await this.onTimelineRemove(eventID, roundedTime, consensusTime)
             } else {
                 this.emit('timelineRejectedEvent', eventID, eventMetadata.claimed, consensusTime)
             }
@@ -757,7 +805,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         // Event is not in timeline yet
         if (!currentEventTime) {
             this.timeline.setTime(eventID, eventMetadata.claimed)
-            this.emit('timelineAddEvent', eventID, eventMetadata.claimed, consensusTime)
+            await this.onTimelineAdd(eventID, eventMetadata.claimed, consensusTime)
         }
     }
 
@@ -772,17 +820,27 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             .update(this.topic)
             .update(event.eventType)
             .update(event.claimed.toString())
-            .update(event.contentHash)
+            .update(event.payloadHash)
             .digest('hex')
     }
 
     /**
-     * Verifies an event header's RLN zkProof
-     * @param event Header for an event
+     * Verifies an event header; if valid, it is added to our store. 
+     * @param event Header of an event
      * @returns Enum indicating the verification result
      */
-    private async verifyEventProof(event: FeedEventHeader) {
+    private async insertEventHeader(event: FeedEventHeader) {
+        if (this.eventHeaders.get(event.proof.signal)) {
+            // Already verified it previously
+            return VerificationResult.VALID
+        }
+
+        const eventID = this.getEventHash(event)
+
         const proof = event.proof
+        if (proof.signal !== eventID) {
+            return HeaderVerificationError.HASH_MISMATCH
+        }
         if (proof.rlnIdentifier !== rlnIdentifier(this.topic, event.eventType)) {
             return HeaderVerificationError.UNEXPECTED_RLN_IDENTIFIER
         }
@@ -801,29 +859,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 return HeaderVerificationError.UNEXPECTED_NULLIFIER
             }
         }
-        return await this.rln.submitProof(proof, event.claimed)
-    }
-
-    /**
-     * Verifies an event header; if valid, it is added to our store. 
-     * @param event Header of an event
-     * @returns Enum indicating the verification result
-     */
-    private async insertEventHeader(event: FeedEventHeader) {
-        if (await this.drive.entry(`/events/${event.proof.signal}/header`)) {
-            throw new Error("Event already added")
+        const result = await this.rln.submitProof(proof, event.claimed)
+        if (result === VerificationResult.VALID) {
+            this.eventHeaders.set(event.proof.signal, event)
         }
-        const eventID = this.getEventHash(event)
-        if (event.proof.signal !== eventID) {
-            return HeaderVerificationError.HASH_MISMATCH
-        }
-        const result = await this.verifyEventProof(event)
-        if (result !== VerificationResult.VALID) {
-            return result
-        }
-
-        const eventBuf = serializeEvent(event)
-        await this.drive.put(`/events/${eventID}/header`, eventBuf)
         return result
     }
 
@@ -831,24 +870,24 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * Register a new event type for this feed 
      * @param eventType Name for this type
      * @param specs Specifications for the nullifiers used in this event
-     * @param maxContentSize Maximum size for the attached content buffer
+     * @param maxPayloadSize Maximum size for the attached payload buffer
      */
-    public addEventType(eventType: string, specs: NullifierSpec[], maxContentSize: number) {
+    public addEventType(eventType: string, specs: NullifierSpec[], maxPayloadSize: number) {
         this.nullifierSpecs.set(eventType, specs)
-        this.maxContentSize.set(eventType, maxContentSize)
+        this.maxPayloadSize.set(eventType, maxPayloadSize)
     }
 
     /**
      * Public API for the publication of a new event
      * @param eventID ID for this event
      * @param header Event header
-     * @param content Buffer containing the event's payload content
+     * @param payload Buffer containing the event's payload payload
      */
-    public async addEvent(eventID: string, header: FeedEventHeader, content: Buffer) {
-        if (!(await this.validateContent(eventID, header.eventType, content))) {
+    public async addEvent(eventID: string, header: FeedEventHeader, payload: Buffer) {
+        if (!(await this.validatePayload(eventID, header.eventType, payload))) {
             return { result: false, eventID }
         }
-        await this.drive.put(`/events/${eventID}/content`, content)
+        await this.drive.put(`/events/${eventID}/payload`, payload)
         const result = await this.insertEventHeader(header)
         if (result == VerificationResult.VALID) {
             let eventMetadata = this.eventMetadata.get(eventID)
@@ -857,6 +896,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             }
 
             eventMetadata = {
+                payloadInvalid: false,
                 index: -1,
                 received: header.claimed,
                 consensus: -1,
@@ -866,23 +906,26 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             this.eventMetadata.set(eventID, eventMetadata)
             const index = await this.publishReceived(eventID, header.claimed)
             eventMetadata.index = index
-            this.eventMetadata.set(eventID, eventMetadata)
             this.timeline.setTime(eventID, header.claimed)
-            this.emit('timelineAddEvent', eventID, header.claimed, header.claimed)
+            await this.onTimelineAdd(eventID, header.claimed, -1)
         }
         return { result, eventID }
+    }
+
+    public isEventInTimeline(eventID: string) {
+        return !!this.timeline.getTime(eventID)
     }
 
     /**
      * Public API for the creation and publication of a new event
      * @param eventType Type for this event
-     * @param content Buffer containing the event's payload content
+     * @param payload Buffer containing the event's payload payload
      * @returns Enum indicating the result of the process.
      */
-    public async newEvent(eventType: string, content: Buffer) {
+    public async newEvent(eventType: string, payload: Buffer) {
         const nullifiers = await this.nullifierRegistry.createNullifier(eventType)
-        const [eventHeader, eventID] = await createEvent(this.rln, this.topic, eventType, nullifiers, content)
-        return await this.addEvent(eventID, eventHeader, content)
+        const [eventHeader, eventID] = await createEvent(this.rln, this.topic, eventType, nullifiers, payload)
+        return await this.addEvent(eventID, eventHeader, payload)
     }
 
     /**
@@ -891,11 +934,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @returns Event data or `null` if the event is not available
      */
     public async getEventByID(eventID: string) {
-        const eventHeaderBuf = await this.drive.get(`/events/${eventID}/header`)
-        const contentBuf = await this.drive.get(`/events/${eventID}/content`)
-        if (!contentBuf || !eventHeaderBuf) return null
-        const eventHeader: FeedEventHeader = deserializeEvent(eventHeaderBuf)
-        return {header: eventHeader, content: contentBuf}
+        const eventHeader = this.eventHeaders.get(eventID)
+        const payloadBuf = await this.drive.get(`/events/${eventID}/payload`)
+        if (!payloadBuf || !eventHeader) return null
+        return {header: eventHeader, payload: payloadBuf}
     }
 
     /**
@@ -911,14 +953,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         maxLength?: number
         ): Promise<{
             header: FeedEventHeader,
-            content: Buffer
+            payload: Buffer
         }[]> {
             const events = (await Promise.all(this.timeline.getEvents(startTime, endTime, maxLength, true)
                     .map(async ([time, eventID]) => await this.getEventByID(eventID))))
                     .filter(e => e != null)
             return events as {
                 header: FeedEventHeader,
-                content: Buffer
+                payload: Buffer
             }[]
     }
 }
