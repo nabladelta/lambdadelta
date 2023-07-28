@@ -159,7 +159,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     public topic: string
 
     // RLN
-    private rln: RLN
+    protected rln: RLN
 
     private timeline: Timeline
 
@@ -175,7 +175,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     private eventHeaders: Map<string, FeedEventHeader> // EventID => Header
 
-    private nullifierRegistry: NullifierRegistry
+    protected nullifierRegistry: NullifierRegistry
     private logReloaded: boolean
 
     private lock = new AsyncLock()

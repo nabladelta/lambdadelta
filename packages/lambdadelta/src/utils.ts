@@ -150,3 +150,21 @@ export function deserializeInteger(buf: Buffer) {
 export function rlnIdentifier(topic: string, eventType: string) {
     return `${topic}.${eventType}`
 }
+
+export  function serializeRelayedEvent(topic: string, eventID: string, header: FeedEventHeader, payload: Buffer) {
+    return [Buffer.from(topic), Buffer.from(eventID), Buffer.from(JSON.stringify(header)), payload]
+}
+
+export  function deSerializeRelayedEvent(eventData: Buffer[]): {
+    topic: string
+    eventID: string
+    header: FeedEventHeader
+    payload: Buffer
+} {
+    return {
+        topic: eventData[0].toString('utf-8'),
+        eventID: eventData[1].toString('utf-8'),
+        header: JSON.parse(eventData[2].toString('utf-8')),
+        payload: eventData[3]
+    }
+}

@@ -208,7 +208,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
      * @param stream The encrypted socket used for communication
      * @param info An object containing metadata regarding this peer
      */
-    private handlePeer(stream: NoiseSecretStream, info: PeerInfo) {
+    protected handlePeer(stream: NoiseSecretStream, info: PeerInfo) {
         this.log.info(`Found peer ${info.publicKey.toString('hex').slice(-6)}`)
         const peerID = stream.remotePublicKey.toString('hex')
 
@@ -241,6 +241,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
 
         this.peers.set(peerID, { info, topics: new Set(), connection: {stream, handshakeSender} })
         this.sendHandshake(peerID)
+        return channel
     }
 
     /**
