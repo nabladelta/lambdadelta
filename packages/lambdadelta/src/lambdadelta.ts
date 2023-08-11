@@ -69,7 +69,7 @@ export interface FeedEventHeader {
  * @typedef LogEntry An entry in our event log hypercore
  * @property {number} oldestIndex Index of the oldest still valid block
  * @property {number} received Timestamp in seconds
- * @property {string} eventID The event's ID
+ * @property {string} header The event's Header
  */
 export interface LogEntry {
     oldestIndex: number
@@ -79,9 +79,9 @@ export interface LogEntry {
 
 /**
  * @typedef LogAppendEvent An update from a peer
- * @property {number} oldestIndex Index of the oldest still valid block
- * @property {number} received Timestamp in seconds
- * @property {string} eventID The event's ID
+ * @property {number} fromIndex First index appended
+ * @property {number} toIndex Next index that hasn't been used
+ * @property {string} timestamp When we received this update
  */
 export type LogAppendEvent = {
     fromIndex: number
