@@ -42,7 +42,7 @@ export class ContractProvider extends GroupDataProvider {
                 })
             }
         }
-        return groupEvents
+        return groupEvents.slice(lastEventIndex)
     }
 
     protected async retrieveRoot(_: string) {
