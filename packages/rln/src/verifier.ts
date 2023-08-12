@@ -51,6 +51,10 @@ export class RLN {
         return new RLN(provider, secret)
     }
 
+    public static async loadCustom(secret: string, provider: GroupDataProvider) {
+        return new RLN(provider, secret)
+    }
+
     public async verify(proof: RLNGFullProof, claimedTime?: number) {
         const root = proof.snarkProof.publicSignals.merkleRoot
         const [start, end] = await this.provider.getRootTimeRange(BigInt(root))

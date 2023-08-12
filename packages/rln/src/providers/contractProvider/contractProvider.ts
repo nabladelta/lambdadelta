@@ -2,6 +2,7 @@ import { GroupDataProvider, GroupEvent } from "../dataProvider"
 import { poseidon1 } from 'poseidon-lite'
 import { ethers } from "ethers"
 import { RLNContract } from "./contractWrapper"
+import { WithdrawProver } from 'rlnjs'
 
 export interface GroupFile {
     id: string,
@@ -13,11 +14,18 @@ export class ContractProvider extends GroupDataProvider {
 
     private contract: RLNContract
     private slashRewardsAddress: string
+    private withdrawProver?: WithdrawProver
 
-    private constructor(gid: string, treeDepth: number, contract: RLNContract, slashRewardsAddress: string) {
+    private constructor(gid: string, treeDepth: number, contract: RLNContract, slashRewardsAddress: string, proverPaths?: {
+        withdrawWasmFilePath: string | Uint8Array,
+        withdrawFinalZkeyPath: string | Uint8Array
+    }) {
         super(gid, treeDepth)
         this.contract = contract
         this.slashRewardsAddress = slashRewardsAddress
+        if (proverPaths !== undefined) {
+            this.withdrawProver = new WithdrawProver(proverPaths.withdrawWasmFilePath, proverPaths.withdrawFinalZkeyPath)
+        }
     }
 
     protected async loadEvents(lastEventIndex: number): Promise<GroupEvent[]> {
@@ -53,22 +61,34 @@ export class ContractProvider extends GroupDataProvider {
             contractAddress: string,
             provider: ethers.Provider,
             signer?: ethers.Signer,
+            contractAtBlock: number = 0,
             slashRewardsAddress: string = "0x000000000000000000000000000000000000dead",
             gid: string = "0",
-            treeDepth: number = 20
+            treeDepth: number = 20,
+            provers?: {
+                withdrawWasmFilePath: string | Uint8Array,
+                withdrawFinalZkeyPath: string | Uint8Array
+            }
         ) {
-        const contract = new RLNContract({provider, signer, contractAddress, contractAtBlock: 0})
-        const dataProvider = new ContractProvider(gid, treeDepth, contract, slashRewardsAddress)
+        const contract = new RLNContract({provider, signer, contractAddress, contractAtBlock})
+        const dataProvider = new ContractProvider(gid, treeDepth, contract, slashRewardsAddress, provers)
         await dataProvider.update()
         return dataProvider
     }
 
-    // TODO: implement
-    public async slash(secretIdentity: bigint) {
-        const identityCommitment = poseidon1([secretIdentity])
+    public async slash(identitySecret: bigint) {
+        if (!this.withdrawProver) {
+            console.error("Failed to slash: No prover provided")
+            return // No prover to slash
+        }
+        const receiverBigInt = BigInt(this.slashRewardsAddress)
+        const identityCommitment = poseidon1([identitySecret])
         try {
-            // TODO: Generate proof
-            const receipt = await this.contract.slash(identityCommitment, this.slashRewardsAddress, null as any)
+            const proof = await this.withdrawProver.generateProof({
+                identitySecret,
+                address: receiverBigInt,
+            })
+            const receipt = await this.contract.slash(identityCommitment, this.slashRewardsAddress, proof.proof)
             console.log("Slashed: " + receipt.blockHash)
         } catch (e) {
             console.error("Failed to slash: " + (e as Error).message)

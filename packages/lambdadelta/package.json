@@ -37,6 +37,7 @@
     "hyperdrive": "^11.0.0-alpha.10",
     "hyperswarm": "^4.3.7",
     "random-access-memory": "^6.1.0",
+    "rlnjs": "^3.1.5",
     "sorted-btree": "^1.8.1",
     "tslog": "^4.8.2",
     "wait-queue": "^1.1.4"
