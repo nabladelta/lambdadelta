@@ -68,7 +68,7 @@ export class ContractProvider extends GroupDataProvider {
         const identityCommitment = poseidon1([secretIdentity])
         try {
             // TODO: Generate proof
-            const receipt = await this.contract.slash(identityCommitment, this.slashRewardsAddress, null)
+            const receipt = await this.contract.slash(identityCommitment, this.slashRewardsAddress, null as any)
             console.log("Slashed: " + receipt.blockHash)
         } catch (e) {
             console.error("Failed to slash: " + (e as Error).message)
