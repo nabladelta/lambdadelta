@@ -3,11 +3,17 @@ import { hashBigint } from "../utils/hash"
 import { poseidon2 } from 'poseidon-lite'
 import { getTimestampInSeconds } from "../utils/time"
 
-export interface GroupEvent {
-    type: "ADD" | "REMOVE"
+export type GroupEvent = {
+    type: "ADD"
     time: number
     commitment: string
     multiplier: number
+    entryIndex?: number
+} | {
+    type: "REMOVE"
+    time: number
+    commitment?: string
+    multiplier?: number
     entryIndex?: number
 }
 
@@ -31,16 +37,23 @@ export abstract class GroupDataProvider {
     public async update() {
         const events = await this.loadEvents(this.lastEvent)
         for (let event of events) {
-            const commitment = BigInt(event.commitment)
             this.pastRootsRemoved.set(this.members.root.toString(16), event.time) // Set time the current root was invalidated
-            const rateCommitment = GroupDataProvider.getRateCommitment(commitment, event.multiplier)
             if (event.type == "ADD") {
+                const commitment = BigInt(event.commitment)
+                const rateCommitment = GroupDataProvider.getRateCommitment(commitment, event.multiplier)
                 this.members.insert(rateCommitment)
+                this.multipliers.set(commitment, event.multiplier)
             }
             if (event.type == "REMOVE") {
-                this.members.delete(event.entryIndex || this.members.indexOf(rateCommitment))
+                if (event.entryIndex) {
+                    this.members.delete(event.entryIndex)
+                } else if (event.entryIndex === undefined && event.commitment !== undefined && event.multiplier !== undefined) {
+                    const rateCommitment = GroupDataProvider.getRateCommitment(BigInt(event.commitment), event.multiplier)
+                    this.members.delete(this.members.indexOf(rateCommitment))
+                } else {
+                   throw new Error("Invalid event")
+                }
             }
-            this.multipliers.set(commitment, event.multiplier)
             this.pastRootsAdded.set(this.members.root.toString(16), event.time) // Set time this root became the root
             this.lastEvent++
         }
