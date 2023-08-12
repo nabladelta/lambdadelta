@@ -95,4 +95,37 @@ export class ContractProvider extends GroupDataProvider {
         }
         await this.update()
     }
+
+    async register(identityCommitment: bigint, multiplier: number): Promise<void> {
+        if (this.indexOf(GroupDataProvider.getRateCommitment(identityCommitment, multiplier)) !== -1) {
+          throw new Error('Identity commitment is already registered')
+        }
+        await this.contract.register(identityCommitment, BigInt(multiplier))
+    }
+
+    async withdraw(identitySecret: bigint): Promise<void> {
+        if (this.withdrawProver === undefined) {
+          throw new Error('Withdraw prover is not initialized')
+        }
+        const identityCommitment = poseidon1([identitySecret])
+        const user = await this.contract.getUser(identityCommitment)
+        if (user.userAddress === ethers.ZeroAddress) {
+          throw new Error('Identity commitment is not registered')
+        }
+        const userAddressBigInt = BigInt(user.userAddress)
+    
+        const proof = await this.withdrawProver.generateProof({
+          identitySecret,
+          address: userAddressBigInt,
+        })
+        await this.contract.withdraw(identityCommitment, proof.proof)
+    }
+    
+    async releaseWithdrawal(identityCommitment: bigint): Promise<void> {
+        const withdrawal = await this.contract.getWithdrawal(identityCommitment)
+        if (withdrawal.blockNumber == BigInt(0)) {
+            throw new Error('Withdrawal is not initiated')
+        }
+        await this.contract.release(identityCommitment)
+    }
 }

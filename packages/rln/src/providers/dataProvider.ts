@@ -83,7 +83,7 @@ export abstract class GroupDataProvider {
         return this.members.createProof(index)
     }
 
-    public indexOf(commitment: bigint, multiplier?: number){
+    public indexOf(commitment: bigint, multiplier: number = 1){
         return this.members.indexOf(
             GroupDataProvider.getRateCommitment(commitment, multiplier)
         )
