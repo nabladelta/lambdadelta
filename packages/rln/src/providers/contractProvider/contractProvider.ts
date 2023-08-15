@@ -16,16 +16,11 @@ export class ContractProvider extends GroupDataProvider {
     private slashRewardsAddress: string
     private withdrawProver?: WithdrawProver
 
-    private constructor(gid: string, treeDepth: number, contract: RLNContract, slashRewardsAddress: string, proverPaths?: {
-        withdrawWasmFilePath: string | Uint8Array,
-        withdrawFinalZkeyPath: string | Uint8Array
-    }) {
+    private constructor(gid: string, treeDepth: number, contract: RLNContract, slashRewardsAddress: string, prover?: WithdrawProver) {
         super(gid, treeDepth)
         this.contract = contract
         this.slashRewardsAddress = slashRewardsAddress
-        if (proverPaths !== undefined) {
-            this.withdrawProver = new WithdrawProver(proverPaths.withdrawWasmFilePath, proverPaths.withdrawFinalZkeyPath)
-        }
+        this.withdrawProver = prover
     }
 
     protected async loadEvents(lastEventIndex: number): Promise<GroupEvent[]> {
@@ -70,8 +65,12 @@ export class ContractProvider extends GroupDataProvider {
                 withdrawFinalZkeyPath: string | Uint8Array
             }
         ) {
+        let withdrawProver: WithdrawProver | undefined
+        if (provers !== undefined) {
+            withdrawProver = new WithdrawProver(provers.withdrawWasmFilePath, provers.withdrawFinalZkeyPath)
+        }
         const contract = new RLNContract({provider, signer, contractAddress, contractAtBlock})
-        const dataProvider = new ContractProvider(gid, treeDepth, contract, slashRewardsAddress, provers)
+        const dataProvider = new ContractProvider(gid, treeDepth, contract, slashRewardsAddress, withdrawProver)
         await dataProvider.update()
         return dataProvider
     }
