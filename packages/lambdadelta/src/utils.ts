@@ -168,3 +168,21 @@ export  function deSerializeRelayedEvent(eventData: Buffer[]): {
         payload: eventData[3]
     }
 }
+
+export function getRandomElement<T>(list: T[]) {
+    return list[Math.floor((Math.random()*list.length))];
+}
+
+export function getRandomIndex<T>(list: T[]) {
+    return Math.floor((Math.random()*list.length));
+}
+
+export const isSubset = (parentArray: unknown[], subsetArray: unknown[]) => {
+    return subsetArray.every((el) => {
+        return parentArray.includes(el)
+    })
+}
+
+export function getRandomInt(max: number){
+    return Math.floor((Math.random()*max))
+}
