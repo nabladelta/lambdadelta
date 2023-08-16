@@ -74,9 +74,9 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         if (!feed) return false
         
         if (!this.routingMaps.has(topic)) {
-            this.routingMaps.set(topic, new RoutingMap())
+            this.routingMaps.set(topic, new RoutingMap(this.peerId))
         }
-        const feedPeers = [...feed.getPeerList(), this.peerId]
+        const feedPeers = [...feed.getPeerList()]
         this.routingMaps.get(topic)!.updatePeers(feedPeers)
 
         const peerID = this.routingMaps.get(topic)!.getDestination(senderPeerID)
@@ -91,7 +91,6 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
     public async relayEvent(topic: string, eventID: string, header: FeedEventHeader, payload: Buffer) {
         const eventData = serializeRelayedEvent(topic, eventID, header, payload)
 
-        // Own peer ID?
         return await this.sendEventToRelay(this.peerId, topic, eventData)
     }
 

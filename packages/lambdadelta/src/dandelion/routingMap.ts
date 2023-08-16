@@ -7,12 +7,14 @@ export class RoutingMap {
     private nextRefresh: number
     private jitter: number
     private refreshInterval: number
+    private ownId: string
 
-    constructor(maxDestinations: number = 2, refreshInterval = 600, jitter = 100) {
+    constructor(ownId: string, maxDestinations: number = 2, refreshInterval = 600, jitter = 100) {
         this.maxDestinations = maxDestinations
         this.nextRefresh = this.getNextRefreshTime()
         this.jitter = jitter
         this.refreshInterval = refreshInterval
+        this.ownId = ownId
     }
 
     /**
@@ -35,6 +37,8 @@ export class RoutingMap {
      */
     public updatePeers(peers: string[]) {
         this.updateDestinations(peers)
+        // Do not use own ID for destinations
+        peers = [...peers, this.ownId]
         if (peers.length == 0) {
             this.destinationMap = new Map()
             return
@@ -95,7 +99,8 @@ export class RoutingMap {
         if (getTimestampInSeconds() < this.nextRefresh) {
             return
         }
-        const peers = Array.from(this.destinationMap.keys())
+        // Get all peers, making sure to remove our own peerId
+        const peers = Array.from(this.destinationMap.keys()).filter((peer) => peer != this.ownId)
         this.destinations = []
         this.destinationMap = new Map()
         this.updatePeers(peers)
