@@ -884,17 +884,17 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @param payload Buffer containing the event's payload payload
      */
     public async addEvent(eventID: string, header: FeedEventHeader, payload: Buffer) {
+        let eventMetadata = this.eventMetadata.get(eventID)
+        if (eventMetadata) {
+            return { result: false, eventID, exists: true }
+        }
+
         if (!(await this.validatePayload(eventID, header.eventType, payload))) {
             return { result: false, eventID }
         }
         await this.drive.put(`/events/${eventID}/payload`, payload)
         const result = await this.insertEventHeader(header)
         if (result == VerificationResult.VALID) {
-            let eventMetadata = this.eventMetadata.get(eventID)
-            if (eventMetadata) {
-                throw new Error("Event already exists")
-            }
-
             eventMetadata = {
                 payloadInvalid: false,
                 index: -1,

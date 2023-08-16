@@ -5,11 +5,12 @@ import { createEvent } from "../create";
 
 class RelayedLambdadelta extends Lambdadelta {
     private node: RelayerNodeBase<any> | undefined
+
     public setRelayer(node: RelayerNodeBase<any>) {
         this.node = node
     }
     public async newEvent(eventType: string, payload: Buffer): Promise<{ result: boolean; eventID: string; } | { result: VerificationResult | HeaderVerificationError; eventID: string; }> {
-        if (!this.node) {
+        if (!this.node || this.getPeerList().length < 2) {
             return await super.newEvent(eventType, payload)
         }
         const nullifiers = await this.nullifierRegistry.createNullifier(eventType)

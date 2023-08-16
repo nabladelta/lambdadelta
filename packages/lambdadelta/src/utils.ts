@@ -186,3 +186,7 @@ export const isSubset = (parentArray: unknown[], subsetArray: unknown[]) => {
 export function getRandomInt(max: number){
     return Math.floor((Math.random()*max))
 }
+
+export function coinFlip(successChance: number) {
+    return(Math.random() < successChance) ? true : false;
+}
