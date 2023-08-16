@@ -76,8 +76,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         if (!this.routingMaps.has(topic)) {
             this.routingMaps.set(topic, new RoutingMap(this.peerId))
         }
-        const feedPeers = [...feed.getPeerList()]
-        this.routingMaps.get(topic)!.updatePeers(feedPeers)
+        this.routingMaps.get(topic)!.updatePeers([...feed.getPeerList()])
 
         const peerID = this.routingMaps.get(topic)!.getDestination(senderPeerID)
         if (!peerID) return false
