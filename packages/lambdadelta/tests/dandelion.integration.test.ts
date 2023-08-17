@@ -67,6 +67,7 @@ describe('LDRelayerNode', () => {
         let i = 0
 
         for (const feed of feeds) {
+            await sleep(1000)
             expect((await feeds[0].newEvent("POST", messages[i++])).result)
                 .toEqual(VerificationResult.VALID)
             expect(feed.getPeerList().length).toBe(2)

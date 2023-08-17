@@ -46,7 +46,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
 
     protected async handleRelayedEvent(senderPeerID: string, eventData: Buffer[]) {
         const {topic, eventID, header, payload} = deSerializeRelayedEvent(eventData)
-        this.logR.info(`Received stem event from ${senderPeerID.slice(-6)} (Topic: ${topic} ID: ${eventID.slice(-6)})`)
+        this.logR.info(`Received stem event from ${senderPeerID.slice(-6)} (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
 
         const totalPeers = this.relayPeers.size
         const chance = 1 / Math.min(totalPeers, 10) // 1 in 10 chance or better of fluffing
@@ -54,29 +54,35 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         
         if (fluffEvent) {
             // Publish event (fluff phase)
-            this.logR.info(`Fluffing event (Topic: ${topic} ID: ${eventID.slice(-6)})`)
+            this.logR.info(`Fluffing event (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
             const feed = this.getTopicByHash(topic)
             if (!feed) return
             
             await feed.addEvent(eventID, header, payload)
         } else {
             // Relay event
-            this.logR.info(`Relaying stem event (Topic: ${topic} ID: ${eventID.slice(-6)})`)
+            this.logR.info(`Relaying stem event (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
             this.sendEventToRelay(senderPeerID, topic, eventData)
 
-            if (this.embargoedEvents.has(`${topic}.${eventID}`)) { // Do not embargo twice
+            if (this.embargoedEvents.has(`${topic.slice(-6)}.${eventID}`)) { // Do not embargo twice
                 return
             }
-            this.embargoedEvents.add(`${topic}.${eventID}`)
+            this.embargoedEvents.add(`${topic.slice(-6)}.${eventID}`)
             // Publish event after the embargo timer expires
             setTimeout(() => {
-                this.logR.info(`Attempting to fluff stem event after embargo expired (Topic: ${topic} ID: ${eventID.slice(-6)})`)
-                this.embargoedEvents.delete(`${topic}.${eventID}`)
+                this.logR.info(`Attempting to fluff stem event after embargo expired (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
+                this.embargoedEvents.delete(`${topic.slice(-6)}.${eventID}`)
                 const feed = this.getTopicByHash(topic)
                 if (!feed) return
 
                 const result = feed.addEvent(eventID, header, payload)
-                result.then((r) => this.logR.info(`Fluff result: ${r.result} existing: ${r.exists} (Topic: ${topic} ID: ${eventID.slice(-6)})`))
+                result.then((r) => {
+                    if (r.exists) {
+                        this.logR.info(`Skip fluff (already existing event) (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
+                    } else {
+                        this.logR.info(`Fluff result: ${r.result} existing: ${r.exists} (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
+                    }
+                })
             }, this.embargoTimeMs + getRandomInt(this.embargoJitterMs))
         }
     }
@@ -91,7 +97,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         this.routingMaps.get(topic)!.updatePeers([...feed.getPeerList()])
 
         const peerID = this.routingMaps.get(topic)!.getDestination(senderPeerID)
-        this.logR.info(`Sending stem event with topic "${topic}" to relay Peer ${peerID?.slice(-6)}`)
+        this.logR.info(`Sending stem event with topic "${topic.slice(-6)}" to relay Peer ${peerID?.slice(-6)}`)
         if (!peerID) return false
 
         const eventSender = this.relayPeers.get(peerID)
