@@ -15,9 +15,11 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
     private routingMaps: Map<string, RoutingMap> = new Map() // Feed => routingMap
     private embargoTimeMs: number = 5000
     private embargoJitterMs: number = 3000
+    private logR: Logger<unknown>
 
     constructor(secret: string, groupID: string, rln: RLN, opts: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>, dataFolder?: string}) {
         super(secret, groupID, rln, opts)
+        this.logR = this.getSubLogger({name: `EventRelay`})
     }
 
     /**
@@ -44,6 +46,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
 
     protected async handleRelayedEvent(senderPeerID: string, eventData: Buffer[]) {
         const {topic, eventID, header, payload} = deSerializeRelayedEvent(eventData)
+        this.logR.info(`Received stem event from ${senderPeerID.slice(-6)} (Topic: ${topic} ID: ${eventID.slice(-6)})`)
 
         const totalPeers = this.relayPeers.size
         const chance = 1 / Math.min(totalPeers, 10) // 1 in 10 chance or better of fluffing
@@ -51,16 +54,19 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         
         if (fluffEvent) {
             // Publish event (fluff phase)
+            this.logR.info(`Fluffing event (Topic: ${topic} ID: ${eventID.slice(-6)})`)
             const feed = this.getTopic(topic)
             if (!feed) return
-    
+            
             await feed.addEvent(eventID, header, payload)
         } else {
             // Relay event
+            this.logR.info(`Relaying stem event (Topic: ${topic} ID: ${eventID.slice(-6)})`)
             this.sendEventToRelay(senderPeerID, topic, eventData)
 
             // Publish event after the embargo timer expires
             setTimeout(() => {
+                this.logR.info(`Attempting to fluff stem event after embargo expired (Topic: ${topic} ID: ${eventID.slice(-6)})`)
                 const feed = this.getTopic(topic)
                 if (!feed) return
 
@@ -80,6 +86,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         this.routingMaps.get(topic)!.updatePeers([...feed.getPeerList()])
 
         const peerID = this.routingMaps.get(topic)!.getDestination(senderPeerID)
+        this.logR.info(`Sending stem event with topic "${topic}" to relay Peer ${peerID?.slice(-6)}`)
         if (!peerID) return false
 
         const eventSender = this.relayPeers.get(peerID)
