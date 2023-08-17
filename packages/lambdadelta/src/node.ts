@@ -181,6 +181,10 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         return this.topicFeeds.get(this.topicHash(topic, 'index').toString('hex'))
     }
 
+    public getTopicByHash(topicHash: string) {
+        return this.topicFeeds.get(topicHash)
+    }
+
     /**
      * Removes a peer form all topics he is connected to
      * @param peerID ID of the peer to remove

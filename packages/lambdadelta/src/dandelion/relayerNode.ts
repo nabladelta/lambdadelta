@@ -15,10 +15,11 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
     private embargoTimeMs: number = 5000
     private embargoJitterMs: number = 3000
     private logR: Logger<unknown>
+    private embargoedEvents: Set<string> = new Set()
 
     constructor(secret: string, groupID: string, rln: RLN, opts: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>, dataFolder?: string}) {
         super(secret, groupID, rln, opts)
-        this.logR = this.getSubLogger({name: `EventRelay`})
+        this.logR = this.getSubLogger({name: `EventRelay`, minLevel: 0})
     }
 
     /**
@@ -54,7 +55,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         if (fluffEvent) {
             // Publish event (fluff phase)
             this.logR.info(`Fluffing event (Topic: ${topic} ID: ${eventID.slice(-6)})`)
-            const feed = this.getTopic(topic)
+            const feed = this.getTopicByHash(topic)
             if (!feed) return
             
             await feed.addEvent(eventID, header, payload)
@@ -63,20 +64,25 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
             this.logR.info(`Relaying stem event (Topic: ${topic} ID: ${eventID.slice(-6)})`)
             this.sendEventToRelay(senderPeerID, topic, eventData)
 
+            if (this.embargoedEvents.has(`${topic}.${eventID}`)) { // Do not embargo twice
+                return
+            }
+            this.embargoedEvents.add(`${topic}.${eventID}`)
             // Publish event after the embargo timer expires
             setTimeout(() => {
                 this.logR.info(`Attempting to fluff stem event after embargo expired (Topic: ${topic} ID: ${eventID.slice(-6)})`)
-                const feed = this.getTopic(topic)
+                this.embargoedEvents.delete(`${topic}.${eventID}`)
+                const feed = this.getTopicByHash(topic)
                 if (!feed) return
 
-                return feed.addEvent(eventID, header, payload)
+                const result = feed.addEvent(eventID, header, payload)
+                result.then((r) => this.logR.info(`Fluff result: ${r.result} existing: ${r.exists} (Topic: ${topic} ID: ${eventID.slice(-6)})`))
             }, this.embargoTimeMs + getRandomInt(this.embargoJitterMs))
         }
     }
 
     private async sendEventToRelay(senderPeerID: string, topic: string, eventData: Buffer[]) {
-        const feed = this.getTopic(topic)
-
+        const feed = this.getTopicByHash(topic)
         if (!feed) return false
         
         if (!this.routingMaps.has(topic)) {

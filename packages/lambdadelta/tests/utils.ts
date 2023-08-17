@@ -87,6 +87,7 @@ export async function nodeSetupDandelion() {
 
     let mapping: Map<string, string> = new Map()
     const mainLogger = new Logger({
+        minLevel: 7,
         prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
         overwrite: {
             formatLogObj(maskedArgs, settings) {

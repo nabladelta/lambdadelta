@@ -15,7 +15,7 @@ export class RelayedLambdadelta extends Lambdadelta {
         }
         const nullifiers = await this.nullifierRegistry.createNullifier(eventType)
         const [eventHeader, eventID] = await createEvent(this.rln, this.topic, eventType, nullifiers, payload)
-        const result = await this.node.relayEvent(this.topic, eventID, eventHeader, payload)
+        const result = await this.node.relayEvent(this.topic, eventID, eventHeader, payload) ? VerificationResult.VALID : false
         return {result, eventID}
     }
 }
