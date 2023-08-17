@@ -4,7 +4,6 @@ import { FeedEventHeader, Lambdadelta } from "../lambdadelta";
 import { LDNodeBase } from "../node";
 import { Logger } from "tslog";
 import { RLN } from "@nabladelta/rln";
-import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { coinFlip, deSerializeRelayedEvent, getRandomInt, serializeRelayedEvent } from "../utils";
 import { RoutingMap } from "./routingMap";
