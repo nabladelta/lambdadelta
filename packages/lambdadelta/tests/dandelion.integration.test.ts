@@ -105,7 +105,7 @@ describe('LDRelayerNode', () => {
             messages.push(Buffer.from(`test ${n++}`))
             expect((await feeds[0].newEvent("POST", messages[n - 1])).result)
                 .toEqual(VerificationResult.VALID)
-            await sleep(1100)
+            await sleep(1600)
             messages.push(Buffer.from(`test ${n++}`))
             expect((await feeds[0].newEvent("POST", messages[n - 1])).result)
             .toEqual(VerificationResult.VALID)
