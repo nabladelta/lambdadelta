@@ -3,10 +3,10 @@ import { HeaderVerificationError, Lambdadelta } from "../lambdadelta";
 import { RelayerNodeBase } from "./relayerNode";
 import { createEvent } from "../create";
 
-class RelayedLambdadelta extends Lambdadelta {
-    private node: RelayerNodeBase<any> | undefined
+export class RelayedLambdadelta extends Lambdadelta {
+    private node: RelayerNodeBase<RelayedLambdadelta> | undefined
 
-    public setRelayer(node: RelayerNodeBase<any>) {
+    public setRelayer(node: RelayerNodeBase<RelayedLambdadelta>) {
         this.node = node
     }
     public async newEvent(eventType: string, payload: Buffer): Promise<{ result: boolean; eventID: string; } | { result: VerificationResult | HeaderVerificationError; eventID: string; }> {

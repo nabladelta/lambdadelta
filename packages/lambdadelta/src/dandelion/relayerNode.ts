@@ -8,6 +8,7 @@ import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { coinFlip, deSerializeRelayedEvent, getRandomInt, serializeRelayedEvent } from "../utils";
 import { RoutingMap } from "./routingMap";
+import { RelayedLambdadelta } from "./relayedFeed";
 
 export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBase<Feed> {
     private relayPeers: Map<string, any> = new Map() // PeerID => messageSender
@@ -96,5 +97,17 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
     public setEmbargoTimer(timeMs: number, jitterMs: number) {
         this.embargoJitterMs = jitterMs
         this.embargoTimeMs = timeMs
+    }
+}
+
+export class LDRelayerNode extends RelayerNodeBase<RelayedLambdadelta> {
+    protected newFeed(topicHash: string) {
+        const feed = new RelayedLambdadelta(
+            topicHash,
+            this.corestore,
+            this.rln!
+        )
+        feed.setRelayer(this)
+        return feed
     }
 }
