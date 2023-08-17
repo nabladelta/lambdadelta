@@ -1,5 +1,5 @@
 import { FileProvider, GroupDataProvider, MemoryProvider, RLN } from "@nabladelta/rln";
-import { LDNode } from "../src/node";
+import { LDNode, LDNodeBase } from "../src/node";
 import { Identity } from "@semaphore-protocol/identity";
 import { existsSync, rmSync } from "fs";
 import createTestnet from "@hyperswarm/testnet";
@@ -123,8 +123,8 @@ export async function nodeSetupDandelion() {
     return {anode, bnode, cnode, nodes, destroy, bootstrap: testnet.bootstrap, groupData: gData}
 }
 
-export function findMissingTopics(peers: LDNode[], topics: string[]) {
-    const missing: {node: LDNode, peer: LDNode, topic: string}[] = []
+export function findMissingTopics(peers: LDNodeBase<Lambdadelta>[], topics: string[]) {
+    const missing: {node: LDNodeBase<Lambdadelta>, peer: LDNodeBase<Lambdadelta>, topic: string}[] = []
     for (const node of peers) {
         for (const peer of peers) {
             if (peer.peerId === node.peerId) continue
@@ -138,8 +138,8 @@ export function findMissingTopics(peers: LDNode[], topics: string[]) {
     return missing
 }
 
-export function findMissingPeersInFeed(peers: LDNode[], topics: string[]) {
-    const missing: {node: LDNode, peer: LDNode, topic: string}[] = []
+export function findMissingPeersInFeed(peers: LDNodeBase<Lambdadelta>[], topics: string[]) {
+    const missing: {node: LDNodeBase<Lambdadelta>, peer: LDNodeBase<Lambdadelta>, topic: string}[] = []
     for (const node of peers) {
         for (const topic of topics) {
             const feed = node.getTopic(topic)
@@ -157,8 +157,8 @@ export function findMissingPeersInFeed(peers: LDNode[], topics: string[]) {
     return missing
 }
 
-export function findMissingPeers(peers: LDNode[]) {
-    const missing: {node: LDNode, peer: LDNode}[] = []
+export function findMissingPeers(peers: LDNodeBase<Lambdadelta>[]) {
+    const missing: {node: LDNodeBase<Lambdadelta>, peer: LDNodeBase<Lambdadelta>}[] = []
     for (const node of peers) {
         const peerSet = new Set(node.getPeerList())
         for (const peer of peers) {
