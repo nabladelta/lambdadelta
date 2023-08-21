@@ -70,6 +70,7 @@ describe('LDNode', () => {
             expect((await feeds[0].newEvent("POST", messages[i++])).result)
                 .toEqual(VerificationResult.VALID)
             expect(feed.getPeerList().length).toBe(2)
+            await sleep(1100)
         }
 
         await sleep(10000)
@@ -109,6 +110,7 @@ describe('LDNode', () => {
             expect((await feeds[0].newEvent("POST", messages[n - 1])).result)
             .toEqual(VerificationResult.VALID)
             expect(feed.getPeerList().length).toBe(2)
+            await sleep(1100)
         }
 
         await sleep(10000)
