@@ -6,12 +6,12 @@ import { Logger } from "tslog";
 import { RLN } from "@nabladelta/rln";
 import c from 'compact-encoding'
 import { coinFlip, deSerializeRelayedEvent, getRandomInt, serializeRelayedEvent } from "../utils";
-import { RoutingMap } from "./routingMap";
+import { RoutingTable } from "./routingTable";
 import { RelayedLambdadelta } from "./relayedFeed";
 
 export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBase<Feed> {
     private relayPeers: Map<string, any> = new Map() // PeerID => messageSender
-    private routingMaps: Map<string, RoutingMap> = new Map() // Feed => routingMap
+    private routingMaps: Map<string, RoutingTable> = new Map() // Feed => routingMap
     private embargoTimeMs: number = 5000
     private embargoJitterMs: number = 3000
     private logR: Logger<unknown>
@@ -92,7 +92,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         if (!feed) return false
         
         if (!this.routingMaps.has(topic)) {
-            this.routingMaps.set(topic, new RoutingMap(this.peerId))
+            this.routingMaps.set(topic, new RoutingTable(this.peerId))
         }
         this.routingMaps.get(topic)!.updatePeers([...feed.getPeerList()])
 

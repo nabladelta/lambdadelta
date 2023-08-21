@@ -4,4 +4,10 @@ import { LDNode, LDNodeBase } from "./node"
 import { Timeline } from "./timeline"
 import { RelayerNodeBase, LDRelayerNode } from "./dandelion/relayerNode"
 import { RelayedLambdadelta } from "./dandelion/relayedFeed"
-export { Lambdadelta, generateMemberCID, verifyMemberCIDProof, LDNode, LDNodeBase, NullifierSpec, Timeline, LogEntry, PeerData, RelayerNodeBase, LDRelayerNode, RelayedLambdadelta }
+import { RoutingTable } from "./dandelion/routingTable"
+export {
+    Lambdadelta, generateMemberCID, verifyMemberCIDProof,
+    LDNode, LDNodeBase, NullifierSpec, Timeline, LogEntry,
+    PeerData, RelayerNodeBase, LDRelayerNode, RelayedLambdadelta,
+    RoutingTable
+}

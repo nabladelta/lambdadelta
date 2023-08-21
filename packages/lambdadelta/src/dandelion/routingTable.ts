@@ -1,6 +1,6 @@
 import { getRandomElement, getRandomIndex, getRandomInt, getTimestampInSeconds, isSubset } from "../utils"
 
-export class RoutingMap {
+export class RoutingTable {
     private maxDestinations: number
     private destinations: string[] = []
     private destinationMap: Map<string, number> = new Map()
@@ -29,6 +29,15 @@ export class RoutingMap {
             return undefined
         }
         return this.destinations[destId]
+    }
+
+    /**
+     * Get the full list of current outbound destination nodes
+     * Mostly useful for debugging/testing
+     * @returns The list of outbound nodes
+     */
+    public getCurrentDestinations() {
+        return [...this.destinations]
     }
 
     /**
@@ -63,6 +72,9 @@ export class RoutingMap {
     }
 
     private updateDestinations(peers: string[]) {
+        // Don't modify original array
+        peers = Array.from(new Set(peers))
+
         if (peers.length == 0) {
             this.destinations = []
             return
@@ -81,8 +93,7 @@ export class RoutingMap {
             }
             this.destinations = []
         }
-        // Don't modify original array
-        peers = [...peers]
+   
         // Select new destinations
         for (let i = 0; i < this.maxDestinations; i++) {
             const index = getRandomIndex(peers)
