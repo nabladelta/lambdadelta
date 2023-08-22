@@ -41,7 +41,7 @@ await Promise.all([anode.ready(), bnode.ready()])
 ``` ts
 const TOPIC = 'example'
 const TOPICB = 'other'
-await anode.join([TOPIC. TOPICB])
+await anode.join([TOPIC, TOPICB])
 await bnode.join([TOPIC, TOPICB])
 const a = anode.getTopic(TOPIC)!
 const b = bnode.getTopic(TOPIC)!

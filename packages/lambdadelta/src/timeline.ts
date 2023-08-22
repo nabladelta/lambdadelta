@@ -74,7 +74,7 @@ export class Timeline {
     }
 
     private getMinMax(max: boolean): [number | undefined, string | undefined]  {
-        const time = max ? this.timeline.maxKey() : this.timeline.maxKey()
+        const time = max ? this.timeline.maxKey() : this.timeline.minKey()
         return time ? [time, this.timeline.get(time)] : [undefined, undefined]
     }
 
