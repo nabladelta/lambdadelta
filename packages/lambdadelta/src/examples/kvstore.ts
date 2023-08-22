@@ -179,11 +179,6 @@ const run = async () => {
     const b = bnode.getTopic(TOPIC)!
 
     await a.setValue("exampleKey", Buffer.from("exampleValue"))
-    // await sleep(5000)
-    // console.log(await a.getValue("exampleKey"))
-    // const events = (await b.getEvents())
-    //             .map(e => e.payload.toString())
-    // console.log("events: " + events)
 }
 
 
