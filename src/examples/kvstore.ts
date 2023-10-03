@@ -1,5 +1,5 @@
 import { FileProvider, GroupDataProvider, MemoryProvider, RLN } from "@nabladelta/rln"
-import { LDNode, LDNodeBase, Lambdadelta, NullifierSpec, PeerData, Timeline } from "@nabladelta/lambdadelta"
+import { LDNode, LDNodeBase, Lambdadelta, NullifierSpec, PeerData, Timeline } from "../index" // from "@nabladelta/lambdadelta"
 import createTestnet from "@hyperswarm/testnet"
 import { sleep } from "../../tests/utils"
 import { Identity } from "@semaphore-protocol/identity"
