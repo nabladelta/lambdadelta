@@ -1,6 +1,6 @@
-import { Logger } from "tslog"
 import { LogEntry, FeedEventHeader } from "./lambdadelta"
 import crypto from 'crypto'
+import AsyncLock from 'async-lock'
 
 export function getTimestampInSeconds() {
     return Math.floor(Date.now() / 1000)
@@ -41,7 +41,7 @@ export function getEpoch(
 //     const firstEpoch = Math.floor(startTime / length)
 //     const finalEpoch = Math.floor(endTime / length)
 //     const epochs: number[] = []
-//     for (let i = firstEpoch; i <= finalEpoch; i++) {
+//     for (let i = firstEpoch i <= finalEpoch i++) {
 //         epochs.push(i)
 //     }
 //     return epochs
@@ -170,11 +170,11 @@ export  function deSerializeRelayedEvent(eventData: Buffer[]): {
 }
 
 export function getRandomElement<T>(list: T[]) {
-    return list[Math.floor((Math.random()*list.length))];
+    return list[Math.floor((Math.random()*list.length))]
 }
 
 export function getRandomIndex<T>(list: T[]) {
-    return Math.floor((Math.random()*list.length));
+    return Math.floor((Math.random()*list.length))
 }
 
 export const isSubset = (parentArray: unknown[], subsetArray: unknown[]) => {
@@ -188,5 +188,37 @@ export function getRandomInt(max: number){
 }
 
 export function coinFlip(successChance: number) {
-    return(Math.random() < successChance) ? true : false;
+    return(Math.random() < successChance) ? true : false
+}
+
+export function AcquireLockOnArg(lock: AsyncLock, argIndex: number = 0) {
+    return function(target: Object, propertyKey: string, descriptor: TypedPropertyDescriptor<any>): void {
+        const originalMethod = descriptor.value
+
+        descriptor.value = function(...args: any[]) {
+            const lockKey = args[argIndex]  // Use the specified argument as the key
+
+            return new Promise((resolve, reject) => {
+                lock.acquire(lockKey, () => originalMethod.apply(this, args), (err: any, result: any) => {
+                    if (err) reject(err)
+                    else resolve(result)
+                })
+            })
+        }
+    }
+}
+
+export function AcquireLockOn(lock: AsyncLock, lockKey: string) {
+    return function(target: Object, propertyKey: string, descriptor: TypedPropertyDescriptor<any>): void {
+        const originalMethod = descriptor.value
+
+        descriptor.value = function(...args: any[]) {
+            return new Promise((resolve, reject) => {
+                lock.acquire(lockKey, () => originalMethod.apply(this, args), (err: any, result: any) => {
+                    if (err) reject(err)
+                    else resolve(result)
+                })
+            })
+        }
+    }
 }
