@@ -10,7 +10,8 @@ import { deserializeEvent,
     serializeEvent,
     deserializeLogEntry,
     serializeLogEntry, 
-    rlnIdentifier} from './utils'
+    rlnIdentifier,
+    AcquireLockOnArg} from './utils'
 import Corestore from 'corestore'
 import Hypercore from 'hypercore'
 import { Timeline } from './timeline'
@@ -342,6 +343,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @param driveID ID of this peer's Hyperdrive which contains the event headers and payload
      * @returns Whether or not the synchronization the peer was added and synced
      */
+    @AcquireLockOnArg(0)
     public async addPeer(peerID: string, logCoreID: string, driveID: string) {
         if (this.peers.has(peerID) || this.pendingPeers.has(peerID)) {
             // Peer already added
@@ -383,7 +385,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.processLogUpdateQueue(peer).catch((e)=> console.error(e))
         return true
     }
-
+    
+    @AcquireLockOnArg(0)
     public async removePeer(peerID: string) {
         const peer = this.peers.get(peerID)
         if (!peer) {

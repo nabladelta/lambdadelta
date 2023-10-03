@@ -191,15 +191,18 @@ export function coinFlip(successChance: number) {
     return(Math.random() < successChance) ? true : false
 }
 
-export function AcquireLockOnArg(lock: AsyncLock, argIndex: number = 0) {
+interface LockHolder {
+    lock: AsyncLock
+}
+
+export function AcquireLockOnArg(argIndex: number = 0) {
     return function(target: Object, propertyKey: string, descriptor: TypedPropertyDescriptor<any>): void {
         const originalMethod = descriptor.value
 
         descriptor.value = function(...args: any[]) {
             const lockKey = args[argIndex]  // Use the specified argument as the key
-
             return new Promise((resolve, reject) => {
-                lock.acquire(lockKey, () => originalMethod.apply(this, args), (err: any, result: any) => {
+                (this as LockHolder).lock.acquire(lockKey, () => originalMethod.apply(this, args), (err: any, result: any) => {
                     if (err) reject(err)
                     else resolve(result)
                 })
@@ -208,13 +211,12 @@ export function AcquireLockOnArg(lock: AsyncLock, argIndex: number = 0) {
     }
 }
 
-export function AcquireLockOn(lock: AsyncLock, lockKey: string) {
+export function AcquireLockOn(lockKey: string) {
     return function(target: Object, propertyKey: string, descriptor: TypedPropertyDescriptor<any>): void {
         const originalMethod = descriptor.value
-
         descriptor.value = function(...args: any[]) {
             return new Promise((resolve, reject) => {
-                lock.acquire(lockKey, () => originalMethod.apply(this, args), (err: any, result: any) => {
+                (this as LockHolder).lock.acquire(lockKey, () => originalMethod.apply(this, args), (err: any, result: any) => {
                     if (err) reject(err)
                     else resolve(result)
                 })
