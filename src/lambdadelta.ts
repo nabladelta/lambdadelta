@@ -4,14 +4,14 @@ import Hyperdrive from 'hyperdrive'
 import crypto from 'crypto'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import { RLN, RLNGFullProof, VerificationResult } from '@nabladelta/rln'
-import { deserializeEvent, 
+import {
     getEpoch,
     getTimestampInSeconds,
-    serializeEvent,
     deserializeLogEntry,
     serializeLogEntry, 
     rlnIdentifier,
-    AcquireLockOnArg} from './utils'
+    AcquireLockOnArg
+} from './utils'
 import Corestore from 'corestore'
 import Hypercore from 'hypercore'
 import { Timeline } from './timeline'
@@ -241,6 +241,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 continue
             }
             const entry = deserializeLogEntry(entryBuf)
+            if (!entry) {
+                continue
+            }
             const eventID = entry.header.proof.signal
 
             newOldestIndex = i
@@ -333,6 +336,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         // Find the first valid entry
         const lastEntryBuf: Buffer = await eventLog.get(eventLog.length - 1, {timeout: TIMEOUT})
         const lastEntry = deserializeLogEntry(lastEntryBuf)
+        if (!lastEntry) {
+            return 0
+        }
         return lastEntry.oldestIndex
     }
 
@@ -386,6 +392,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return true
     }
     
+    /**
+     * Remove a peer from this topic feed
+     * @param peerID ID of the peer to remove
+     * @returns Whether or not the peer was removed
+     */
     @AcquireLockOnArg(0)
     public async removePeer(peerID: string) {
         const peer = this.peers.get(peerID)
@@ -433,10 +444,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     /**
-     * Wait for a peer's new log entries and processes them
-     * @param peerID 
-     * @param peer 
-     * @returns 
+     * Wait for a peer's new log entries and process them
+     * @param peer The object representing the peer to process
      */
     private async processLogUpdateQueue(peer: PeerData) {
         while (true) {
@@ -449,6 +458,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
     }
 
+    /**
+     * Called whenever we need to process an update from a peer's event log
+     * @param peer The peer responsible for this update
+     * @param update The update
+     * @returns boolean indicating whether we should continue synchronizing events from this peer or stop
+     */
     private async processLogUpdate(peer: PeerData, update: LogAppendEvent) {
         for (let i = update.fromIndex; i < update.toIndex; i++) {
             const result = await this.syncEntry(peer, i, update.timestamp)
@@ -541,6 +556,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const entryBufB: Buffer = await peer.eventLog.get(index, {timeout: TIMEOUT})
         const entryB = deserializeLogEntry(entryBufB)
 
+        if (!entryA || !entryB) {
+            throw new Error("Could not deserialize log entry")
+        }
         if (entryA.header.proof.signal == entryB.header.proof.signal) {
             this.emit('syncDuplicateEvent', peerID, eventID, index, prevIndex)
             return true
@@ -549,6 +567,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return true
     }
 
+    /**
+     * Reload the previous known event log from disk at startup
+     */
     private async reloadEventLog() {
         if (this.logReloaded) return
         this.logReloaded = true
@@ -559,6 +580,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         for (let i = oldestIndex; i < this.eventLog.length; i++) {
             const entryBuf = await this.eventLog.get(i, {timeout: TIMEOUT})
             const entry = deserializeLogEntry(entryBuf)
+            if (!entry) {
+                continue
+            }
             const eventID = entry.header.proof.signal
             this.eventHeaders.set(eventID, entry.header)
             const eventMetadata = {
@@ -599,6 +623,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
 
         const entry = deserializeLogEntry(entryBuf)
+        if (!entry) {
+            return { code: HeaderVerificationError.UNAVAILABLE, eventID: null }
+        }
         const eventID = entry.header.proof.signal
 
         const headerResult = await this.insertEventHeader(entry.header)

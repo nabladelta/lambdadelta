@@ -1,0 +1,72 @@
+syntax = "proto3";
+
+message PiB {
+    repeated string pi_b = 1;
+}
+
+message Proof {
+    repeated string pi_a = 1;
+    repeated PiB pi_b = 2; 
+    repeated string pi_c = 3;
+    string protocol = 4;
+    string curve = 5;
+}
+
+message nullifierOutput {
+    string nullifier = 1;
+    float messageLimit = 2;
+}
+
+message RLNGPublicSignals {
+    repeated string y = 1;
+    string merkleRoot = 2;
+    repeated string nullifiers = 3;
+    string signalHash = 4;
+    repeated string externalNullifiers = 5;
+    repeated string messageLimits = 6;
+}
+
+message RLNGSNARKProof {
+    Proof proof = 1;
+    RLNGPublicSignals publicSignals = 2;
+}
+
+message RLNGFullProof {
+    string signal = 1;
+    string rlnIdentifier = 2;
+    repeated nullifierOutput externalNullifiers = 3;
+    RLNGSNARKProof snarkProof = 4;
+}
+
+/**
+ * @typedef FeedEventHeader Our main Event type
+ * @property {string} eventType Event type
+ * @property {number} claimed Time the event author claims
+ * @property {RLNGFullProof} proof RLN proof for this event
+ * @property {string} payloadHash Hash of payload
+ */
+message FeedEventHeader {
+    string eventType = 1;
+    float claimed = 2;
+    RLNGFullProof proof = 3;
+    string payloadHash = 4;
+}
+
+/**
+ * @typedef LogEntry An entry in our event log hypercore
+ * @property {number} oldestIndex Index of the oldest still valid block
+ * @property {number} received Timestamp in seconds
+ * @property {string} header The event's Header
+ */
+message LogEntry {
+    float oldestIndex = 1;
+    float received = 2;
+    FeedEventHeader header = 3;
+}
+
+message RelayedEvent {
+    string topic = 1;
+    string eventID = 2;
+    FeedEventHeader header = 3;
+    bytes payload = 4;
+}

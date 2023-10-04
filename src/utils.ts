@@ -1,6 +1,9 @@
-import { LogEntry, FeedEventHeader } from "./lambdadelta"
 import crypto from 'crypto'
 import AsyncLock from 'async-lock'
+import { FeedEventHeader, LogEntry } from './protobuf/msgTypes'
+import { FeedEventHeader as IFeedEventHeader, LogEntry as ILogEntry } from './lambdadelta'
+import { Proof as IProof } from '@nabladelta/rln/src/rln'
+import { Proof } from './protobuf/msgTypes'
 
 export function getTimestampInSeconds() {
     return Math.floor(Date.now() / 1000)
@@ -47,21 +50,73 @@ export function getEpoch(
 //     return epochs
 // }
 
-export function serializeEvent(event: FeedEventHeader): Buffer {
-    return Buffer.from(JSON.stringify(event), 'utf-8')
+export function convertIProofToProof(proof: IProof): Proof {
+    return Proof.create({
+        protocol: proof.protocol,
+        curve: proof.curve,
+        piA: proof.pi_a,
+        piB: proof.pi_b.map((el) => ({piB: el})),
+        piC: proof.pi_c,
+    })
 }
 
-export function deserializeEvent(eventBuf: Buffer): FeedEventHeader {
-    const event = JSON.parse(eventBuf.toString('utf-8'))
-    return event
+export function convertProofToIProof(proof: Proof): IProof {
+    return {
+        protocol: proof.protocol,
+        curve: proof.curve,
+        pi_a: proof.piA,
+        pi_b: proof.piB.map((el) => el.piB),
+        pi_c: proof.piC,
+    }
 }
 
-export function serializeLogEntry(event: LogEntry): Buffer {
-    return Buffer.from(JSON.stringify(event), 'utf-8')
+export function convertIEventHeaderToEventHeader(header: IFeedEventHeader): FeedEventHeader {
+    return FeedEventHeader.create({
+        ...header,
+        proof: {
+            ...header.proof,
+            snarkProof: {
+                ...header.proof.snarkProof,
+                proof: convertIProofToProof(header.proof.snarkProof.proof)
+            }
+        }
+    })
 }
 
-export function deserializeLogEntry(eventBuf: Buffer): LogEntry {
-    return JSON.parse(eventBuf.toString('utf-8'))
+export function convertEventHeaderToIEventHeader(header?: FeedEventHeader): IFeedEventHeader | false {
+    if (!header) return false
+    if (!header.proof) return false
+    if (!header.proof.snarkProof) return false
+    if (!header.proof.snarkProof.proof) return false
+    if (!header.proof.snarkProof.publicSignals) return false
+    const proof = convertProofToIProof(header.proof.snarkProof.proof)
+    return {
+        ...header,
+        proof: {
+            ...header.proof,
+            snarkProof: {
+                publicSignals: header.proof.snarkProof.publicSignals,
+                proof: proof
+            }
+        }
+    }
+}
+
+export function serializeLogEntry(event: ILogEntry): Buffer {
+    return Buffer.from(LogEntry.toBinary({
+        ...event,
+        header: convertIEventHeaderToEventHeader(event.header)
+    }))
+}
+
+export function deserializeLogEntry(eventBuf: Buffer): ILogEntry | false {
+    const entry = LogEntry.fromBinary(eventBuf)
+    const header = convertEventHeaderToIEventHeader(entry.header)
+    if (!header) return false
+    return {
+        ...entry,
+        header: header
+    }
 }
 
 // Rounded to 100000 seconds. This is the Member-Epoch
@@ -151,14 +206,14 @@ export function rlnIdentifier(topic: string, eventType: string) {
     return `${topic}.${eventType}`
 }
 
-export  function serializeRelayedEvent(topic: string, eventID: string, header: FeedEventHeader, payload: Buffer) {
+export  function serializeRelayedEvent(topic: string, eventID: string, header: IFeedEventHeader, payload: Buffer) {
     return [Buffer.from(topic), Buffer.from(eventID), Buffer.from(JSON.stringify(header)), payload]
 }
 
 export  function deSerializeRelayedEvent(eventData: Buffer[]): {
     topic: string
     eventID: string
-    header: FeedEventHeader
+    header: IFeedEventHeader
     payload: Buffer
 } {
     return {
@@ -195,6 +250,10 @@ interface LockHolder {
     lock: AsyncLock
 }
 
+/**
+ * Acquires a lock on the specified argument of the function
+ * @param argIndex The index of the argument to use as the lock key
+ */
 export function AcquireLockOnArg(argIndex: number = 0) {
     return function(target: Object, propertyKey: string, descriptor: TypedPropertyDescriptor<any>): void {
         const originalMethod = descriptor.value
@@ -211,6 +270,10 @@ export function AcquireLockOnArg(argIndex: number = 0) {
     }
 }
 
+/**
+ * Acquires a lock on the specified key
+ * @param lockKey The key to use for the lock
+ */
 export function AcquireLockOn(lockKey: string) {
     return function(target: Object, propertyKey: string, descriptor: TypedPropertyDescriptor<any>): void {
         const originalMethod = descriptor.value
