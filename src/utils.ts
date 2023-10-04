@@ -207,7 +207,8 @@ export function rlnIdentifier(topic: string, eventType: string) {
 }
 
 export  function serializeRelayedEvent(topic: string, eventID: string, header: IFeedEventHeader, payload: Buffer) {
-    return [Buffer.from(topic), Buffer.from(eventID), Buffer.from(JSON.stringify(header)), payload]
+    const headerBuf = FeedEventHeader.toBinary(convertIEventHeaderToEventHeader(header))
+    return [Buffer.from(topic), Buffer.from(eventID), Buffer.from(headerBuf), payload]
 }
 
 export  function deSerializeRelayedEvent(eventData: Buffer[]): {
@@ -216,10 +217,12 @@ export  function deSerializeRelayedEvent(eventData: Buffer[]): {
     header: IFeedEventHeader
     payload: Buffer
 } {
+    const header = convertEventHeaderToIEventHeader(FeedEventHeader.fromBinary(eventData[2]))
+    if (!header) throw new Error('Could not deserialize event header')
     return {
         topic: eventData[0].toString('utf-8'),
         eventID: eventData[1].toString('utf-8'),
-        header: JSON.parse(eventData[2].toString('utf-8')),
+        header,
         payload: eventData[3]
     }
 }
