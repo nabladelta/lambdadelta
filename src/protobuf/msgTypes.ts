@@ -54,7 +54,7 @@ export interface nullifierOutput {
      */
     nullifier: string;
     /**
-     * @generated from protobuf field: float messageLimit = 2;
+     * @generated from protobuf field: double messageLimit = 2;
      */
     messageLimit: number;
 }
@@ -137,7 +137,7 @@ export interface FeedEventHeader {
      */
     eventType: string;
     /**
-     * @generated from protobuf field: float claimed = 2;
+     * @generated from protobuf field: double claimed = 2;
      */
     claimed: number;
     /**
@@ -160,11 +160,11 @@ export interface FeedEventHeader {
  */
 export interface LogEntry {
     /**
-     * @generated from protobuf field: float oldestIndex = 1;
+     * @generated from protobuf field: double oldestIndex = 1;
      */
     oldestIndex: number;
     /**
-     * @generated from protobuf field: float received = 2;
+     * @generated from protobuf field: double received = 2;
      */
     received: number;
     /**
@@ -320,7 +320,7 @@ class nullifierOutput$Type extends MessageType<nullifierOutput> {
     constructor() {
         super("nullifierOutput", [
             { no: 1, name: "nullifier", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "messageLimit", kind: "scalar", T: 2 /*ScalarType.FLOAT*/ }
+            { no: 2, name: "messageLimit", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ }
         ]);
     }
     create(value?: PartialMessage<nullifierOutput>): nullifierOutput {
@@ -338,8 +338,8 @@ class nullifierOutput$Type extends MessageType<nullifierOutput> {
                 case /* string nullifier */ 1:
                     message.nullifier = reader.string();
                     break;
-                case /* float messageLimit */ 2:
-                    message.messageLimit = reader.float();
+                case /* double messageLimit */ 2:
+                    message.messageLimit = reader.double();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -356,9 +356,9 @@ class nullifierOutput$Type extends MessageType<nullifierOutput> {
         /* string nullifier = 1; */
         if (message.nullifier !== "")
             writer.tag(1, WireType.LengthDelimited).string(message.nullifier);
-        /* float messageLimit = 2; */
+        /* double messageLimit = 2; */
         if (message.messageLimit !== 0)
-            writer.tag(2, WireType.Bit32).float(message.messageLimit);
+            writer.tag(2, WireType.Bit64).double(message.messageLimit);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -578,7 +578,7 @@ class FeedEventHeader$Type extends MessageType<FeedEventHeader> {
     constructor() {
         super("FeedEventHeader", [
             { no: 1, name: "eventType", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "claimed", kind: "scalar", T: 2 /*ScalarType.FLOAT*/ },
+            { no: 2, name: "claimed", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
             { no: 3, name: "proof", kind: "message", T: () => RLNGFullProof },
             { no: 4, name: "payloadHash", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
@@ -598,8 +598,8 @@ class FeedEventHeader$Type extends MessageType<FeedEventHeader> {
                 case /* string eventType */ 1:
                     message.eventType = reader.string();
                     break;
-                case /* float claimed */ 2:
-                    message.claimed = reader.float();
+                case /* double claimed */ 2:
+                    message.claimed = reader.double();
                     break;
                 case /* RLNGFullProof proof */ 3:
                     message.proof = RLNGFullProof.internalBinaryRead(reader, reader.uint32(), options, message.proof);
@@ -622,9 +622,9 @@ class FeedEventHeader$Type extends MessageType<FeedEventHeader> {
         /* string eventType = 1; */
         if (message.eventType !== "")
             writer.tag(1, WireType.LengthDelimited).string(message.eventType);
-        /* float claimed = 2; */
+        /* double claimed = 2; */
         if (message.claimed !== 0)
-            writer.tag(2, WireType.Bit32).float(message.claimed);
+            writer.tag(2, WireType.Bit64).double(message.claimed);
         /* RLNGFullProof proof = 3; */
         if (message.proof)
             RLNGFullProof.internalBinaryWrite(message.proof, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
@@ -645,8 +645,8 @@ export const FeedEventHeader = new FeedEventHeader$Type();
 class LogEntry$Type extends MessageType<LogEntry> {
     constructor() {
         super("LogEntry", [
-            { no: 1, name: "oldestIndex", kind: "scalar", T: 2 /*ScalarType.FLOAT*/ },
-            { no: 2, name: "received", kind: "scalar", T: 2 /*ScalarType.FLOAT*/ },
+            { no: 1, name: "oldestIndex", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
+            { no: 2, name: "received", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
             { no: 3, name: "header", kind: "message", T: () => FeedEventHeader }
         ]);
     }
@@ -662,11 +662,11 @@ class LogEntry$Type extends MessageType<LogEntry> {
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* float oldestIndex */ 1:
-                    message.oldestIndex = reader.float();
+                case /* double oldestIndex */ 1:
+                    message.oldestIndex = reader.double();
                     break;
-                case /* float received */ 2:
-                    message.received = reader.float();
+                case /* double received */ 2:
+                    message.received = reader.double();
                     break;
                 case /* FeedEventHeader header */ 3:
                     message.header = FeedEventHeader.internalBinaryRead(reader, reader.uint32(), options, message.header);
@@ -683,12 +683,12 @@ class LogEntry$Type extends MessageType<LogEntry> {
         return message;
     }
     internalBinaryWrite(message: LogEntry, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* float oldestIndex = 1; */
+        /* double oldestIndex = 1; */
         if (message.oldestIndex !== 0)
-            writer.tag(1, WireType.Bit32).float(message.oldestIndex);
-        /* float received = 2; */
+            writer.tag(1, WireType.Bit64).double(message.oldestIndex);
+        /* double received = 2; */
         if (message.received !== 0)
-            writer.tag(2, WireType.Bit32).float(message.received);
+            writer.tag(2, WireType.Bit64).double(message.received);
         /* FeedEventHeader header = 3; */
         if (message.header)
             FeedEventHeader.internalBinaryWrite(message.header, writer.tag(3, WireType.LengthDelimited).fork(), options).join();

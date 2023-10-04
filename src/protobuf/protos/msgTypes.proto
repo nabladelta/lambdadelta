@@ -14,7 +14,7 @@ message Proof {
 
 message nullifierOutput {
     string nullifier = 1;
-    float messageLimit = 2;
+    double messageLimit = 2;
 }
 
 message RLNGPublicSignals {
@@ -47,7 +47,7 @@ message RLNGFullProof {
  */
 message FeedEventHeader {
     string eventType = 1;
-    float claimed = 2;
+    double claimed = 2;
     RLNGFullProof proof = 3;
     string payloadHash = 4;
 }
@@ -59,8 +59,8 @@ message FeedEventHeader {
  * @property {string} header The event's Header
  */
 message LogEntry {
-    float oldestIndex = 1;
-    float received = 2;
+    double oldestIndex = 1;
+    double received = 2;
     FeedEventHeader header = 3;
 }
 
