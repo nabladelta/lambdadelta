@@ -128,21 +128,21 @@ export interface PeerData {
 }
 
 export enum PayloadVerificationResult {
-    VALID,
-    UNAVAILABLE,
-    SIZE,
-    HASH_MISMATCH,
-    INVALID
+    VALID = "PAYLOAD_VALID",
+    UNAVAILABLE = "PAYLOAD_UNAVAILABLE",
+    SIZE = "PAYLOAD_SIZE",
+    HASH_MISMATCH = "PAYLOAD_HASH_MISMATCH",
+    INVALID = "PAYLOAD_INVALID"
 }
 
 export enum HeaderVerificationError {
-    HASH_MISMATCH = 16, // Make sure we don't overlap with other enums
-    UNKNOWN_EVENT_TYPE,
-    UNEXPECTED_RLN_IDENTIFIER,
-    UNEXPECTED_MESSAGE_LIMIT,
-    UNEXPECTED_NULLIFIER,
-    SIZE,
-    UNAVAILABLE
+    HASH_MISMATCH = "HEADER_HASH_MISMATCH",
+    UNKNOWN_EVENT_TYPE = "UNKNOWN_EVENT_TYPE",
+    UNEXPECTED_RLN_IDENTIFIER = "UNEXPECTED_RLN_IDENTIFIER",
+    UNEXPECTED_MESSAGE_LIMIT = "UNEXPECTED_MESSAGE_LIMIT",
+    UNEXPECTED_NULLIFIER = "UNEXPECTED_NULLIFIER",
+    SIZE = "HEADER_SIZE",
+    UNAVAILABLE = "HEADER_UNAVAILABLE"
 }
 
 interface Settings {
@@ -765,11 +765,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
         try {
             await this.eventLog.ready()
-            const {length, byteLength} = await this.eventLog.append(serializeLogEntry({
+            const logBuf = serializeLogEntry({
                 header,
                 received: received,
                 oldestIndex: newOldestIndex
-            }))
+            })
+            const {length, byteLength} = await this.eventLog.append(logBuf)
             this.emit('publishReceivedTime', eventID, received)
             await this.clearSweptEvents(prevOldestIndex, newOldestIndex)
             return length - 1
