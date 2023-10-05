@@ -25,28 +25,28 @@ declare module 'protomux-rpc' {
 
   export interface ResponseOpts {
     // Optional encoding for both requests and responses, defaults to raw
-    valueEncoding: encoding,
-    requestEncoding: encoding, // Optional encoding for requests
-    responseEncoding: encoding // Optional encoding for responses
+    valueEncoding?: encoding,
+    requestEncoding?: encoding, // Optional encoding for requests
+    responseEncoding?: encoding // Optional encoding for responses
   }
 
   export interface RequestOpts extends ResponseOpts {
-    timeout: number // Optional request timeout in milliseconds
+    timeout?: number // Optional request timeout in milliseconds
   }
   export interface ProtomuxRPCOpts {
     // Optional binary ID to identify this RPC channel
-    id: Buffer,
+    id?: Buffer,
     // Optional protocol name
-    protocol: string,
+    protocol?: string,
     // Optional default value encoding
-    valueEncoding: encoding,
+    valueEncoding?: encoding,
     // Optional handshake
-    handshake: Buffer,
+    handshake?: Buffer,
     // Optional encoding for the handshake
-    handshakeEncoding: encoding
+    handshakeEncoding?: encoding
   }
 
-  export class ProtomuxRPC extends TypedEmitter<ProtomuxRPCEvents> {
+  export default class ProtomuxRPC extends TypedEmitter<ProtomuxRPCEvents> {
     constructor(stream: Duplex | any, options?: ProtomuxRPCOpts)
     closed: boolean
     mux: any
