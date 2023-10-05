@@ -250,7 +250,11 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
 
         return [proofBuf, topicsCoreKey]
     }
-
+    /**
+     * Requests a MemberCID from a peer
+     * @param peerID ID of the peer to request the MemberCID from
+     * @param rpc The ProtomuxRPC object used to communicate with the peer
+     */
     private async requestMemberCID(peerID: string, rpc: ProtomuxRPC) {
         const peer = this.getPeer(peerID)
         this.log.info(`Requesting MemberCID from ${peerID.slice(-6)}`)
