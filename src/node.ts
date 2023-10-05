@@ -8,7 +8,7 @@ import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, VerificationResult } from '@nabladelta/rln'
 import { PayloadVerificationResult, HeaderVerificationError, Lambdadelta, SyncError } from './lambdadelta'
-import { decrypt, deserializeFullProof, deserializeTopicData, encrypt, getMemberCIDEpoch, serializeFullProof, serializeTopicData } from './utils'
+import { decrypt, deserializeFullProof, deserializeTopicData, encrypt, getMemberCIDEpoch, randomNextRefreshTime, serializeFullProof, serializeTopicData } from './utils'
 import { ISettingsParam, Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 import Hyperbee from 'hyperbee'
@@ -233,7 +233,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         rpc.on('open', () => {
             this.log.info(`RPC channel opened with ${peerID.slice(-6)}`)
             this.peers.set(peerID, { info, topics: new Set(), connection: {stream, rpc} })
-            this.requestMemberCID(peerID, rpc)
+            this.refreshMemberCID(peerID)
         })
 
         return rpc
@@ -254,19 +254,47 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
 
         return [proofBuf, topicsCoreKey]
     }
+
     /**
      * Requests a MemberCID from a peer
      * @param peerID ID of the peer to request the MemberCID from
      * @param rpc The ProtomuxRPC object used to communicate with the peer
      */
-    private async requestMemberCID(peerID: string, rpc: ProtomuxRPC) {
+    private async requestMemberCID(peerID: string) {
         const peer = this.getPeer(peerID)
         this.log.info(`Requesting MemberCID from ${peerID.slice(-6)}`)
 
-        const response: Buffer[] = await rpc.request('getMemberCID', [], {
+        const response: Buffer[] = await peer.connection.rpc.request('getMemberCID', [], {
             valueEncoding: c.array(c.buffer),
         })
         await this.handleHandshakeError(this.handleHandshake(peerID, response), peer.connection.stream)
+    }
+
+    /**
+     * Refreshes a peer's MemberCID
+     * @param peerID ID of the peer to refresh the MemberCID for
+     */
+    private async refreshMemberCID(peerID: string) {
+        let peer
+        try {
+            peer = this.getPeer(peerID)
+        } catch {
+            return
+        }
+        if (peer.connection.rpc.closed) {
+            return
+        }
+        try {
+            await this.requestMemberCID(peerID)
+        } catch (e) {
+            this.log.error(`Failed to refresh MemberCID for ${peerID.slice(-6)}`)
+            return
+        }
+        // Refresh again after a random time between 12 and 24 hours
+        const nextRefreshTime = randomNextRefreshTime()
+        setTimeout(async () => {
+            await this.refreshMemberCID(peerID)   
+        }, nextRefreshTime)
     }
 
     /**
@@ -304,6 +332,13 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
             peer.connection.stream.destroy()
             throw new HandshakeError("Banned peer", HandshakeErrorCode.BannedPeer, peerID)
         }
+        this.memberCIDs.set(peer.memberCID, peerID)
+        this.log.info(`Accepted MemberCID from ${peerID.slice(-6)}`)
+
+        if (peer.topicsBee) {
+            // Already completed handshake previously
+            return true
+        }
 
         try {
             const beeCore = this.corestore.get(proofBuf[1])
@@ -318,8 +353,6 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
             throw new HandshakeError(`Invalid hyperbee (${(e as any).message})`, HandshakeErrorCode.InvalidHyperbee, peerID)
         }
 
-        this.memberCIDs.set(peer.memberCID, peerID)
-        this.log.info(`Accepted MemberCID from ${peerID.slice(-6)}`)
         try {
             await this.syncTopics(peerID)
         } catch (e) {

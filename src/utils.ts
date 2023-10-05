@@ -322,3 +322,17 @@ export function AcquireLockOn(lockKey: string) {
         }
     }
 }
+
+/**
+ * Generates a random time for the next memberCID request
+ * @returns A random time between 12 to 24 hours from now
+ */
+export function randomNextRefreshTime(): number {    
+    // Convert hours to milliseconds: 1 hour = 60 minutes = 3600 seconds = 3,600,000 milliseconds
+    const twelveHoursInMs = 12 * 3600 * 1000
+
+    // Generate a random number between 12 to 24 hours (24 hours + 0 to 12 hours)
+    const randomFutureTimeInMs = twelveHoursInMs + Math.random() * twelveHoursInMs
+
+    return randomFutureTimeInMs
+}
