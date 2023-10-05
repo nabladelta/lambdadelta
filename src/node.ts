@@ -13,6 +13,7 @@ import { ISettingsParam, Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 import Hyperbee from 'hyperbee'
 import { TypedEmitter } from 'tiny-typed-emitter'
+import ProtomuxRPC from 'protomux-rpc'
 
 const DATA_FOLDER = 'data'
 
