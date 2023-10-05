@@ -1,8 +1,8 @@
 import crypto from 'crypto'
 import AsyncLock from 'async-lock'
-import { FeedEventHeader, LogEntry } from './protobuf/msgTypes'
+import { FeedEventHeader, LogEntry, RLNGFullProof } from './protobuf/msgTypes'
 import { FeedEventHeader as IFeedEventHeader, LogEntry as ILogEntry } from './lambdadelta'
-import { Proof as IProof } from '@nabladelta/rln/src/rln'
+import { Proof as IProof, RLNGFullProof as IRLNGFullProof } from '@nabladelta/rln/src/rln'
 import { Proof } from './protobuf/msgTypes'
 
 export function getTimestampInSeconds() {
@@ -70,6 +70,30 @@ export function convertProofToIProof(proof: Proof): IProof {
     }
 }
 
+export function convertFullProofToIFullProof(fullProof: RLNGFullProof): IRLNGFullProof | false {
+    if (!fullProof.snarkProof) return false
+    if (!fullProof.snarkProof.proof) return false
+    if (!fullProof.snarkProof.publicSignals) return false
+    const proof = convertProofToIProof(fullProof.snarkProof.proof)
+    return {
+        ...fullProof,
+        snarkProof: {
+            publicSignals: fullProof.snarkProof.publicSignals,
+            proof,
+        }
+    }
+}
+
+export function convertIFullProofToFullProof(fullProof: IRLNGFullProof): RLNGFullProof {
+    return RLNGFullProof.create({
+        ...fullProof,
+        snarkProof: {
+            ...fullProof.snarkProof,
+            proof: convertIProofToProof(fullProof.snarkProof.proof)
+        }
+    })
+}
+
 export function convertIEventHeaderToEventHeader(header: IFeedEventHeader): FeedEventHeader {
     return FeedEventHeader.create({
         ...header,
@@ -96,7 +120,7 @@ export function convertEventHeaderToIEventHeader(header?: FeedEventHeader): IFee
             ...header.proof,
             snarkProof: {
                 publicSignals: header.proof.snarkProof.publicSignals,
-                proof: proof
+                proof
             }
         }
     }
@@ -117,6 +141,14 @@ export function deserializeLogEntry(eventBuf: Buffer): ILogEntry | false {
         ...entry,
         header: header
     }
+}
+
+export function serializeFullProof(proof: IRLNGFullProof): Buffer {
+    return Buffer.from(RLNGFullProof.toBinary(convertIFullProofToFullProof(proof)))
+}
+export function deserializeFullProof(proofBuf: Buffer): IRLNGFullProof | false {
+    const proof = RLNGFullProof.fromBinary(proofBuf)
+    return convertFullProofToIFullProof(proof)
 }
 
 // Rounded to 100000 seconds. This is the Member-Epoch

@@ -6,9 +6,9 @@ import path from 'path'
 import Protomux from 'protomux'
 import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
-import { RLN, deserializeProof, RLNGFullProof, serializeProof, VerificationResult } from '@nabladelta/rln'
+import { RLN, VerificationResult } from '@nabladelta/rln'
 import { PayloadVerificationResult, HeaderVerificationError, Lambdadelta, SyncError } from './lambdadelta'
-import { decrypt, deserializeTopicData, encrypt, getMemberCIDEpoch, serializeTopicData } from './utils'
+import { decrypt, deserializeFullProof, deserializeTopicData, encrypt, getMemberCIDEpoch, serializeFullProof, serializeTopicData } from './utils'
 import { ISettingsParam, Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 import Hyperbee from 'hyperbee'
@@ -29,14 +29,14 @@ interface NodePeerData {
     info: PeerInfo
 }
 export enum HandshakeErrorCode {
-    DoubleHandshake,
-    DuplicateHandshake, 
-    FailedDeserialization,
-    DuplicateMemberCID,
-    InvalidProof,
-    BannedPeer,
-    InvalidHyperbee,
-    SyncFailure
+    DoubleHandshake = "DoubleHandshake",
+    DuplicateHandshake = "DuplicateHandshake", 
+    FailedDeserialization = "FailedDeserialization",
+    DuplicateMemberCID = "DuplicateMemberCID",
+    InvalidProof = "InvalidProof",
+    BannedPeer = "BannedPeer",
+    InvalidHyperbee = "InvalidHyperbee",
+    SyncFailure = "SyncFailure"
 }
 
 class HandshakeError extends Error {
@@ -248,7 +248,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         this.log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
 
         const proof = await generateMemberCID(this.secret, peer.connection.stream.remotePublicKey, this.rln!)
-        const proofBuf = serializeProof(proof)
+        const proofBuf = serializeFullProof(proof)
         const topicsCoreKey: Buffer = this.topicsBee.core.key!
         peer.localMemberCID = proof.signal
 
@@ -278,17 +278,16 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
      */
     private async handleHandshake(peerID: string, proofBuf: Buffer[]) {
         const peer = this.getPeer(peerID)
-
-        if (peer.memberCID) {
-            throw new HandshakeError(`Received duplicate handshake from ${peerID.slice(-6)}`, HandshakeErrorCode.DuplicateHandshake, peerID)
-        }
         let proof
         try {
-            proof = deserializeProof(proofBuf[0])
+            proof = deserializeFullProof(proofBuf[0])
+            if (!proof) {
+                throw new Error("Failed to deserialize proof")
+            }
         } catch {
             throw new HandshakeError(`Failed to deserialize proof from ${peerID.slice(-6)}`, HandshakeErrorCode.FailedDeserialization, peerID)
         }
-        if (this.memberCIDs.has(proof.signal)) {
+        if (this.memberCIDs.has(proof.signal) && this.memberCIDs.get(proof.signal) !== peerID) {
             throw new HandshakeError(`Received duplicate MemberCID from ${peerID.slice(-6)}`, HandshakeErrorCode.DuplicateMemberCID, peerID)
         }
         const result = await verifyMemberCIDProof(proof, peer.connection.stream.publicKey, this.rln!)
