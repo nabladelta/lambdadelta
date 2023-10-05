@@ -63,10 +63,3 @@ message LogEntry {
     double received = 2;
     FeedEventHeader header = 3;
 }
-
-message RelayedEvent {
-    string topic = 1;
-    string eventID = 2;
-    FeedEventHeader header = 3;
-    bytes payload = 4;
-}

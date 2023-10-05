@@ -30,7 +30,7 @@ interface NodePeerData {
 }
 export enum HandshakeErrorCode {
     DoubleHandshake,
-    DuplicateHandshake,
+    DuplicateHandshake, 
     FailedDeserialization,
     DuplicateMemberCID,
     InvalidProof,
@@ -117,6 +117,10 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
 
     public getSubLogger(settings?: ISettingsParam<unknown>) {
         return this.log.getSubLogger(settings)
+    }
+
+    protected getPeerRPC(peerID: string) {
+        return this.peers.get(peerID)?.connection.rpc
     }
 
     public async destroy() {
@@ -259,7 +263,9 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         const peer = this.getPeer(peerID)
         this.log.info(`Requesting MemberCID from ${peerID.slice(-6)}`)
 
-        const response: Buffer[] = await rpc.request('getMemberCID', null)
+        const response: Buffer[] = await rpc.request('getMemberCID', [], {
+            valueEncoding: c.array(c.buffer),
+        })
         await this.handleHandshakeError(this.handleHandshake(peerID, response), peer.connection.stream)
     }
 

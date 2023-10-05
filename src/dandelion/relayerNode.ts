@@ -8,9 +8,10 @@ import c from 'compact-encoding'
 import { coinFlip, deSerializeRelayedEvent, getRandomInt, serializeRelayedEvent } from "../utils";
 import { RoutingTable } from "./routingTable";
 import { RelayedLambdadelta } from "./relayedFeed";
+import ProtomuxRPC from "protomux-rpc";
 
 export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBase<Feed> {
-    private relayPeers: Map<string, any> = new Map() // PeerID => messageSender
+    private relayPeers: number = 0
     private routingMaps: Map<string, RoutingTable> = new Map() // Feed => routingMap
     private embargoTimeMs: number = 5000
     private embargoJitterMs: number = 3000
@@ -27,28 +28,31 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
      * @param stream The encrypted socket used for communication
      * @param info An object containing metadata regarding this peer
      */
-    protected handlePeer(stream: NoiseSecretStream, info: PeerInfo): void {
-        const channel = super.handlePeer(stream, info)
+    protected handlePeer(stream: NoiseSecretStream, info: PeerInfo): ProtomuxRPC {
+        const rpc = super.handlePeer(stream, info)
         const peerID = stream.remotePublicKey.toString('hex')
-        const self = this
-        const eventSender = channel.addMessage({
-            encoding: c.array(c.buffer),
-            async onmessage(eventData: Buffer[], _: any) {
-                await self.handleRelayedEvent(peerID, eventData)
-            }})
-        this.relayPeers.set(peerID, eventSender)
-
-        stream.once('close', async () => {
-            const peerID = stream.remotePublicKey.toString('hex')
-            this.relayPeers.delete(peerID)
+        rpc.on('open', () => {
+            this.logR.info(`New relay peer connected ${peerID.slice(-6)}`)
+            this.relayPeers++
         })
+        rpc.on('close', () => {
+            this.logR.info(`Relay peer disconnected ${peerID.slice(-6)}`)
+            this.relayPeers--
+        })
+        rpc.respond('relayEvent', {
+            valueEncoding: c.array(c.buffer)
+        }, async (eventData: Buffer[]) => {
+            await this.handleRelayedEvent(peerID, eventData)
+            return []
+        })
+        return rpc
     }
 
     protected async handleRelayedEvent(senderPeerID: string, eventData: Buffer[]) {
         const {topic, eventID, header, payload} = deSerializeRelayedEvent(eventData)
         this.logR.info(`Received stem event from ${senderPeerID.slice(-6)} (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
 
-        const totalPeers = this.relayPeers.size
+        const totalPeers = this.relayPeers
         const chance = 1 / Math.min(totalPeers, 10) // 1 in 10 chance or better of fluffing
         const fluffEvent = coinFlip(chance)
         
@@ -100,9 +104,11 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         this.logR.info(`Sending stem event with topic "${topic.slice(-6)}" to relay Peer ${peerID?.slice(-6)}`)
         if (!peerID) return false
 
-        const eventSender = this.relayPeers.get(peerID)
-        if (!eventSender) return false
-        await eventSender.send(eventData)
+        const rpc = this.getPeerRPC(peerID)
+        if (!rpc) return false
+        rpc.request('relayEvent', eventData, {
+            valueEncoding: c.array(c.buffer)
+        })
         return true
     }
 
