@@ -1,6 +1,6 @@
 import crypto from 'crypto'
 import AsyncLock from 'async-lock'
-import { FeedEventHeader, LogEntry, RLNGFullProof } from './protobuf/msgTypes'
+import { FeedEventHeader, LogEntry, RLNGFullProof, TopicData } from './protobuf/msgTypes'
 import { FeedEventHeader as IFeedEventHeader, LogEntry as ILogEntry } from './lambdadelta'
 import { Proof as IProof, RLNGFullProof as IRLNGFullProof } from '@nabladelta/rln/src/rln'
 import { Proof } from './protobuf/msgTypes'
@@ -219,11 +219,11 @@ export function decrypt(data: Buffer, secret: string) {
 }
 
 export function deserializeTopicData(dataBuf: Buffer): { feedCore: string, drive: string } {
-    return JSON.parse(dataBuf.toString('utf-8'))
+    return TopicData.fromBinary(dataBuf)
 }
 
 export function serializeTopicData(data: { feedCore: string, drive: string }): Buffer {
-    return Buffer.from(JSON.stringify(data))
+    return Buffer.from(TopicData.toBinary(TopicData.create(data)))
 }
 
 export function serializeInteger(i: number) {

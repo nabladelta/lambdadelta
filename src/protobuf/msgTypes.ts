@@ -173,25 +173,17 @@ export interface LogEntry {
     header?: FeedEventHeader;
 }
 /**
- * @generated from protobuf message RelayedEvent
+ * @generated from protobuf message TopicData
  */
-export interface RelayedEvent {
+export interface TopicData {
     /**
-     * @generated from protobuf field: string topic = 1;
+     * @generated from protobuf field: string feedCore = 1;
      */
-    topic: string;
+    feedCore: string;
     /**
-     * @generated from protobuf field: string eventID = 2;
+     * @generated from protobuf field: string drive = 2;
      */
-    eventID: string;
-    /**
-     * @generated from protobuf field: FeedEventHeader header = 3;
-     */
-    header?: FeedEventHeader;
-    /**
-     * @generated from protobuf field: bytes payload = 4;
-     */
-    payload: Uint8Array;
+    drive: string;
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class PiB$Type extends MessageType<PiB> {
@@ -703,38 +695,30 @@ class LogEntry$Type extends MessageType<LogEntry> {
  */
 export const LogEntry = new LogEntry$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class RelayedEvent$Type extends MessageType<RelayedEvent> {
+class TopicData$Type extends MessageType<TopicData> {
     constructor() {
-        super("RelayedEvent", [
-            { no: 1, name: "topic", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "eventID", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 3, name: "header", kind: "message", T: () => FeedEventHeader },
-            { no: 4, name: "payload", kind: "scalar", T: 12 /*ScalarType.BYTES*/ }
+        super("TopicData", [
+            { no: 1, name: "feedCore", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "drive", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
-    create(value?: PartialMessage<RelayedEvent>): RelayedEvent {
-        const message = { topic: "", eventID: "", payload: new Uint8Array(0) };
+    create(value?: PartialMessage<TopicData>): TopicData {
+        const message = { feedCore: "", drive: "" };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<RelayedEvent>(this, message, value);
+            reflectionMergePartial<TopicData>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: RelayedEvent): RelayedEvent {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TopicData): TopicData {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* string topic */ 1:
-                    message.topic = reader.string();
+                case /* string feedCore */ 1:
+                    message.feedCore = reader.string();
                     break;
-                case /* string eventID */ 2:
-                    message.eventID = reader.string();
-                    break;
-                case /* FeedEventHeader header */ 3:
-                    message.header = FeedEventHeader.internalBinaryRead(reader, reader.uint32(), options, message.header);
-                    break;
-                case /* bytes payload */ 4:
-                    message.payload = reader.bytes();
+                case /* string drive */ 2:
+                    message.drive = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -747,19 +731,13 @@ class RelayedEvent$Type extends MessageType<RelayedEvent> {
         }
         return message;
     }
-    internalBinaryWrite(message: RelayedEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* string topic = 1; */
-        if (message.topic !== "")
-            writer.tag(1, WireType.LengthDelimited).string(message.topic);
-        /* string eventID = 2; */
-        if (message.eventID !== "")
-            writer.tag(2, WireType.LengthDelimited).string(message.eventID);
-        /* FeedEventHeader header = 3; */
-        if (message.header)
-            FeedEventHeader.internalBinaryWrite(message.header, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
-        /* bytes payload = 4; */
-        if (message.payload.length)
-            writer.tag(4, WireType.LengthDelimited).bytes(message.payload);
+    internalBinaryWrite(message: TopicData, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string feedCore = 1; */
+        if (message.feedCore !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.feedCore);
+        /* string drive = 2; */
+        if (message.drive !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.drive);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -767,6 +745,6 @@ class RelayedEvent$Type extends MessageType<RelayedEvent> {
     }
 }
 /**
- * @generated MessageType for protobuf message RelayedEvent
+ * @generated MessageType for protobuf message TopicData
  */
-export const RelayedEvent = new RelayedEvent$Type();
+export const TopicData = new TopicData$Type();

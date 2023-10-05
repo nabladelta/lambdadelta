@@ -63,3 +63,8 @@ message LogEntry {
     double received = 2;
     FeedEventHeader header = 3;
 }
+
+message TopicData {
+    string feedCore = 1;
+    string drive = 2;
+}
