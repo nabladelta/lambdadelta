@@ -156,6 +156,13 @@ export function getMemberCIDEpoch() {
     return Math.floor(Date.now() / (100000 * 1000))
 }
 
+// Function to get milliseconds to the next epoch
+export function getMillisToNextMemberCIDEpoch(): number {
+    const currentEpoch = getMemberCIDEpoch();
+    const nextEpochStartTime = (currentEpoch + 1) * 100000 * 1000; // Convert epoch back to milliseconds
+    return nextEpochStartTime - Date.now();
+}
+
 export function getStandardDeviation(array: number[]) {
     const n = array.length
     const mean = array.reduce((a, b) => a + b) / n
@@ -325,14 +332,15 @@ export function AcquireLockOn(lockKey: string) {
 
 /**
  * Generates a random time for the next memberCID request
- * @returns A random time between 12 to 24 hours from now
+ * @returns A random amount of time in milliseconds between 1 minute to 1 hour
  */
-export function randomNextRefreshTime(): number {    
+export function randomNextRefreshDelay(): number {    
     // Convert hours to milliseconds: 1 hour = 60 minutes = 3600 seconds = 3,600,000 milliseconds
-    const twelveHoursInMs = 12 * 3600 * 1000
+    const oneHourInMs = 3600 * 1000
+    const oneMinuteInMs = 60 * 1000
 
-    // Generate a random number between 12 to 24 hours (24 hours + 0 to 12 hours)
-    const randomFutureTimeInMs = twelveHoursInMs + Math.random() * twelveHoursInMs
+    // Generate a random number between 0 to 1 hours
+    const randomFutureTimeInMs = Math.random() * oneHourInMs
 
-    return randomFutureTimeInMs
+    return randomFutureTimeInMs + oneMinuteInMs // Add 1 minute to the random time
 }

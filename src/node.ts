@@ -8,7 +8,7 @@ import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, VerificationResult } from '@nabladelta/rln'
 import { PayloadVerificationResult, HeaderVerificationError, Lambdadelta, SyncError } from './lambdadelta'
-import { decrypt, deserializeFullProof, deserializeTopicData, encrypt, getMemberCIDEpoch, randomNextRefreshTime, serializeFullProof, serializeTopicData } from './utils'
+import { decrypt, deserializeFullProof, deserializeTopicData, encrypt, getMemberCIDEpoch, getMillisToNextMemberCIDEpoch, randomNextRefreshDelay, serializeFullProof, serializeTopicData } from './utils'
 import { ISettingsParam, Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 import Hyperbee from 'hyperbee'
@@ -282,7 +282,11 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
             return
         }
         if (peer.connection.rpc.closed) {
-            return
+            try {
+                peer.connection.stream.destroy()
+            } catch {
+                return
+            }
         }
         try {
             await this.requestMemberCID(peerID)
@@ -290,10 +294,13 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
             this.log.error(`Failed to refresh MemberCID for ${peerID.slice(-6)}`)
             return
         }
-        // Refresh again after a random time between 12 and 24 hours
-        const nextRefreshTime = randomNextRefreshTime()
+        // Refresh again after the epoch ends plus a random delay to avoid all nodes refreshing at the same time
+        const nextRefreshTime = getMillisToNextMemberCIDEpoch() + randomNextRefreshDelay()
+        const nextRefreshTimeSeconds = Math.floor(nextRefreshTime / 1000)
+        this.log.info(`Next refresh for ${peerID.slice(-6)} in ${nextRefreshTimeSeconds} seconds`)
         setTimeout(async () => {
-            await this.refreshMemberCID(peerID)   
+            this.log.info(`Refreshing MemberCID for ${peerID.slice(-6)}`)
+            await this.refreshMemberCID(peerID)
         }, nextRefreshTime)
     }
 
