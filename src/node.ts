@@ -20,7 +20,7 @@ const DATA_FOLDER = 'data'
 interface NodePeerData {
     connection: {
         stream: NoiseSecretStream
-        handshakeSender: any
+        rpc: ProtomuxRPC
     }
     topicsBee?: Hyperbee<string, Buffer>,
     topics: Set<string>
@@ -76,7 +76,6 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
     public topicFeeds: Map<string, Feed> // Topic => feed
     private topicNames: Map<string, string>
 
-    private pendingHandshakes: Map<string, Promise<boolean>>
     private _ready: Promise<void>
 
     constructor(secret: string, groupID: string, rln: RLN, {memstore, swarmOpts, logger, dataFolder}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>, dataFolder?: string}) {
@@ -86,7 +85,6 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         this.topicFeeds = new Map()
         this.peers = new Map()
         this.memberCIDs = new Map()
-        this.pendingHandshakes = new Map()
         this.topicNames = new Map()
         this.bannedMCIDs = new Map()
 
@@ -137,12 +135,6 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         await this._ready
         await this.corestore.ready()
         await this.topicsBee.ready()
-    }
-    /**
-     * Wait for all pending handshakes to be completed
-     */
-    public async awaitPending() {
-        await Promise.all(this.pendingHandshakes.values())
     }
 
     private getPeer(peerID: string) {
@@ -226,34 +218,28 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         // Always replicate corestore
         this.corestore.replicate(stream)
 
-        const self = this
-        const mux = Protomux.from(stream)
+        const rpc = new ProtomuxRPC(stream)
 
-        const channel = mux.createChannel({
-            protocol: 'ldd-topic-rep'
+        rpc.respond('getMemberCID', {
+            valueEncoding: c.array(c.buffer),
+        }, async () => {
+            return this.getMemberCID(peerID)
         })
-        channel.open()
 
+        rpc.on('open', () => {
+            this.log.info(`RPC channel opened with ${peerID.slice(-6)}`)
+            this.peers.set(peerID, { info, topics: new Set(), connection: {stream, rpc} })
+            this.requestMemberCID(peerID, rpc)
+        })
 
-        const handshakeSender = channel.addMessage({
-            encoding: c.array(c.buffer),
-            async onmessage(proof: Buffer[], _: any) {
-                    await self.handleHandshakeError(
-                        self.recvHandshake(peerID, proof),
-                        stream
-                    )
-            }})
-
-        this.peers.set(peerID, { info, topics: new Set(), connection: {stream, handshakeSender} })
-        this.sendHandshake(peerID)
-        return channel
+        return rpc
     }
 
     /**
-     * Sends a handshake message to a peer
-     * @param peerID ID of the peer to send the handshake to
+     * Generates a MemberCID for a peer
+     * @param peerID ID of the peer to generate the MemberCID for
      */
-    private async sendHandshake(peerID: string) {
+    private async getMemberCID(peerID: string) {
         const peer = this.getPeer(peerID)
         this.log.info(`Sending MemberCID to ${peerID.slice(-6)}`)
 
@@ -262,26 +248,15 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         const topicsCoreKey: Buffer = this.topicsBee.core.key!
         peer.localMemberCID = proof.signal
 
-        await peer.connection.handshakeSender.send([proofBuf, topicsCoreKey])
+        return [proofBuf, topicsCoreKey]
     }
 
-    /**
-     * Handler for receiveing a handshake from a peer
-     * @param peerID ID of the peer
-     * @param proofBuf Buffer containing the RLN zkSnarks proof for the handshake
-     */
-    private async recvHandshake(peerID: string, proofBuf: Buffer[]) {
-        if (this.pendingHandshakes.has(peerID)) {
-            this.pendingHandshakes.delete(peerID)
-            this.emit('handshakeFailure', HandshakeErrorCode.DoubleHandshake, peerID)
-            throw new Error("Received double handshake")
-        }
+    private async requestMemberCID(peerID: string, rpc: ProtomuxRPC) {
+        const peer = this.getPeer(peerID)
+        this.log.info(`Requesting MemberCID from ${peerID.slice(-6)}`)
 
-        const handshakePromise = this.handleHandshake(peerID, proofBuf)
-        this.pendingHandshakes.set(peerID, handshakePromise)
-        handshakePromise.catch(() => { this.pendingHandshakes.delete(peerID) })
-        await handshakePromise
-        this.pendingHandshakes.delete(peerID)
+        const response: Buffer[] = await rpc.request('getMemberCID', null)
+        await this.handleHandshakeError(this.handleHandshake(peerID, response), peer.connection.stream)
     }
 
     /**
@@ -522,7 +497,6 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         this.log.info(`Joining topics: ${topics.join(',')}`)
         await Promise.all(topics.map(topic => this._join(topic)))
         await this.swarm.flush()
-        await this.awaitPending()
         await Promise.all(topics.map(topic => this.publishTopic(topic)))
     }
 
