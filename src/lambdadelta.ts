@@ -50,6 +50,7 @@ export interface TopicEvents {
     'timelineRemoveEvent': (eventID: string, prevTime: number, consensusTime: number) => void
     'timelineRejectedEvent': (eventID: string, claimedTime: number, consensusTime: number) => void
     'consensusTimeChanged': (eventID: string, prevTime: number, newTime: number) => void
+    'newEvent': (eventID: string) => void
 }
 
 /**
@@ -287,6 +288,10 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     protected async onTimelineAdd(eventID: string, time: number, consensusTime: number) {
         this.emit('timelineAddEvent', eventID, time, consensusTime)
+        const event = await this.getEventByID(eventID)
+        if (!event) return
+
+        await this.onNewEvent(eventID, event)
     }
 
     protected async onTimelineRemove(eventID: string, time: number, consensusTime: number) {
@@ -484,6 +489,16 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return true
     }
 
+    /**
+     * Called whenever an event has been processed.
+     * Should decide what course of action to take, up to and including
+     * removing and banning the peer responsible if the event was invalid.
+     * @param peer The peer responsible for sending us this event
+     * @param eventID The ID of the event
+     * @param code The result of the event header verification process
+     * @param payloadCode The result of the payload verification process
+     * @returns True if we should continue, false if we are to stop altogether
+     */
     private async onSyncResult(
         peer: PeerData,
         {eventID, code, payloadCode}: {
@@ -502,18 +517,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return true
     }
 
-    protected async onEventSyncComplete(peer: PeerData, eventID: string) {
-
-    }
-
-    /**
-     * Called whenever an event has been processed.
-     * Should decide what course of action to take, up to and including
-     * removing and banning the peer responsible if the event was invalid.
-     * @param peer The peer responsible for sending us this event
-     * @param headerResult The result of the event header verification process
-     * @returns True if we should continue, false if we are to stop altogether
-     */
     protected onLogEntrySyncResult(peer: PeerData, eventID: string | null, result: VerificationResult | HeaderVerificationError | SyncError): boolean {
         this.emit('syncEventResult', peer.id, eventID, result)
         if (result !== VerificationResult.VALID) {
@@ -532,6 +535,36 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             return false
         }
         return true
+    }
+
+    /**
+     * Called whenever an event has been fully synchronized
+     * This means both the header and payload are verified and synchronized,
+     * but it does *not* mean that the event has been approved by consensus and added to the timeline.
+     * @param peer The peer responsible for sending us this event
+     * @param eventID The ID of the event
+     */
+    protected async onEventSyncComplete(peer: PeerData, eventID: string) {
+        const event = await this.getEventByID(eventID)
+        if (!event) {
+            throw new Error("Event not found")
+        }
+        // Check if we have already added this event to the timeline
+        if (this.isEventInTimeline(eventID)) {
+            return await this.onNewEvent(eventID, event)
+        }
+    }
+
+    /**
+     * Called *once* whenever an event has been fully synchronized AND added to the timeline.
+     * This is the suggested hook to use for applications using this library.
+     * Override this method to handle new events.
+     * @param eventID The ID of the event
+     * @param event The event itself
+     */
+    protected async onNewEvent(eventID: string, event: {header: FeedEventHeader, payload: Buffer}) {
+        this.emit('newEvent', eventID)
+        // Application logic goes here
     }
 
     /**
