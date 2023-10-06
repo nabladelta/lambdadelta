@@ -179,7 +179,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     protected nullifierRegistry: NullifierRegistry
     private logReloaded: boolean
 
-    private lock = new AsyncLock()
+    private lock = new AsyncLock() // Used from within decorators
 
     protected settings: Settings
 
@@ -324,6 +324,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             peer.eventLog.removeListener('append', peer._onappend)
         }
         for (let [_, peer] of this.peers) {
+            await peer.drive.purge()
+            await peer.eventLog.purge()
             await peer.drive.close()
             await peer.eventLog.close()
         }
@@ -382,12 +384,13 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.emit('peerAdded', peerID)
 
         const firstIndex = await this.getOldestIndex(peer.eventLog)
-        await this.processLogUpdate(peer, 
+        const result = await this.processLogUpdate(peer,
             {
                 fromIndex: firstIndex,
                 toIndex: logCore.length,
                 timestamp: null
             })
+        if (!result) return false
         this.processLogUpdateQueue(peer).catch((e)=> console.error(e))
         return true
     }
@@ -407,6 +410,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         peer.eventLog.removeListener('append', peer._onappend)
         this.peers.delete(peerID)
         // await peer.drive.close() TODO: investigate issues
+        // Delete all resources associated with this peer
+        await peer.drive.purge()
+        await peer.eventLog.purge()
         await peer.eventLog.close()
         // Remove peer's received timestamps contributions
         for (let [eventID, _] of peer.events) {
