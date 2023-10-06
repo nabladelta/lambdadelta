@@ -721,6 +721,9 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (!payloadBuf) {
             return PayloadVerificationResult.UNAVAILABLE 
         }
+        // Delete local cache from peer drive after retrieving
+        await peer.drive.clear(`/events/${eventID}/payload`)
+
         if (payloadBuf.length > this.maxPayloadSize.get(eventHeader.eventType)!) {
             return PayloadVerificationResult.SIZE 
         }
