@@ -7,12 +7,13 @@ import c from 'compact-encoding'
 import { NoiseSecretStream } from '@hyperswarm/secret-stream'
 import { RLN, VerificationResult } from '@nabladelta/rln'
 import { PayloadVerificationResult, HeaderVerificationError, Lambdadelta, SyncError } from './lambdadelta'
-import { decrypt, deserializeFullProof, deserializeTopicData, encrypt, getMemberCIDEpoch, getMillisToNextMemberCIDEpoch, randomNextRefreshDelay, serializeFullProof, serializeTopicData } from './utils'
+import { AcquireLockOnArg, decrypt, deserializeFullProof, deserializeTopicData, encrypt, getMemberCIDEpoch, getMillisToNextMemberCIDEpoch, randomNextRefreshDelay, serializeFullProof, serializeTopicData } from './utils'
 import { ISettingsParam, Logger } from "tslog"
 import { generateMemberCID, verifyMemberCIDProof } from './membercid'
 import Hyperbee from 'hyperbee'
 import { TypedEmitter } from 'tiny-typed-emitter'
 import ProtomuxRPC from 'protomux-rpc'
+import AsyncLock from 'async-lock'
 
 const DATA_FOLDER = 'data'
 
@@ -79,6 +80,8 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
 
     private _pendingPeers: Set<Promise<any>> = new Set()
 
+    private lock = new AsyncLock()
+
     constructor(secret: string, groupID: string, rln: RLN, {memstore, swarmOpts, logger, dataFolder}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>, dataFolder?: string}) {
         super()
         this.secret = secret
@@ -128,6 +131,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         await this.corestore.close()
         await this.topicsBee.close()
         for (const [_, peer] of this.peers) {
+            await peer.topicsBee?.core.purge()
             await peer.topicsBee?.close()
         }
         for (const [_, feed] of this.topicFeeds) {
@@ -183,10 +187,11 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
     }
 
     /**
-     * Removes a peer form all topics he is connected to
+     * Removes a peer from all topics he is connected to
      * @param peerID ID of the peer to remove
      * @returns Number of topics the peer was removed from
      */
+    @AcquireLockOnArg(0)
     private async removePeer(peerID: string) {
         const peer = this.getPeer(peerID)
         this.peers.delete(peerID)
@@ -198,9 +203,10 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
             if (!feed) {
                 continue
             }
-            peer.topicsBee?.close()
             removePromises.push(feed.removePeer(peerID))
         }
+        await peer.topicsBee?.core.purge()
+        await peer.topicsBee?.close()
         return (await Promise.all(removePromises)).map(r => r).length
     }
 
@@ -212,9 +218,18 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
     protected handlePeer(stream: NoiseSecretStream, info: PeerInfo) {
         this.log.info(`Found peer ${info.publicKey.toString('hex').slice(-6)}`)
         const peerID = stream.remotePublicKey.toString('hex')
+        return this.addPeer(peerID, stream, info)
+    }
 
+    /**
+     * Adds a new peer to the list of connected peers
+     * @param peerID The ID of the peer
+     * @param stream The encrypted socket used for communication
+     * @param info An object containing metadata regarding this peer
+     * @returns The ProtomuxRPC object used to communicate with the peer
+     */
+    private addPeer(peerID: string, stream: NoiseSecretStream, info: PeerInfo) {
         stream.once('close', async () => {
-            const peerID = stream.remotePublicKey.toString('hex')
             this.log.info(`Peer ${info.publicKey.toString('hex').slice(-6)} left`)
             await this.removePeer(peerID)
         })
@@ -229,13 +244,11 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         }, async () => {
             return this.getMemberCID(peerID)
         })
-
+        this.peers.set(peerID, { info, topics: new Set(), connection: {stream, rpc} })
         rpc.on('open', () => {
             this.log.info(`RPC channel opened with ${peerID.slice(-6)}`)
-            this.peers.set(peerID, { info, topics: new Set(), connection: {stream, rpc} })
             this.refreshMemberCID(peerID)
         })
-
         return rpc
     }
 
@@ -253,21 +266,6 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
         peer.localMemberCID = proof.signal
 
         return [proofBuf, topicsCoreKey]
-    }
-
-    /**
-     * Requests a MemberCID from a peer
-     * @param peerID ID of the peer to request the MemberCID from
-     * @param rpc The ProtomuxRPC object used to communicate with the peer
-     */
-    private async requestMemberCID(peerID: string) {
-        const peer = this.getPeer(peerID)
-        this.log.info(`Requesting MemberCID from ${peerID.slice(-6)}`)
-
-        const response: Buffer[] = await peer.connection.rpc.request('getMemberCID', [], {
-            valueEncoding: c.array(c.buffer),
-        })
-        await this.handleHandshakeError(this.handleHandshake(peerID, response), peer.connection.stream)
     }
 
     /**
@@ -304,6 +302,21 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
             this.log.info(`Refreshing MemberCID for ${peerID.slice(-6)}`)
             await this.refreshMemberCID(peerID)
         }, nextRefreshTime)
+    }
+
+    /**
+     * Requests a MemberCID from a peer
+     * @param peerID ID of the peer to request the MemberCID from
+     * @param rpc The ProtomuxRPC object used to communicate with the peer
+     */
+    private async requestMemberCID(peerID: string) {
+        const peer = this.getPeer(peerID)
+        this.log.info(`Requesting MemberCID from ${peerID.slice(-6)}`)
+
+        const response: Buffer[] = await peer.connection.rpc.request('getMemberCID', [], {
+            valueEncoding: c.array(c.buffer),
+        })
+        await this.handleHandshakeError(this.handleHandshake(peerID, response), peer.connection.stream)
     }
 
     /**
