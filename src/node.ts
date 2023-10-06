@@ -67,25 +67,22 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
     public corestore: Corestore
     protected rln?: RLN
 
-    private peers: Map<string, NodePeerData>
-    private memberCIDs: Map<string, string> // MCID => peerID
-    private bannedMCIDs: Map<string, VerificationResult | HeaderVerificationError | PayloadVerificationResult | undefined | SyncError>
+    private peers: Map<string, NodePeerData> = new Map()
+    private memberCIDs: Map<string, string> = new Map() // MCID => peerID
+    private bannedMCIDs: Map<string, VerificationResult | HeaderVerificationError | PayloadVerificationResult | undefined | SyncError> = new Map()
 
     private topicsBee: Hyperbee<string, Buffer>
-    public topicFeeds: Map<string, Feed> // Topic => feed
-    private topicNames: Map<string, string>
+    public topicFeeds: Map<string, Feed> = new Map() // Topic => feed
+    private topicNames: Map<string, string> = new Map()
 
     private _ready: Promise<void>
+
+    private _pendingPeers: Set<Promise<any>> = new Set()
 
     constructor(secret: string, groupID: string, rln: RLN, {memstore, swarmOpts, logger, dataFolder}: {memstore?: boolean, swarmOpts?: any, logger?: Logger<unknown>, dataFolder?: string}) {
         super()
         this.secret = secret
         this.groupID = groupID
-        this.topicFeeds = new Map()
-        this.peers = new Map()
-        this.memberCIDs = new Map()
-        this.topicNames = new Map()
-        this.bannedMCIDs = new Map()
 
         this.log = logger || new Logger({
             prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
@@ -116,6 +113,10 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
 
     public getSubLogger(settings?: ISettingsParam<unknown>) {
         return this.log.getSubLogger(settings)
+    }
+
+    public awaitPending() {
+        return Promise.all(this._pendingPeers)
     }
 
     protected getPeerRPC(peerID: string) {
@@ -288,7 +289,9 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
             }
         }
         try {
-            await this.requestMemberCID(peerID)
+            const promise = this.requestMemberCID(peerID)
+            this._pendingPeers.add(promise)
+            await promise
         } catch (e) {
             this.log.error(`Failed to refresh MemberCID for ${peerID.slice(-6)}`)
             return
