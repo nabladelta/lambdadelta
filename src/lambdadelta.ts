@@ -136,6 +136,7 @@ export enum PayloadVerificationResult {
 }
 
 export enum HeaderVerificationError {
+    FORKED_HYPERCORE = "HEADER_FORKED_HYPERCORE",
     HASH_MISMATCH = "HEADER_HASH_MISMATCH",
     UNKNOWN_EVENT_TYPE = "UNKNOWN_EVENT_TYPE",
     UNEXPECTED_RLN_IDENTIFIER = "UNEXPECTED_RLN_IDENTIFIER",
@@ -624,6 +625,11 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         let entryBuf: Buffer
         try {
             entryBuf = await peer.eventLog.get(i, {timeout: TIMEOUT})
+            if (peer.eventLog.fork > 1) {
+                return { code: HeaderVerificationError.FORKED_HYPERCORE, eventID: null }
+            }
+            // Delete local copy of peer's block after retrieving
+            peer.eventLog.clear(i)
         } catch (e) {
             return { code: HeaderVerificationError.UNAVAILABLE, eventID: null }
         }
