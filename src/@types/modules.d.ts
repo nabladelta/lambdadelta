@@ -144,6 +144,12 @@ declare module 'hyperdrive' {
 
     close(): Promise<void>
 
+    clear(path: string, opts?: {diff?: boolean}): Promise<number | null>
+
+    clearAll(opts?: {diff?: boolean}): Promise<number | null>
+
+    purge(): Promise<void>
+
     get(path: string): Promise<Buffer | null>
 
     entry(path: string): Promise<PathEntry>
@@ -316,7 +322,9 @@ declare module 'hypercore' {
 
     createWriteStream(): Writable<Buffer>
 
-    clear(start: number, end?: number): Promise<void>
+    clear(start: number, end?: number, options?: { diff?: boolean }): Promise<void>
+
+    purge(): Promise<void>
 
     truncate(newLength: number, forkId?: number): Promise<void>
 
