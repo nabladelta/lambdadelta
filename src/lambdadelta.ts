@@ -151,7 +151,7 @@ interface Settings {
 }
 
 /**
- * Decentralized Multi-writer event feed for a `topic`
+ * Decentralized Multi-writer event feed for a specific `topic`
  * with timestamps based on local consensus
  * and rate limiting through RLN
  */
@@ -217,7 +217,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     protected async markEventsForDeletion() {
-        
         const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
         const eventsToDelete = new Set<string>()
         for (let [_, eventID] of this.timeline.getEvents(0, oldestTimeAllowed)) {
@@ -264,7 +263,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     protected async deleteEventResources(eventID: string) {
         const res = await this.getEventResources(eventID)
         for (let path of res) {
-            this.drive.del(path)
+            await this.drive.del(path)
+            await this.drive.clear(path)
         }
     }
 
