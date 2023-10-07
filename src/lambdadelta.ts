@@ -164,7 +164,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     // RLN
     protected rln: RLN
 
-    private timeline: Timeline
+    private timeline: Timeline = new Timeline() // Consensus timeline
+    private unconfirmedTimeline: Timeline = new Timeline() // Contains all events including unconfirmed ones
 
     private eventLog: Hypercore // Event Log Hypercore
     protected drive: Hyperdrive // Hyperdrive
@@ -202,7 +203,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.maxPayloadSize = new Map()
         this.eventHeaders = new Map()
 
-        this.timeline = new Timeline()
         this.logReloaded = false
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
@@ -232,6 +232,26 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         return eventsToDelete
     }
 
+    /**
+     * Delete events that are too old and not in the consensus timeline
+     */
+    private async deleteUnconfirmedEvents() {
+        const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
+        for (let [_, eventID] of this.unconfirmedTimeline.getEvents(0, oldestTimeAllowed)) {
+            if (this.timeline.getTime(eventID) !== undefined) {
+                continue // Skip events that are already in the consensus timeline
+            }
+            // Events in the unconfirmed timeline do not have log entries yet, so we can't delete them
+            // Instead, we just delete the resources associated with them
+            await this.onEventGarbageCollected(eventID)
+            // Remove all traces of this event
+            this.eventMetadata.delete(eventID)
+            this.eventHeaders.delete(eventID)
+            this.unconfirmedTimeline.unsetTime(eventID)
+            this.timeline.unsetTime(eventID)
+        }
+    }
+
     protected async sweepMarkedEvents(markedEvents: Set<string>, previousOldestIndex: number) {
         let newOldestIndex = previousOldestIndex
         for (let i = newOldestIndex; i < this.eventLog.length; i++) {
@@ -253,9 +273,21 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 break
             }
             markedEvents.delete(eventID)
+            // Remove all traces of this event
+            this.eventMetadata.delete(eventID)
+            this.eventHeaders.delete(eventID)
+            this.unconfirmedTimeline.unsetTime(eventID)
+            this.timeline.unsetTime(eventID)
         }
 
         return {previousOldestIndex, newOldestIndex}
+    }
+    protected getAllConfirmedEventIDs() {
+        return this.timeline.getEvents(0).map(([_, eventID]) => eventID)
+    }
+
+    protected getAllEventIDs() {
+        return this.unconfirmedTimeline.getEvents(0).map(([_, eventID]) => eventID)
     }
 
     protected async clearSweptEvents(sweepStartIndex: number, oldestIndex: number) {
@@ -942,6 +974,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const result = await this.rln.submitProof(proof, event.claimed)
         if (result === VerificationResult.VALID) {
             this.eventHeaders.set(event.proof.signal, event)
+            this.unconfirmedTimeline.setTime(eventID, event.claimed)
         }
         return result
     }
@@ -987,6 +1020,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             const index = await this.publishReceived(eventID, header.claimed)
             eventMetadata.index = index
             this.timeline.setTime(eventID, header.claimed)
+            this.unconfirmedTimeline.setTime(eventID, header.claimed)
             await this.onTimelineAdd(eventID, header.claimed, -1)
         }
         return { result, eventID }
