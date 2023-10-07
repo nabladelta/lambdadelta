@@ -278,6 +278,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             this.eventHeaders.delete(eventID)
             this.unconfirmedTimeline.unsetTime(eventID)
             this.timeline.unsetTime(eventID)
+            this.onTimelineRemove(eventID, -1, -1)
         }
 
         return {previousOldestIndex, newOldestIndex}
