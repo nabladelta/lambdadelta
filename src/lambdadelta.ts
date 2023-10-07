@@ -189,7 +189,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     constructor(topic: string, corestore: Corestore, rln: RLN,
         settings: Settings = {
             expireEventsAfter: 86400,
-            minEventsBeforeGC: 0
+            minEventsBeforeGC: 128
         }) {
         super()
         this.topic = topic
@@ -212,19 +212,24 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
      * @param eventID ID of the event
      */
     protected async onEventGarbageCollected(eventID: string) {
+        this.unconfirmedTimeline.unsetTime(eventID)
         await this.deleteEventResources(eventID)
     }
 
     /**
      * Mark events for deletion by the GC and immediately delete resources associated with them
+     * This only operates on events that are already in the event log.
      * @returns Set of event IDs that were marked for deletion
      */
     protected async markEventsForDeletion() {
         const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
         const eventsToDelete = new Set<string>()
-        for (let [_, eventID] of this.timeline.getEvents(0, oldestTimeAllowed)) {
+        for (let [_, eventID] of this.unconfirmedTimeline.getEvents(0, oldestTimeAllowed)) {
+            if (this.eventMetadata.get(eventID)?.index === -1) { // Is not in our event log
+                continue
+            }
             // Only reduce to the minimum size
-            if (this.timeline.getSize() < this.settings.minEventsBeforeGC) {
+            if (this.unconfirmedTimeline.getSize() < this.settings.minEventsBeforeGC) {
                 break
             }
             eventsToDelete.add(eventID)
@@ -234,22 +239,20 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     }
 
     /**
-     * Delete events that are too old and not in the consensus timeline
-     * These events are not in the eventLog since they are not confirmed
+     * Delete events that are too old and not in our event log
      */
     private async gcUnconfirmedEvents() {
         const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
         for (let [_, eventID] of this.unconfirmedTimeline.getEvents(0, oldestTimeAllowed)) {
-            if (this.timeline.getTime(eventID) !== undefined) {
-                continue // Skip events that are already in the consensus timeline
+            if (this.eventMetadata.get(eventID)?.index !== -1) { // Is in our event log
+                continue
             }
-            // Events in the unconfirmed timeline do not have log entries yet, so we can't delete them
+            // These events do not have log entries yet, so we can't delete them from the log
             // Instead, we just delete the resources associated with them
             await this.onEventGarbageCollected(eventID)
             // Remove all traces of this event
             this.eventMetadata.delete(eventID)
             this.eventHeaders.delete(eventID)
-            this.unconfirmedTimeline.unsetTime(eventID)
             this.timeline.unsetTime(eventID)
         }
     }
