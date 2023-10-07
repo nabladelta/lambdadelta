@@ -170,14 +170,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private eventLog: Hypercore // Event Log Hypercore
     protected drive: Hyperdrive // Hyperdrive
 
-    protected nullifierSpecs: Map<string, NullifierSpec[]>
-    protected maxPayloadSize: Map<string, number>
+    protected nullifierSpecs: Map<string, NullifierSpec[]> = new Map()
+    protected maxPayloadSize: Map<string, number> = new Map()
 
-    private eventMetadata: Map<string, EventMetadata> // EventID => Metadata
-    private peers: Map<string, PeerData> // peerID => Hypercore
-    private pendingPeers: Set<string>
+    private eventMetadata: Map<string, EventMetadata>  = new Map() // EventID => Metadata
+    private peers: Map<string, PeerData> = new Map() // peerID => Hypercore
+    private pendingPeers: Set<string> = new Set()
 
-    private eventHeaders: Map<string, FeedEventHeader> // EventID => Header
+    private eventHeaders: Map<string, FeedEventHeader> = new Map() // EventID => Header
 
     protected nullifierRegistry: NullifierRegistry
     private logReloaded: boolean
@@ -196,13 +196,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         this.rln = rln
         this.settings = settings
 
-        this.peers = new Map()
-        this.pendingPeers = new Set()
-        this.nullifierSpecs = new Map()
-        this.eventMetadata = new Map()
-        this.maxPayloadSize = new Map()
-        this.eventHeaders = new Map()
-
         this.logReloaded = false
 
         this.corestore = corestore.namespace('lambdadelta').namespace(topic)
@@ -213,11 +206,19 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
         this.registerTypes()
     }
-
+    /**
+     * Called whenever an event has been marked for deletion by the GC
+     * Deletes all on-disk resources associated with this event except for the event log entry
+     * @param eventID ID of the event
+     */
     protected async onEventGarbageCollected(eventID: string) {
         await this.deleteEventResources(eventID)
     }
 
+    /**
+     * Mark events for deletion by the GC and immediately delete resources associated with them
+     * @returns Set of event IDs that were marked for deletion
+     */
     protected async markEventsForDeletion() {
         const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
         const eventsToDelete = new Set<string>()
@@ -234,6 +235,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
 
     /**
      * Delete events that are too old and not in the consensus timeline
+     * These events are not in the eventLog since they are not confirmed
      */
     private async gcUnconfirmedEvents() {
         const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
@@ -252,6 +254,14 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
     }
 
+    /**
+     * Sweep the event Log to find which of the marked events can be deleted
+     * We can only delete consecutive events starting from the oldest currently existing event,
+     * so we have to stop as soon as we find one that is not to be deleted
+     * @param markedEvents Set of event IDs that are eligible for deletion
+     * @param previousOldestIndex Index of the oldest non-deleted event before this sweep
+     * @returns The index for the new oldest event after this sweep, and the previous value for that.
+     */
     protected async sweepMarkedEvents(markedEvents: Set<string>, previousOldestIndex: number) {
         let newOldestIndex = previousOldestIndex
         for (let i = newOldestIndex; i < this.eventLog.length; i++) {
@@ -273,7 +283,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
                 break
             }
             markedEvents.delete(eventID)
-            // Remove all traces of this event
+            // Remove all traces of this event from the application state
             this.eventMetadata.delete(eventID)
             this.eventHeaders.delete(eventID)
             this.unconfirmedTimeline.unsetTime(eventID)
@@ -281,20 +291,40 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             this.onTimelineRemove(eventID, -1, -1)
         }
 
-        return {previousOldestIndex, newOldestIndex}
-    }
-    protected getAllConfirmedEventIDs() {
-        return this.timeline.getEvents(0).map(([_, eventID]) => eventID)
+        return newOldestIndex
     }
 
-    protected getAllEventIDs() {
-        return this.unconfirmedTimeline.getEvents(0).map(([_, eventID]) => eventID)
-    }
-
+    /**
+     * Actually delete the marked events from the event log from disk
+     * This can only be done after publishing the new oldest index in a new log entry.
+     * That way, we can be sure that other peers will not try to fetch these events.
+     * @param sweepStartIndex Index of the first event to delete
+     * @param oldestIndex Index of the new oldest non-deleted event
+     */
     protected async clearSweptEvents(sweepStartIndex: number, oldestIndex: number) {
         await this.eventLog.clear(sweepStartIndex, oldestIndex)
     }
 
+    /**
+     * Get all event IDs that are in the consensus timeline
+     * @returns Array of event IDs
+     */
+    protected getAllConfirmedEventIDs() {
+        return this.timeline.getEvents(0).map(([_, eventID]) => eventID)
+    }
+
+    /**
+     * Get all event IDs including unconfirmed ones
+     * @returns Array of event IDs
+     */
+    protected getAllEventIDs() {
+        return this.unconfirmedTimeline.getEvents(0).map(([_, eventID]) => eventID)
+    }
+
+    /**
+     * Delete all on-disk resources associated with an event from the hyperdrive
+     * @param eventID ID of the event
+     */
     protected async deleteEventResources(eventID: string) {
         const res = await this.getEventResources(eventID)
         for (let path of res) {
@@ -303,6 +333,12 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         }
     }
 
+    /**
+     * Get the hyperdrive paths for the resources associated with an event.
+     * Used for garbage collection.
+     * @param eventID ID of the event
+     * @returns Array of paths in the hyperdrive
+     */
     protected async getEventResources(eventID: string) {
         return [`/events/${eventID}/payload`]
     }
@@ -838,7 +874,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     private async publishReceived(eventID: string, received: number) {
         const prevOldestIndex = await this.getOldestIndex(this.eventLog)
         const marked = await this.markEventsForDeletion()
-        const {newOldestIndex} = await this.sweepMarkedEvents(marked, prevOldestIndex)
+        const newOldestIndex = await this.sweepMarkedEvents(marked, prevOldestIndex)
 
         const eventMetadata = this.eventMetadata.get(eventID)
         if (eventMetadata && eventMetadata.index !== -1) {
