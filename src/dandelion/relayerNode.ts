@@ -48,6 +48,13 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         return rpc
     }
 
+    protected async fluffEvent(feed: Feed, eventData: Buffer[]) {
+        const {topic, eventID, header, payload} = deSerializeRelayedEvent(eventData)
+
+        const result = await feed.addEvent(eventID, header, payload)
+        return result
+    }
+
     protected async handleRelayedEvent(senderPeerID: string, eventData: Buffer[]) {
         const {topic, eventID, header, payload} = deSerializeRelayedEvent(eventData)
         this.logR.info(`Received stem event from ${senderPeerID.slice(-6)} (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
@@ -62,7 +69,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
             const feed = this.getTopicByHash(topic)
             if (!feed) return
             
-            await feed.addEvent(eventID, header, payload)
+            const result = await this.fluffEvent(feed, eventData)
         } else {
             // Relay event
             this.logR.info(`Relaying stem event (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
@@ -79,7 +86,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
                 const feed = this.getTopicByHash(topic)
                 if (!feed) return
 
-                const result = feed.addEvent(eventID, header, payload)
+                const result = this.fluffEvent(feed, eventData)
                 result.then((r) => {
                     if (r.exists) {
                         this.logR.info(`Skip fluff (already existing event) (Topic: ${topic.slice(-6)} ID: ${eventID.slice(-6)})`)
@@ -91,7 +98,7 @@ export abstract class RelayerNodeBase<Feed extends Lambdadelta> extends LDNodeBa
         }
     }
 
-    private async sendEventToRelay(senderPeerID: string, topic: string, eventData: Buffer[]) {
+    protected async sendEventToRelay(senderPeerID: string, topic: string, eventData: Buffer[]) {
         const feed = this.getTopicByHash(topic)
         if (!feed) return false
         
