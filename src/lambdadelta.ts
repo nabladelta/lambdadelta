@@ -235,7 +235,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
     /**
      * Delete events that are too old and not in the consensus timeline
      */
-    private async deleteUnconfirmedEvents() {
+    private async gcUnconfirmedEvents() {
         const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
         for (let [_, eventID] of this.unconfirmedTimeline.getEvents(0, oldestTimeAllowed)) {
             if (this.timeline.getTime(eventID) !== undefined) {
@@ -513,6 +513,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         for (let i = update.fromIndex; i < update.toIndex; i++) {
             const result = await this.syncEntry(peer, i, update.timestamp)
             
+            await this.gcUnconfirmedEvents()
+
             if (!await this.onSyncResult(peer, result)) {
                 // Stop processing events from this peer in case of a fatal error
                 return false
@@ -669,6 +671,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             this.eventMetadata.set(eventID, eventMetadata)
 
             await this.onMemberReceivedTime(eventID)
+            this.unconfirmedTimeline.setTime(eventID, eventMetadata.claimed)
         }
     }
 
@@ -755,7 +758,7 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         if (payloadCode === PayloadVerificationResult.INVALID) {
             eventMetadata.payloadInvalid == true
         }
-    
+        this.unconfirmedTimeline.setTime(eventID, eventMetadata.claimed)
         return {code: VerificationResult.VALID, eventID, payloadCode}
     }
 
@@ -975,7 +978,6 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
         const result = await this.rln.submitProof(proof, event.claimed)
         if (result === VerificationResult.VALID) {
             this.eventHeaders.set(event.proof.signal, event)
-            this.unconfirmedTimeline.setTime(eventID, event.claimed)
         }
         return result
     }
@@ -1020,8 +1022,8 @@ export class Lambdadelta extends TypedEmitter<TopicEvents> {
             this.eventMetadata.set(eventID, eventMetadata)
             const index = await this.publishReceived(eventID, header.claimed)
             eventMetadata.index = index
-            this.timeline.setTime(eventID, header.claimed)
             this.unconfirmedTimeline.setTime(eventID, header.claimed)
+            this.timeline.setTime(eventID, header.claimed)
             await this.onTimelineAdd(eventID, header.claimed, -1)
         }
         return { result, eventID }
