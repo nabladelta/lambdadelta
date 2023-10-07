@@ -17,6 +17,9 @@ export class Timeline {
      */
     public setTime(eventID: string, time: number) {
         const prevTime = this.eidTime.get(eventID)
+        
+        if (prevTime === time) return prevTime // No change
+
         if (prevTime) { // Already existing key
             this.timeline.delete(prevTime)
         }
