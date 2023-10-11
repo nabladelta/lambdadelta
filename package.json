@@ -1,11 +1,11 @@
 {
   "name": "@nabladelta/lambdadelta",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "P2P Event Feed",
   "main": "src/index.ts",
   "repository": "https://github.com/nabladelta/lambdadelta",
   "exports": {
-    "import": "./src/index.ts",
+    "import": "./dist/src/index.js",
     "require": "./dist/src/index.js",
     "types": "./dist/src/index.d.ts"
   },
