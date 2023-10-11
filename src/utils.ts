@@ -2,7 +2,7 @@ import crypto from 'crypto'
 import AsyncLock from 'async-lock'
 import { FeedEventHeader, LogEntry, RLNGFullProof, TopicData } from './protobuf/msgTypes'
 import { FeedEventHeader as IFeedEventHeader, LogEntry as ILogEntry } from './lambdadelta'
-import { Proof as IProof, RLNGFullProof as IRLNGFullProof } from '@nabladelta/rln/src/rln'
+import { Proof as IProof, RLNGFullProof as IRLNGFullProof } from '@nabladelta/rln'
 import { Proof } from './protobuf/msgTypes'
 
 export function getTimestampInSeconds() {

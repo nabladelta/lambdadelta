@@ -1,7 +1,6 @@
 
 import crypto from 'crypto'
-import { RLN, deserializeProof, FileProvider, GroupDataProvider, nullifierInput, RLNGFullProof, serializeProof, VerificationResult, MemoryProvider } from '@nabladelta/rln'
-import { getMemberCIDEpoch, getTimestampInSeconds } from '../src/utils'
+import { RLN,  GroupDataProvider, MemoryProvider } from '@nabladelta/rln'
 import { Identity } from '@semaphore-protocol/identity'
 import { generateMemberCID, verifyMemberCIDProof } from '../src/membercid'
 
@@ -29,7 +28,7 @@ describe('Member CID', () => {
 
         const proofA = await generateMemberCID(secretA, pubkeyB, rln)
         const proofB = await generateMemberCID(secretB, pubkeyA, rlnB)
-        expect(await verifyMemberCIDProof(deserializeProof(serializeProof(proofB)), pubkeyA, rln)).toEqual(true) // From the perspective of being A
+        expect(await verifyMemberCIDProof(proofB, pubkeyA, rln)).toEqual(true) // From the perspective of being A
         expect(await verifyMemberCIDProof(proofB, pubkeyA, rln)).toEqual(true) // Duplicate should not be a problem
         expect(await verifyMemberCIDProof(proofA, pubkeyB, rlnB)).toEqual(true) // From the perspective of being B
         expect(await verifyMemberCIDProof(proofA, pubkeyB, rlnB)).toEqual(true) // Duplicate should not be a problem

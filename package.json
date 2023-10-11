@@ -1,6 +1,6 @@
 {
   "name": "@nabladelta/lambdadelta",
-  "version": "0.1.12",
+  "version": "0.1.14",
   "description": "P2P Event Feed",
   "main": "src/index.ts",
   "repository": "https://github.com/nabladelta/lambdadelta",
@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@hyperswarm/dht": "6.5.1",
-    "@nabladelta/rln": "^1.0.8",
+    "@nabladelta/rln": "^1.0.13",
     "@protobuf-ts/plugin": "^2.9.1",
     "@types/async-lock": "^1.4.0",
     "async-lock": "^1.4.0",
