@@ -122,13 +122,6 @@ export interface RLNGFullProof {
     snarkProof?: RLNGSNARKProof;
 }
 /**
- * *
- * @typedef FeedEventHeader Our main Event type
- * @property {string} eventType Event type
- * @property {number} claimed Time the event author claims
- * @property {RLNGFullProof} proof RLN proof for this event
- * @property {string} payloadHash Hash of payload
- *
  * @generated from protobuf message FeedEventHeader
  */
 export interface FeedEventHeader {
@@ -141,49 +134,64 @@ export interface FeedEventHeader {
      */
     claimed: number;
     /**
-     * @generated from protobuf field: RLNGFullProof proof = 3;
-     */
-    proof?: RLNGFullProof;
-    /**
      * @generated from protobuf field: string payloadHash = 4;
      */
     payloadHash: string;
 }
 /**
- * *
- * @typedef LogEntry An entry in our event log hypercore
- * @property {number} oldestIndex Index of the oldest still valid block
- * @property {number} received Timestamp in seconds
- * @property {string} header The event's Header
- *
- * @generated from protobuf message LogEntry
+ * @generated from protobuf message StoredEvent
  */
-export interface LogEntry {
+export interface StoredEvent {
     /**
-     * @generated from protobuf field: double oldestIndex = 1;
+     * @generated from protobuf field: FeedEventHeader header = 1;
      */
-    oldestIndex: number;
+    header?: FeedEventHeader;
     /**
-     * @generated from protobuf field: double received = 2;
+     * @generated from protobuf field: RLNGFullProof proof = 2;
+     */
+    proof?: RLNGFullProof;
+}
+/**
+ * @generated from protobuf message PeerMessage
+ */
+export interface PeerMessage {
+    /**
+     * @generated from protobuf field: string type = 1;
+     */
+    type: string;
+    /**
+     * @generated from protobuf field: RLNGFullProof membershipProof = 2;
+     */
+    membershipProof?: RLNGFullProof;
+    /**
+     * @generated from protobuf field: float received = 3;
      */
     received: number;
     /**
-     * @generated from protobuf field: FeedEventHeader header = 3;
+     * @generated from protobuf field: RLNGFullProof eventProof = 4;
+     */
+    eventProof?: RLNGFullProof;
+    /**
+     * @generated from protobuf field: FeedEventHeader header = 5;
      */
     header?: FeedEventHeader;
+    /**
+     * @generated from protobuf field: string topic = 6;
+     */
+    topic: string;
 }
 /**
- * @generated from protobuf message TopicData
+ * @generated from protobuf message EncryptedMessage
  */
-export interface TopicData {
+export interface EncryptedMessage {
     /**
-     * @generated from protobuf field: string feedCore = 1;
+     * @generated from protobuf field: bytes iv = 1;
      */
-    feedCore: string;
+    iv: Uint8Array;
     /**
-     * @generated from protobuf field: string drive = 2;
+     * @generated from protobuf field: bytes content = 2;
      */
-    drive: string;
+    content: Uint8Array;
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class PiB$Type extends MessageType<PiB> {
@@ -571,7 +579,6 @@ class FeedEventHeader$Type extends MessageType<FeedEventHeader> {
         super("FeedEventHeader", [
             { no: 1, name: "eventType", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 2, name: "claimed", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 3, name: "proof", kind: "message", T: () => RLNGFullProof },
             { no: 4, name: "payloadHash", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
@@ -592,9 +599,6 @@ class FeedEventHeader$Type extends MessageType<FeedEventHeader> {
                     break;
                 case /* double claimed */ 2:
                     message.claimed = reader.double();
-                    break;
-                case /* RLNGFullProof proof */ 3:
-                    message.proof = RLNGFullProof.internalBinaryRead(reader, reader.uint32(), options, message.proof);
                     break;
                 case /* string payloadHash */ 4:
                     message.payloadHash = reader.string();
@@ -617,9 +621,6 @@ class FeedEventHeader$Type extends MessageType<FeedEventHeader> {
         /* double claimed = 2; */
         if (message.claimed !== 0)
             writer.tag(2, WireType.Bit64).double(message.claimed);
-        /* RLNGFullProof proof = 3; */
-        if (message.proof)
-            RLNGFullProof.internalBinaryWrite(message.proof, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
         /* string payloadHash = 4; */
         if (message.payloadHash !== "")
             writer.tag(4, WireType.LengthDelimited).string(message.payloadHash);
@@ -634,35 +635,31 @@ class FeedEventHeader$Type extends MessageType<FeedEventHeader> {
  */
 export const FeedEventHeader = new FeedEventHeader$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class LogEntry$Type extends MessageType<LogEntry> {
+class StoredEvent$Type extends MessageType<StoredEvent> {
     constructor() {
-        super("LogEntry", [
-            { no: 1, name: "oldestIndex", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 2, name: "received", kind: "scalar", T: 1 /*ScalarType.DOUBLE*/ },
-            { no: 3, name: "header", kind: "message", T: () => FeedEventHeader }
+        super("StoredEvent", [
+            { no: 1, name: "header", kind: "message", T: () => FeedEventHeader },
+            { no: 2, name: "proof", kind: "message", T: () => RLNGFullProof }
         ]);
     }
-    create(value?: PartialMessage<LogEntry>): LogEntry {
-        const message = { oldestIndex: 0, received: 0 };
+    create(value?: PartialMessage<StoredEvent>): StoredEvent {
+        const message = {};
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<LogEntry>(this, message, value);
+            reflectionMergePartial<StoredEvent>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: LogEntry): LogEntry {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: StoredEvent): StoredEvent {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* double oldestIndex */ 1:
-                    message.oldestIndex = reader.double();
-                    break;
-                case /* double received */ 2:
-                    message.received = reader.double();
-                    break;
-                case /* FeedEventHeader header */ 3:
+                case /* FeedEventHeader header */ 1:
                     message.header = FeedEventHeader.internalBinaryRead(reader, reader.uint32(), options, message.header);
                     break;
+                case /* RLNGFullProof proof */ 2:
+                    message.proof = RLNGFullProof.internalBinaryRead(reader, reader.uint32(), options, message.proof);
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -674,16 +671,13 @@ class LogEntry$Type extends MessageType<LogEntry> {
         }
         return message;
     }
-    internalBinaryWrite(message: LogEntry, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* double oldestIndex = 1; */
-        if (message.oldestIndex !== 0)
-            writer.tag(1, WireType.Bit64).double(message.oldestIndex);
-        /* double received = 2; */
-        if (message.received !== 0)
-            writer.tag(2, WireType.Bit64).double(message.received);
-        /* FeedEventHeader header = 3; */
+    internalBinaryWrite(message: StoredEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* FeedEventHeader header = 1; */
         if (message.header)
-            FeedEventHeader.internalBinaryWrite(message.header, writer.tag(3, WireType.LengthDelimited).fork(), options).join();
+            FeedEventHeader.internalBinaryWrite(message.header, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* RLNGFullProof proof = 2; */
+        if (message.proof)
+            RLNGFullProof.internalBinaryWrite(message.proof, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -691,34 +685,50 @@ class LogEntry$Type extends MessageType<LogEntry> {
     }
 }
 /**
- * @generated MessageType for protobuf message LogEntry
+ * @generated MessageType for protobuf message StoredEvent
  */
-export const LogEntry = new LogEntry$Type();
+export const StoredEvent = new StoredEvent$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class TopicData$Type extends MessageType<TopicData> {
+class PeerMessage$Type extends MessageType<PeerMessage> {
     constructor() {
-        super("TopicData", [
-            { no: 1, name: "feedCore", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "drive", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        super("PeerMessage", [
+            { no: 1, name: "type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "membershipProof", kind: "message", T: () => RLNGFullProof },
+            { no: 3, name: "received", kind: "scalar", T: 2 /*ScalarType.FLOAT*/ },
+            { no: 4, name: "eventProof", kind: "message", T: () => RLNGFullProof },
+            { no: 5, name: "header", kind: "message", T: () => FeedEventHeader },
+            { no: 6, name: "topic", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
-    create(value?: PartialMessage<TopicData>): TopicData {
-        const message = { feedCore: "", drive: "" };
+    create(value?: PartialMessage<PeerMessage>): PeerMessage {
+        const message = { type: "", received: 0, topic: "" };
         globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
         if (value !== undefined)
-            reflectionMergePartial<TopicData>(this, message, value);
+            reflectionMergePartial<PeerMessage>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TopicData): TopicData {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: PeerMessage): PeerMessage {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* string feedCore */ 1:
-                    message.feedCore = reader.string();
+                case /* string type */ 1:
+                    message.type = reader.string();
                     break;
-                case /* string drive */ 2:
-                    message.drive = reader.string();
+                case /* RLNGFullProof membershipProof */ 2:
+                    message.membershipProof = RLNGFullProof.internalBinaryRead(reader, reader.uint32(), options, message.membershipProof);
+                    break;
+                case /* float received */ 3:
+                    message.received = reader.float();
+                    break;
+                case /* RLNGFullProof eventProof */ 4:
+                    message.eventProof = RLNGFullProof.internalBinaryRead(reader, reader.uint32(), options, message.eventProof);
+                    break;
+                case /* FeedEventHeader header */ 5:
+                    message.header = FeedEventHeader.internalBinaryRead(reader, reader.uint32(), options, message.header);
+                    break;
+                case /* string topic */ 6:
+                    message.topic = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -731,13 +741,25 @@ class TopicData$Type extends MessageType<TopicData> {
         }
         return message;
     }
-    internalBinaryWrite(message: TopicData, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* string feedCore = 1; */
-        if (message.feedCore !== "")
-            writer.tag(1, WireType.LengthDelimited).string(message.feedCore);
-        /* string drive = 2; */
-        if (message.drive !== "")
-            writer.tag(2, WireType.LengthDelimited).string(message.drive);
+    internalBinaryWrite(message: PeerMessage, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string type = 1; */
+        if (message.type !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.type);
+        /* RLNGFullProof membershipProof = 2; */
+        if (message.membershipProof)
+            RLNGFullProof.internalBinaryWrite(message.membershipProof, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        /* float received = 3; */
+        if (message.received !== 0)
+            writer.tag(3, WireType.Bit32).float(message.received);
+        /* RLNGFullProof eventProof = 4; */
+        if (message.eventProof)
+            RLNGFullProof.internalBinaryWrite(message.eventProof, writer.tag(4, WireType.LengthDelimited).fork(), options).join();
+        /* FeedEventHeader header = 5; */
+        if (message.header)
+            FeedEventHeader.internalBinaryWrite(message.header, writer.tag(5, WireType.LengthDelimited).fork(), options).join();
+        /* string topic = 6; */
+        if (message.topic !== "")
+            writer.tag(6, WireType.LengthDelimited).string(message.topic);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -745,6 +767,60 @@ class TopicData$Type extends MessageType<TopicData> {
     }
 }
 /**
- * @generated MessageType for protobuf message TopicData
+ * @generated MessageType for protobuf message PeerMessage
  */
-export const TopicData = new TopicData$Type();
+export const PeerMessage = new PeerMessage$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class EncryptedMessage$Type extends MessageType<EncryptedMessage> {
+    constructor() {
+        super("EncryptedMessage", [
+            { no: 1, name: "iv", kind: "scalar", T: 12 /*ScalarType.BYTES*/ },
+            { no: 2, name: "content", kind: "scalar", T: 12 /*ScalarType.BYTES*/ }
+        ]);
+    }
+    create(value?: PartialMessage<EncryptedMessage>): EncryptedMessage {
+        const message = { iv: new Uint8Array(0), content: new Uint8Array(0) };
+        globalThis.Object.defineProperty(message, MESSAGE_TYPE, { enumerable: false, value: this });
+        if (value !== undefined)
+            reflectionMergePartial<EncryptedMessage>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: EncryptedMessage): EncryptedMessage {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* bytes iv */ 1:
+                    message.iv = reader.bytes();
+                    break;
+                case /* bytes content */ 2:
+                    message.content = reader.bytes();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: EncryptedMessage, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* bytes iv = 1; */
+        if (message.iv.length)
+            writer.tag(1, WireType.LengthDelimited).bytes(message.iv);
+        /* bytes content = 2; */
+        if (message.content.length)
+            writer.tag(2, WireType.LengthDelimited).bytes(message.content);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message EncryptedMessage
+ */
+export const EncryptedMessage = new EncryptedMessage$Type();

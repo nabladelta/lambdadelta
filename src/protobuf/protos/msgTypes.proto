@@ -38,33 +38,27 @@ message RLNGFullProof {
     RLNGSNARKProof snarkProof = 4;
 }
 
-/**
- * @typedef FeedEventHeader Our main Event type
- * @property {string} eventType Event type
- * @property {number} claimed Time the event author claims
- * @property {RLNGFullProof} proof RLN proof for this event
- * @property {string} payloadHash Hash of payload
- */
 message FeedEventHeader {
     string eventType = 1;
     double claimed = 2;
-    RLNGFullProof proof = 3;
     string payloadHash = 4;
 }
 
-/**
- * @typedef LogEntry An entry in our event log hypercore
- * @property {number} oldestIndex Index of the oldest still valid block
- * @property {number} received Timestamp in seconds
- * @property {string} header The event's Header
- */
-message LogEntry {
-    double oldestIndex = 1;
-    double received = 2;
-    FeedEventHeader header = 3;
+message StoredEvent {
+    FeedEventHeader header = 1;
+    RLNGFullProof proof = 2;
 }
 
-message TopicData {
-    string feedCore = 1;
-    string drive = 2;
+message PeerMessage {
+    string type = 1;
+    RLNGFullProof membershipProof = 2;
+    float received = 3;
+    RLNGFullProof eventProof = 4;
+    FeedEventHeader header = 5;
+    string topic = 6;
+}
+
+message EncryptedMessage {
+    bytes iv = 1;
+    bytes content = 2;
 }

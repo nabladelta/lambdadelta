@@ -1,5 +1,5 @@
 import 'jest'
-import { decrypt, encrypt } from '../src/utils'
+import { decrypt, encrypt } from '../src/encrypt'
 import crypto from 'crypto'
 
 describe('Encryption', () => {

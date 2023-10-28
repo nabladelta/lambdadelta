@@ -1,11 +1,23 @@
 import BTree from 'sorted-btree'
 
+/**
+ * A timeline of events, sorted by timestamp,
+ * stored in a B+Tree.
+ */
 export class Timeline {
-    private timeline: BTree<number, string> // Timestamp (ms) => EventID
-    private eidTime: Map<string, number> // EventID => Timestamp (ms)
+    /**
+     * Timestamp (ms) => EventID
+     */
+    private timeline: BTree<number, string>
+    /**
+     * EventID => Timestamp (ms)
+     */
+    private eidTime: Map<string, number>
     
     constructor() {
-        this.timeline = new BTree()
+        // ESM workaround
+        // @ts-ignore
+        this.timeline = new BTree.default()
         this.eidTime = new Map()
     }
 
@@ -35,7 +47,7 @@ export class Timeline {
     /**
      * Removes an event from the timeline
      * @param eventID ID of the event
-     * @returns The previously set time or undefined
+     * @returns The previously set time (ms) or undefined
      */
     public unsetTime(eventID: string) {
         const prevTime = this.eidTime.get(eventID)
@@ -52,7 +64,7 @@ export class Timeline {
      * @param endTime Events with this timestamp or older will be included
      * @param maxLength Maximum number of results
      * @param includeHigh Whether the reange is inclusive or exclusive of endTime
-     * @returns Array of [time, eventID]
+     * @returns Array of [time (ms), eventID]
      */
     public getEvents(
         startTime: number = 0,

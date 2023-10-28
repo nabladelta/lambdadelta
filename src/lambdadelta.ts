@@ -1,1122 +1,319 @@
-import BTree from 'sorted-btree'
-import b4a from 'b4a'
-import Hyperdrive from 'hyperdrive'
-import crypto from 'crypto'
-import { TypedEmitter } from 'tiny-typed-emitter'
-import { RLN, RLNGFullProof, VerificationResult } from '@nabladelta/rln'
-import {
-    getEpoch,
-    getTimestampInSeconds,
-    deserializeLogEntry,
-    serializeLogEntry, 
-    rlnIdentifier,
-    AcquireLockOnArg
-} from './utils'
-import Corestore from 'corestore'
-import Hypercore from 'hypercore'
-import { Timeline } from './timeline'
-import { NullifierRegistry } from './nullifier'
-import { createEvent } from './create'
-import { calculateConsensusTime } from './consensusTime'
-import WaitQueue from 'wait-queue'
-import AsyncLock from 'async-lock'
-
-const TOLERANCE = 10
-const CLAIMED_TOLERANCE = 60
-const TIMEOUT = 5000
-
-export interface TopicEvents {
-    'peerAdded': (peerID: string) => void
-    'peerRemoved': (peerID: string) => void
-    'publishReceivedTime': (eventID: string, time: number) => void
-    'peerUpdate': (peerID: string, prevLength: number, newLength: number) => void
-    'syncEventStart': (peerID: string, index: number, receivedTime: number | null) => void
-    'syncCompleted': (peerID: string, lastIndex: number) => void
-    'syncFatalError': (
-            peerID: string,
-            error: VerificationResult | HeaderVerificationError | PayloadVerificationResult | SyncError) => void
-    'syncEventResult': (
-            peerID: string,
-            eventID: string | null,
-            headerResult: VerificationResult | HeaderVerificationError | SyncError) => void
-    'syncPayloadResult': (peerID: string, eventID: string, payloadResult: PayloadVerificationResult) => void
-    'syncDuplicateEvent': (
-            peerID: string,
-            eventID: string,
-            index: number,
-            prevIndex: number | undefined) => void
-    'syncEventReceivedTime': (peerID: string, eventID: string, received: number) => void
-    'timelineAddEvent': (eventID: string, time: number, consensusTime: number) => void
-    'timelineRemoveEvent': (eventID: string, prevTime: number, consensusTime: number) => void
-    'timelineRejectedEvent': (eventID: string, claimedTime: number, consensusTime: number) => void
-    'consensusTimeChanged': (eventID: string, prevTime: number, newTime: number) => void
-    'newEvent': (eventID: string) => void
-}
+import { RLN, VerificationResult } from "@nabladelta/rln"
+import { ISettingsParam, Logger } from "tslog"
+import crypto from "crypto"
+import { Libp2p } from "libp2p"
+import { PubSub } from "@libp2p/interface/pubsub"
+import { KadDHT } from "@libp2p/kad-dht"
+import { NullifierSpec, verifyEventHeader } from "./verifyEventHeader.js"
+import { LambdadeltaFeed } from "./feed.js"
+import { MessageIdRegistry } from "./messageIdRegistry.js"
+import { LambdadeltaSync } from "./sync.js"
+import { createEvent } from "./create.js"
+import type { Datastore } from 'interface-datastore'
+import { MemoryDatastore } from "datastore-core"
+import { MemberTracker } from "./membershipTracker.js"
+import { EventRelayer } from "./dandelion/eventRelayer.js"
+import { createLibp2p } from "./libp2p/createLibP2P.js"
+import { Crypter, decrypt, encrypt } from "./encrypt.js"
 
 /**
- * @typedef FeedEventHeader Our main Event type
- * @property {string} eventType Event type
- * @property {number} claimed Time the event author claims
- * @property {RLNGFullProof} proof RLN proof for this event
- * @property {string} payloadHash Hash of payload
+ * Configuration options for creating a Lambdadelta instance.
  */
-export interface FeedEventHeader {
-    eventType: string
-    claimed: number
-    proof: RLNGFullProof
-    payloadHash: string
+export interface LambdadeltaOptions {
+    /**
+     * Name of the Topic for this instance.
+     */
+    topic: string;
+
+    /**
+     * Group ID for this instance. The instance will not connect to nodes with a different group ID.
+     */
+    groupID: string;
+
+    /**
+     * RLN instance for proof verification and generation.
+     */
+    rln: RLN;
+
+    /**
+     * Optional libp2p instance for network communication.
+     * Contains sub-properties for pubsub and dht configurations.
+     */
+    libp2p?: Libp2p<{ pubsub: PubSub; dht: KadDHT }>;
+
+    /**
+     * (Optional) After startup, incoming events will be collected and buffered for this period of time (in milliseconds),
+     * and processed afterwards. Recommended for safer initial consensus calculation.
+     */
+    initialSyncPeriodMs?: number;
+
+    /**
+     * Optional datastore for persistence. If not provided, a MemoryDatastore will be used.
+     */
+    store?: Datastore;
+
+    /**
+     * Optional logger instance for this Lambdadelta instance.
+     * If not provided, a new logger instance will be created.
+     */
+    logger?: Logger<unknown>;
 }
+
 
 /**
- * @typedef LogEntry An entry in our event log hypercore
- * @property {number} oldestIndex Index of the oldest still valid block
- * @property {number} received Timestamp in seconds
- * @property {string} header The event's Header
+ * Main class for the Lambdadelta library
+ * Represents a decentralized feed of events over a particular topic, with an optional Dandelion++ relay for event propagation
+ * @typeParam Feed Type of the feed for this instance
+ * @typeParam Sync Type of the peer sync for this instance
+ * @typeParam Relayer Type of the Dandelion++ relayer for this instance
  */
-export interface LogEntry {
-    oldestIndex: number
-    received: number
-    header: FeedEventHeader
-}
-
-/**
- * @typedef LogAppendEvent An update from a peer
- * @property {number} fromIndex First index appended
- * @property {number} toIndex Next index that hasn't been used
- * @property {string} timestamp When we received this update
- */
-export type LogAppendEvent = {
-    fromIndex: number
-    toIndex: number // NON inclusive
-    timestamp: number | null
-}
-
-/**
- * @typedef NullifierSpec Spec for a nullifier
- * @property {number} epoch Epoch length in seconds
- * @property {number} messageLimit Message limit per epoch
- */
-export interface NullifierSpec {
-    epoch: number
-    messageLimit: number
-}
-
-export enum SyncError {
-    DUPLICATE_ENTRY
-}
-
-enum QueueControl {
-    STOP
-}
-
-interface EventMetadata {
-    payloadInvalid: boolean // Do not try to fetch the payload again. It's invalid.
-    index: number // Index on own hypercore
-    received: number // Time received for us
-    claimed: number // Time the event was supposedly produced
-    consensus: number
-    membersReceived: Map<string, number> // peerID => time received
-}
-
-export interface PeerData {
-    id: string // PeerID
-    events: Map<string, number> // All events we obtained from this peer => index on core
-    knownLength: number // Current length of feed core
-    eventLog: Hypercore
-    drive: Hyperdrive
-    logUpdateQueue: WaitQueue<LogAppendEvent | QueueControl.STOP>,
-    _onappend: () => Promise<void>
-}
-
-export enum PayloadVerificationResult {
-    VALID = "PAYLOAD_VALID",
-    UNAVAILABLE = "PAYLOAD_UNAVAILABLE",
-    SIZE = "PAYLOAD_SIZE",
-    HASH_MISMATCH = "PAYLOAD_HASH_MISMATCH",
-    INVALID = "PAYLOAD_INVALID"
-}
-
-export enum HeaderVerificationError {
-    FORKED_HYPERCORE = "HEADER_FORKED_HYPERCORE",
-    HASH_MISMATCH = "HEADER_HASH_MISMATCH",
-    UNKNOWN_EVENT_TYPE = "UNKNOWN_EVENT_TYPE",
-    UNEXPECTED_RLN_IDENTIFIER = "UNEXPECTED_RLN_IDENTIFIER",
-    UNEXPECTED_MESSAGE_LIMIT = "UNEXPECTED_MESSAGE_LIMIT",
-    UNEXPECTED_NULLIFIER = "UNEXPECTED_NULLIFIER",
-    SIZE = "HEADER_SIZE",
-    UNAVAILABLE = "HEADER_UNAVAILABLE"
-}
-
-interface Settings {
-    expireEventsAfter: number // Events older than this will be subject to deletion by the GC
-    minEventsBeforeGC: number // The GC will only delete events as long as there are more events than this
-}
-
-/**
- * Decentralized Multi-writer event feed for a specific `topic`
- * with timestamps based on local consensus
- * and rate limiting through RLN
- */
-export class Lambdadelta extends TypedEmitter<TopicEvents> {
-    private corestore: Corestore
-    public topic: string
-
-    // RLN
-    protected rln: RLN
-
-    private timeline: Timeline = new Timeline() // Consensus timeline
-    private unconfirmedTimeline: Timeline = new Timeline() // Contains all events including unconfirmed ones
-
-    private eventLog: Hypercore // Event Log Hypercore
-    protected drive: Hyperdrive // Hyperdrive
-
+export class Lambdadelta<Feed extends LambdadeltaFeed, Sync extends LambdadeltaSync<Feed>, Relayer extends EventRelayer<Feed, Sync>> {
+    public static appID = "LDD"
+    public static protocolVersion = "1.0.0"
+    public static protocol = `/lambdadelta/${this.protocolVersion}`
+    public static storePrefix = {
+        sync: `${this.protocol}/sync`,
+        feed: `${this.protocol}/feed`,
+        mid: `${this.protocol}/mid`,
+        relayer: `${this.protocol}/dandelion`,
+        main: `${this.protocol}/main`
+    }
+    private rln: RLN
+    private nullifierRegistry: MessageIdRegistry
+    private topicName: string
+    private topicHash: string
+    private groupID: string
+    private feed: Feed
+    private sync: Sync
+    private relayer: Relayer
+    private store: Datastore
     protected nullifierSpecs: Map<string, NullifierSpec[]> = new Map()
-    protected maxPayloadSize: Map<string, number> = new Map()
+    private log: Logger<unknown>
+    private _libp2p: Libp2p<{ pubsub: PubSub; dht: KadDHT }>
 
-    private eventMetadata: Map<string, EventMetadata>  = new Map() // EventID => Metadata
-    private peers: Map<string, PeerData> = new Map() // peerID => Hypercore
-    private pendingPeers: Set<string> = new Set()
+    public get topic(): string {
+        return this.topicName
+    }
 
-    private eventHeaders: Map<string, FeedEventHeader> = new Map() // EventID => Header
+    public get group(): string {
+        return this.groupID
+    }
 
-    protected nullifierRegistry: NullifierRegistry
-    private logReloaded: boolean
+    public get libp2p(): Libp2p<{ pubsub: PubSub; dht: KadDHT }> {
+        return this._libp2p
+    }
 
-    private lock = new AsyncLock() // Used from within decorators
-
-    protected settings: Settings
-
-    constructor(topic: string, corestore: Corestore, rln: RLN,
-        settings: Settings = {
-            expireEventsAfter: 86400,
-            minEventsBeforeGC: 128
-        }) {
-        super()
-        this.topic = topic
+    private constructor(
+        topic: string,
+        groupID: string,
+        rln: RLN,
+        store: Datastore,
+        libP2P: Libp2p<{ pubsub: PubSub; dht: KadDHT }>,
+        feed: (...args: ConstructorParameters<typeof LambdadeltaFeed>) => Feed,
+        sync: (...args: ConstructorParameters<typeof LambdadeltaSync>) => Sync,
+        relayer: (...args: ConstructorParameters<typeof EventRelayer>) => Relayer,
+        { initialSyncPeriodMs, logger}: {initialSyncPeriodMs: number, logger?: Logger<unknown>}
+    ) {
+        this.store = store
         this.rln = rln
-        this.settings = settings
+        this.topicName = topic
+        this.groupID = groupID
+        this._libp2p = libP2P
+        this.topicHash = this.getTopicHash(topic, 'public').toString('hex')
+        const encryptionKey = this.getTopicHash(topic, 'key').toString('hex')
+        const crypter: Crypter = {
+            encrypt: (data: Uint8Array) => encrypt(data, encryptionKey),
+            decrypt: (data: Uint8Array) => decrypt(data, encryptionKey)
+        }
 
-        this.logReloaded = false
+        this.log = logger?.getSubLogger({name: this.topicName}) || new Logger({
+            name: `LDD-${this.topicName}`,
+            prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
+        })
 
-        this.corestore = corestore.namespace('lambdadelta').namespace(topic)
-        this.eventLog = this.corestore.get({ name: `eventLog` })
-        this.drive = new Hyperdrive(this.corestore.namespace('drive'))
-
-        this.nullifierRegistry = new NullifierRegistry(this.corestore, this)
-
+        this.log.info(`Starting Lambdadelta for topic ${topic} with group ID ${groupID}`)
         this.registerTypes()
-    }
-    /**
-     * Called whenever an event has been marked for deletion by the GC
-     * Deletes all on-disk resources associated with this event except for the event log entry
-     * @param eventID ID of the event
-     */
-    protected async onEventGarbageCollected(eventID: string) {
-        this.unconfirmedTimeline.unsetTime(eventID)
-        await this.deleteEventResources(eventID)
+
+        this.nullifierRegistry = new MessageIdRegistry(this, this.prefix.mid, this.store)
+        const memberTracker = new MemberTracker(this.getSubLogger({name: "tracker"}))
+
+        this.feed = feed(this.prefix.feed, this.topicHash, memberTracker, this.store, this.getSubLogger({name: "feed"}))
+        this.sync = sync(this.prefix.sync, this.prefix.sync, this.feed, this.store, memberTracker, this.rln, crypter, this.nullifierSpecs, libP2P, this.getSubLogger({name: 'sync'}), initialSyncPeriodMs)
+        this.relayer = relayer(this.prefix.relayer, this.prefix.relayer, this.feed, this.sync, this.store, memberTracker, libP2P, crypter, this.getSubLogger({name: 'relayer'}))
     }
 
     /**
-     * Mark events for deletion by the GC and immediately delete resources associated with them
-     * This only operates on events that are already in the event log.
-     * @returns Set of event IDs that were marked for deletion
+     * Creates a new Lambdadelta instance with the provided options.
+     *
+     * @param {LambdadeltaOptions} options - Configuration options for the Lambdadelta instance.
+     * @param components Custom components for feed, sync, and relayer
+     * @returns {Promise<Lambdadelta>} Returns a new Lambdadelta instance.
      */
-    protected async markEventsForDeletion() {
-        const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
-        const eventsToDelete = new Set<string>()
-        for (let [_, eventID] of this.unconfirmedTimeline.getEvents(0, oldestTimeAllowed)) {
-            if (this.eventMetadata.get(eventID)?.index === -1) { // Is not in our event log
-                continue
-            }
-            // Only reduce to the minimum size
-            if (this.unconfirmedTimeline.getSize() < this.settings.minEventsBeforeGC) {
-                break
-            }
-            eventsToDelete.add(eventID)
-            await this.onEventGarbageCollected(eventID)
+    public static async createCustom<Feed extends LambdadeltaFeed, Sync extends LambdadeltaSync<Feed>, Relayer extends EventRelayer<Feed, Sync>>(
+        {
+            topic,
+            groupID,
+            rln,
+            libp2p,
+            store,
+            logger,
+            initialSyncPeriodMs,
+        }: LambdadeltaOptions,
+        components: {
+            feed: (...args: ConstructorParameters<typeof LambdadeltaFeed>) => Feed,
+            sync: (...args: ConstructorParameters<typeof LambdadeltaSync>) => Sync,
+            relayer: (...args: ConstructorParameters<typeof EventRelayer>) => Relayer,
         }
-        return eventsToDelete
+    ): Promise<Lambdadelta<Feed, Sync, Relayer>> {
+        store = store || new MemoryDatastore()
+        libp2p = libp2p || await createLibp2p(store)
+        const {feed, sync, relayer} = components
+        const lambdadelta = new Lambdadelta<Feed, Sync, Relayer>(topic, groupID, rln, store, libp2p, feed, sync, relayer, {logger, initialSyncPeriodMs: initialSyncPeriodMs || 0})
+        await lambdadelta.relayer.start()
+        await lambdadelta.sync.start()
+        return lambdadelta
     }
 
     /**
-     * Delete events that are too old and not in our event log
+     * Creates a new Lambdadelta instance with the provided options.
+     *
+     * @param {LambdadeltaOptions} options - Configuration options for the Lambdadelta instance.
+     * @returns {Promise<Lambdadelta>} Returns a new Lambdadelta instance.
      */
-    private async gcUnconfirmedEvents() {
-        const oldestTimeAllowed = getTimestampInSeconds() - this.settings.expireEventsAfter
-        for (let [_, eventID] of this.unconfirmedTimeline.getEvents(0, oldestTimeAllowed)) {
-            if (this.eventMetadata.get(eventID)?.index !== -1) { // Is in our event log
-                continue
-            }
-            // These events do not have log entries yet, so we can't delete them from the log
-            // Instead, we just delete the resources associated with them
-            await this.onEventGarbageCollected(eventID)
-            // Remove all traces of this event
-            this.eventMetadata.delete(eventID)
-            this.eventHeaders.delete(eventID)
-            this.timeline.unsetTime(eventID)
-        }
+    public static async create(options: LambdadeltaOptions) {
+        return await Lambdadelta.createCustom(options, {
+            feed: LambdadeltaFeed.create,
+            sync: LambdadeltaSync.create,
+            relayer: EventRelayer.create
+        })
     }
 
     /**
-     * Sweep the event Log to find which of the marked events can be deleted
-     * We can only delete consecutive events starting from the oldest currently existing event,
-     * so we have to stop as soon as we find one that is not to be deleted
-     * @param markedEvents Set of event IDs that are eligible for deletion
-     * @param previousOldestIndex Index of the oldest non-deleted event before this sweep
-     * @returns The index for the new oldest event after this sweep, and the previous value for that.
+     * Get the `Datastore` prefix for a given namespace.
+     * Different namespaces are used for different purposes, such as storing the feed, the sync state, etc.
+     * This allows a user to mount different `Datastore`s for each purpose using a `MountDatastore`, if desired.
+     * It's recommended to use `Lambdadelta.storePrefix` for that purpose instead of this method, however, since that will apply to all instances.
      */
-    protected async sweepMarkedEvents(markedEvents: Set<string>, previousOldestIndex: number) {
-        let newOldestIndex = previousOldestIndex
-        for (let i = newOldestIndex; i < this.eventLog.length; i++) {
-            let entryBuf: Buffer
-            try {
-                entryBuf = await this.eventLog.get(i, {timeout: TIMEOUT})
-            } catch (e) {
-                continue
-            }
-            const entry = deserializeLogEntry(entryBuf)
-            if (!entry) {
-                continue
-            }
-            const eventID = entry.header.proof.signal
-
-            newOldestIndex = i
-            // Stop as soon as we find the first event that is not to be deleted yet
-            if (!markedEvents.has(eventID)) {
-                break
-            }
-            markedEvents.delete(eventID)
-            // Remove all traces of this event from the application state
-            this.eventMetadata.delete(eventID)
-            this.eventHeaders.delete(eventID)
-            this.unconfirmedTimeline.unsetTime(eventID)
-            this.timeline.unsetTime(eventID)
-            this.onTimelineRemove(eventID, -1, -1)
-        }
-
-        return newOldestIndex
-    }
-
-    /**
-     * Actually delete the marked events from the event log from disk
-     * This can only be done after publishing the new oldest index in a new log entry.
-     * That way, we can be sure that other peers will not try to fetch these events.
-     * @param sweepStartIndex Index of the first event to delete
-     * @param oldestIndex Index of the new oldest non-deleted event
-     */
-    protected async clearSweptEvents(sweepStartIndex: number, oldestIndex: number) {
-        await this.eventLog.clear(sweepStartIndex, oldestIndex)
-    }
-
-    /**
-     * Get all event IDs that are in the consensus timeline
-     * @returns Array of event IDs
-     */
-    protected getAllConfirmedEventIDs() {
-        return this.timeline.getEvents(0).map(([_, eventID]) => eventID)
-    }
-
-    /**
-     * Get all event IDs including unconfirmed ones
-     * @returns Array of event IDs
-     */
-    protected getAllEventIDs() {
-        return this.unconfirmedTimeline.getEvents(0).map(([_, eventID]) => eventID)
-    }
-
-    /**
-     * Delete all on-disk resources associated with an event from the hyperdrive
-     * @param eventID ID of the event
-     */
-    protected async deleteEventResources(eventID: string) {
-        const res = await this.getEventResources(eventID)
-        for (let path of res) {
-            await this.drive.del(path)
-            await this.drive.clear(path)
+    public get prefix() {
+        return {
+            sync: `${Lambdadelta.storePrefix.sync}/${this.topicHash}`,
+            feed: `${Lambdadelta.storePrefix.feed}/${this.topicHash}`,
+            mid: `${Lambdadelta.storePrefix.mid}/${this.topicHash}`,
+            relayer: `${Lambdadelta.storePrefix.relayer}/${this.topicHash}`,
+            main: `${Lambdadelta.storePrefix.main}/${this.topicHash}`
         }
     }
 
     /**
-     * Get the hyperdrive paths for the resources associated with an event.
-     * Used for garbage collection.
-     * @param eventID ID of the event
-     * @returns Array of paths in the hyperdrive
+     * Register the event types for this feed
+     * To be overridden by subclasses
+     * @internal
      */
-    protected async getEventResources(eventID: string) {
-        return [`/events/${eventID}/payload`]
-    }
-
     protected registerTypes() {
         const spec: NullifierSpec = {
             epoch: 1,
             messageLimit: 1
         }
-        this.addEventType("POST", [spec, spec], 4096)
-    }
-
-    public getNullifierSpecs(eventType: string) {
-        return this.nullifierSpecs.get(eventType)
-    }
-
-    protected async onTimelineAdd(eventID: string, time: number, consensusTime: number) {
-        this.emit('timelineAddEvent', eventID, time, consensusTime)
-        const event = await this.getEventByID(eventID)
-        if (!event) return
-
-        await this.onNewEvent(eventID, event)
-    }
-
-    protected async onTimelineRemove(eventID: string, time: number, consensusTime: number) {
-        this.emit('timelineRemoveEvent', eventID, time, consensusTime)
-    }
-
-    public async ready() {
-        await this.eventLog.ready()
-        await this.drive.ready()
-        await this.reloadEventLog()
-    }
-
-    public hasPeer(peerID: string) {
-        return this.peers.has(peerID)
-    }
-
-    public getPeerList() {
-        return Array.from(this.peers.keys())
-    }
-    
-    /**
-     * Get the IDs of the cores backing this instance
-     * @returns [logCore, driveCore]
-     */
-    public getCoreIDs(): [string, string] {
-        return [this.eventLog.key!.toString('hex'), this.drive.key.toString('hex')]
-    }
-
-    public async getCoreLength(): Promise<number> {
-        await this.eventLog.ready()
-        return this.eventLog.length
-    }
-
-    public async close() {
-        for (let [_, peer] of this.peers) {
-            peer.eventLog.removeListener('append', peer._onappend)
-        }
-        for (let [_, peer] of this.peers) {
-            await peer.drive.purge()
-            await peer.eventLog.purge()
-            await peer.drive.close()
-            await peer.eventLog.close()
-        }
-    }
-
-    private async getOldestIndex(eventLog: Hypercore) {
-        if (eventLog.length == 0) {
-            return 0
-        }
-        // Find the first valid entry
-        const lastEntryBuf: Buffer = await eventLog.get(eventLog.length - 1, {timeout: TIMEOUT})
-        const lastEntry = deserializeLogEntry(lastEntryBuf)
-        if (!lastEntry) {
-            return 0
-        }
-        return lastEntry.oldestIndex
-    }
-
-    /**
-     * Add a new peer to this topic feed and synchronize
-     * @param peerID ID of this peer
-     * @param logCoreID ID of this peer's event log core which contains `received` times
-     * @param driveID ID of this peer's Hyperdrive which contains the event headers and payload
-     * @returns Whether or not the synchronization the peer was added and synced
-     */
-    @AcquireLockOnArg(0)
-    public async addPeer(peerID: string, logCoreID: string, driveID: string) {
-        if (this.peers.has(peerID) || this.pendingPeers.has(peerID)) {
-            // Peer already added
-            return false
-        }
-        this.pendingPeers.add(peerID)
-        const drive = new Hyperdrive(this.corestore, b4a.from(driveID, 'hex'))
-        await drive.ready()
-
-        const logCore = this.corestore.get(b4a.from(logCoreID, 'hex'))
-        await logCore.ready()
-        await logCore.update({wait: true})
-        this.emit('peerUpdate', peerID, -1, logCore.length)
-
-        const peer = {
-            id: peerID,
-            eventLog: logCore,
-            drive,
-            events: new Map(),
-            knownLength: logCore.length,
-            logUpdateQueue: new WaitQueue<LogAppendEvent>(),
-            _onappend: async () => {
-                this.enqueueEventLogUpdate(peer)
-            }
-        }
-        
-        logCore.on('append', peer._onappend)
-        this.peers.set(peerID, peer)
-        this.pendingPeers.delete(peerID)
-        this.emit('peerAdded', peerID)
-
-        const firstIndex = await this.getOldestIndex(peer.eventLog)
-        const result = await this.processLogUpdate(peer,
-            {
-                fromIndex: firstIndex,
-                toIndex: logCore.length,
-                timestamp: null
-            })
-        if (!result) return false
-        this.processLogUpdateQueue(peer).catch((e)=> console.error(e))
-        return true
-    }
-    
-    /**
-     * Remove a peer from this topic feed
-     * @param peerID ID of the peer to remove
-     * @returns Whether or not the peer was removed
-     */
-    @AcquireLockOnArg(0)
-    public async removePeer(peerID: string) {
-        const peer = this.peers.get(peerID)
-        if (!peer) {
-            // Peer does not exist
-            return false
-        }
-        peer.eventLog.removeListener('append', peer._onappend)
-        this.peers.delete(peerID)
-        // await peer.drive.close() TODO: investigate issues
-        // Delete all resources associated with this peer
-        await peer.drive.purge()
-        await peer.eventLog.purge()
-        await peer.eventLog.close()
-        // Remove peer's received timestamps contributions
-        for (let [eventID, _] of peer.events) {
-            const eventMetadata = this.eventMetadata.get(eventID)
-            if (!eventMetadata) {
-                continue
-            }
-            eventMetadata.membersReceived.delete(peerID)
-            this.eventMetadata.set(eventID, eventMetadata)
-            await this.onMemberReceivedTime(eventID)
-        }
-        this.emit('peerRemoved', peerID)
-        peer.logUpdateQueue.push(QueueControl.STOP)
-        return true
-    }
-
-    /**
-     * Called on an `append` event from a peer's event log.
-     * This records when the new log entries were added immediately,
-     * ensuring we don't wait until we get to synchronize that event.
-     * This allows us to establish reliable `received` times.
-     * @param peerID The peer we received an update from
-     */
-    private enqueueEventLogUpdate(peer: PeerData) {
-        const currentTime = getTimestampInSeconds()
-
-        peer.logUpdateQueue.push({
-            fromIndex: peer.knownLength,
-            toIndex: peer.eventLog.length,
-            timestamp: currentTime,
-        })
-        this.emit('peerUpdate', peer.id, peer.knownLength, peer.eventLog.length)
-
-        peer.knownLength = peer.eventLog.length
-    }
-
-    /**
-     * Wait for a peer's new log entries and process them
-     * @param peer The object representing the peer to process
-     */
-    private async processLogUpdateQueue(peer: PeerData) {
-        while (true) {
-            const update = await peer.logUpdateQueue.shift()
-            if (update == QueueControl.STOP) return
-
-            if (!await this.processLogUpdate(peer, update)) {
-                return
-            }
-        }
-    }
-
-    /**
-     * Called whenever we need to process an update from a peer's event log
-     * @param peer The peer responsible for this update
-     * @param update The update
-     * @returns boolean indicating whether we should continue synchronizing events from this peer or stop
-     */
-    private async processLogUpdate(peer: PeerData, update: LogAppendEvent) {
-        for (let i = update.fromIndex; i < update.toIndex; i++) {
-            const result = await this.syncEntry(peer, i, update.timestamp)
-            
-            await this.gcUnconfirmedEvents()
-
-            if (!await this.onSyncResult(peer, result)) {
-                // Stop processing events from this peer in case of a fatal error
-                return false
-            }
-        }
-        this.emit('syncCompleted', peer.id, update.toIndex - 1)
-        return true
-    }
-
-    /**
-     * Called whenever an event has been processed.
-     * Should decide what course of action to take, up to and including
-     * removing and banning the peer responsible if the event was invalid.
-     * @param peer The peer responsible for sending us this event
-     * @param eventID The ID of the event
-     * @param code The result of the event header verification process
-     * @param payloadCode The result of the payload verification process
-     * @returns True if we should continue, false if we are to stop altogether
-     */
-    private async onSyncResult(
-        peer: PeerData,
-        {eventID, code, payloadCode}: {
-            eventID: string | null,
-            code: VerificationResult | HeaderVerificationError | SyncError,
-            payloadCode?: PayloadVerificationResult}) {
-        if (!this.onLogEntrySyncResult(peer, eventID, code)) {
-            return false
-        }
-        if (payloadCode !== undefined && !this.onPayloadSyncResult(peer, eventID!, payloadCode)) {
-            return false
-        }
-        if (code === VerificationResult.VALID && payloadCode === PayloadVerificationResult.VALID) {
-            await this.onEventSyncComplete(peer, eventID!)
-        }
-        return true
-    }
-
-    protected onLogEntrySyncResult(peer: PeerData, eventID: string | null, result: VerificationResult | HeaderVerificationError | SyncError): boolean {
-        this.emit('syncEventResult', peer.id, eventID, result)
-        if (result !== VerificationResult.VALID) {
-            this.removePeer(peer.id)
-            this.emit('syncFatalError', peer.id, result)
-            return false
-        }
-        return true
-    }
-
-    protected onPayloadSyncResult(peer: PeerData, eventID: string, result: PayloadVerificationResult) {
-        this.emit('syncPayloadResult', peer.id, eventID, result)
-        if (result !== PayloadVerificationResult.VALID && result !== PayloadVerificationResult.UNAVAILABLE) {
-            this.removePeer(peer.id)
-            this.emit('syncFatalError', peer.id, result)
-            return false
-        }
-        return true
-    }
-
-    /**
-     * Called whenever an event has been fully synchronized
-     * This means both the header and payload are verified and synchronized,
-     * but it does *not* mean that the event has been approved by consensus and added to the timeline.
-     * @param peer The peer responsible for sending us this event
-     * @param eventID The ID of the event
-     */
-    protected async onEventSyncComplete(peer: PeerData, eventID: string) {
-        const event = await this.getEventByID(eventID)
-        if (!event) {
-            throw new Error("Event not found")
-        }
-        // Check if we have already added this event to the timeline
-        if (this.isEventInTimeline(eventID)) {
-            return await this.onNewEvent(eventID, event)
-        }
-    }
-
-    /**
-     * Called *once* whenever an event has been fully synchronized AND added to the timeline.
-     * This is the suggested hook to use for applications using this library.
-     * Override this method to handle new events.
-     * @param eventID The ID of the event
-     * @param event The event itself
-     */
-    protected async onNewEvent(eventID: string, event: {header: FeedEventHeader, payload: Buffer}) {
-        this.emit('newEvent', eventID)
-        // Application logic goes here
-    }
-
-    /**
-     * Called whenever we find the same event twice in a peer's event feed.
-     * It verifies whether the event is actually stored twice in the peer's feed,
-     * then takes appropriate action.
-     * @param peerID The peer responsible
-     * @param eventID The ID of the event
-     * @param index The last index we found this event at
-     * @param prevIndex The previous index we found this event at
-     * @returns false if the verification succeeds, to stop syncing events from this peer
-     */
-    protected async onDuplicateInput(
-            peerID: string,
-            peer: PeerData,
-            eventID: string,
-            index: number,
-            prevIndex: number | undefined) {
-        if (index === prevIndex && index !== undefined && prevIndex !== undefined) {
-            throw new Error("Scanned same index entry twice")
-        }
-        if (prevIndex === undefined) {
-            throw new Error("Index confusion")
-        }
-
-        const entryBufA: Buffer = await peer.eventLog.get(prevIndex, {timeout: TIMEOUT})
-        const entryA = deserializeLogEntry(entryBufA)
-
-        const entryBufB: Buffer = await peer.eventLog.get(index, {timeout: TIMEOUT})
-        const entryB = deserializeLogEntry(entryBufB)
-
-        if (!entryA || !entryB) {
-            throw new Error("Could not deserialize log entry")
-        }
-        if (entryA.header.proof.signal == entryB.header.proof.signal) {
-            this.emit('syncDuplicateEvent', peerID, eventID, index, prevIndex)
-            return true
-        }
-
-        return true
-    }
-
-    /**
-     * Reload the previous known event log from disk at startup
-     */
-    private async reloadEventLog() {
-        if (this.logReloaded) return
-        this.logReloaded = true
-
-        if (this.eventLog.length == 0) return
-
-        const oldestIndex = await this.getOldestIndex(this.eventLog)
-        for (let i = oldestIndex; i < this.eventLog.length; i++) {
-            const entryBuf = await this.eventLog.get(i, {timeout: TIMEOUT})
-            const entry = deserializeLogEntry(entryBuf)
-            if (!entry) {
-                continue
-            }
-            const eventID = entry.header.proof.signal
-            this.eventHeaders.set(eventID, entry.header)
-            const eventMetadata = {
-                payloadInvalid: false,
-                index: i,
-                received: entry.received,
-                consensus: -1,
-                claimed: entry.header.claimed,
-                membersReceived: new Map()
-            }
-            this.eventMetadata.set(eventID, eventMetadata)
-
-            await this.onMemberReceivedTime(eventID)
-            this.unconfirmedTimeline.setTime(eventID, eventMetadata.claimed)
-        }
-    }
-
-    /**
-     * Synchronizes an individual entry from a peer's feed hypercore
-     * @param peerID ID of the peer
-     * @param i index of this entry on the hypercore
-     * @param timeReceived When we received this event. `null` if it was already present
-     * @returns boolean indicating whether we should continue synchronizing events from this peer or stop
-     */
-    private async syncEntry(
-            peer: PeerData,
-            i: number,
-            timeReceived: number | null
-        ): Promise<{ code: VerificationResult | HeaderVerificationError | SyncError, payloadCode?: PayloadVerificationResult, eventID: string | null} > {
-        const peerID = peer.id
-
-        this.emit('syncEventStart', peerID, i, timeReceived)
-        
-        let entryBuf: Buffer
-        try {
-            entryBuf = await peer.eventLog.get(i, {timeout: TIMEOUT})
-            // Delete local copy of peer's block after retrieving
-            await peer.eventLog.clear(i)
-            
-            if (peer.eventLog.fork > 1) {
-                return { code: HeaderVerificationError.FORKED_HYPERCORE, eventID: null }
-            }
-        } catch (e) {
-            return { code: HeaderVerificationError.UNAVAILABLE, eventID: null }
-        }
-
-        const entry = deserializeLogEntry(entryBuf)
-        if (!entry) {
-            return { code: HeaderVerificationError.UNAVAILABLE, eventID: null }
-        }
-        const eventID = entry.header.proof.signal
-
-        const headerResult = await this.insertEventHeader(entry.header)
-        if (headerResult !== VerificationResult.VALID) {
-            return { code: headerResult, eventID }
-        }
-
-        const payloadCode = await this.syncPayload(peer, entry.header)
-
-        let eventMetadata = this.eventMetadata.get(eventID)
-        if (!eventMetadata) { // Is a new event
-            eventMetadata = {
-                payloadInvalid: false,
-                index: -1,
-                received: -1,
-                consensus: -1,
-                claimed: entry.header.claimed,
-                membersReceived: new Map()
-            }
-            this.eventMetadata.set(eventID, eventMetadata)
-            /**
-             * We use the time we actually received this update from our peer
-             * if event was received live, not from an initial peer sync
-             */
-            if (timeReceived) {
-                // If our peer's received time is close to our current time, use their time
-                // This makes it harder to tell who first saw an event
-                eventMetadata.received = (Math.abs(timeReceived - entry.received) <= TOLERANCE)
-                                                ? entry.received : timeReceived
-                const index = await this.publishReceived(eventID, eventMetadata.received)
-                eventMetadata.index = index
-            }
-
-        } else if (eventMetadata.membersReceived.has(peerID)) {
-            if (await this.onDuplicateInput(peerID, peer, eventID, i, peer.events.get(eventID))) {
-                return { code: SyncError.DUPLICATE_ENTRY, eventID, payloadCode }
-            }
-        }
-
-        // Add peer's received timestamp
-        this.emit('syncEventReceivedTime', peerID, eventID, entry.received)
-        eventMetadata.membersReceived.set(peerID, entry.received)
-        peer.events.set(eventID, i)
-
-        await this.onMemberReceivedTime(eventID)
-
-        // Make sure we do not fetch this again if it's invalid
-        if (payloadCode === PayloadVerificationResult.INVALID) {
-            eventMetadata.payloadInvalid == true
-        }
-        this.unconfirmedTimeline.setTime(eventID, eventMetadata.claimed)
-        return {code: VerificationResult.VALID, eventID, payloadCode}
-    }
-
-    /**
-     * Download and verify the payload attached to a particular event
-     * @param peerID The peer we received this event from
-     * @param eventID ID of the event
-     * @param eventType Type of the event
-     * @param payloadHash Expected hash of the payload
-     * @returns Result of the verification process
-     */
-    private async syncPayload(
-            peer: PeerData,
-            eventHeader: FeedEventHeader,
-            ): Promise<PayloadVerificationResult> {
-        
-        const eventID = eventHeader.proof.signal
-        const event = this.eventMetadata.get(eventID)
-        if (event?.payloadInvalid) {
-            // Do not bother refetching
-            PayloadVerificationResult.UNAVAILABLE
-        }
-        // Skip payload if it exists already
-        if (await this.drive.entry(`/events/${eventID}/payload`)) {
-            return PayloadVerificationResult.VALID
-        }
-        const entry = await peer.drive.entry(`/events/${eventID}/payload`)
-        if (!entry) {
-            return PayloadVerificationResult.UNAVAILABLE 
-        }
-        if (entry.value.blob.byteLength > this.maxPayloadSize.get(eventHeader.eventType)!) {
-            return PayloadVerificationResult.SIZE 
-        }
-
-        const payloadBuf = await peer.drive.get(`/events/${eventID}/payload`)
-        if (!payloadBuf) {
-            return PayloadVerificationResult.UNAVAILABLE 
-        }
-        // Delete local cache from peer drive after retrieving
-        await peer.drive.clear(`/events/${eventID}/payload`)
-
-        if (payloadBuf.length > this.maxPayloadSize.get(eventHeader.eventType)!) {
-            return PayloadVerificationResult.SIZE 
-        }
-        const hash = crypto.createHash('sha256').update(payloadBuf).digest('hex')
-        if (hash !== eventHeader.payloadHash) {
-            return PayloadVerificationResult.HASH_MISMATCH 
-        }
-
-        if (!(await this.validatePayload(eventID, eventHeader.eventType, payloadBuf))){
-            return PayloadVerificationResult.INVALID
-        }
-
-        await this.drive.put(`/events/${eventID}/payload`, payloadBuf)
-
-        return PayloadVerificationResult.VALID
-    }
-
-    /**
-     * Validates the data inside an event's attached payload Buffer
-     * (To be overridden by an application using this library).
-     * @param eventID ID of the event
-     * @param eventType Type of the event
-     * @param buf Payload buffer
-     * @returns boolean indicating the result of the verification process
-     */
-    protected async validatePayload(eventID: string, eventType: string, buf: Buffer) {
-        return true
-    }
-
-    /**
-     * Publish our `received` time for an event
-     * @param eventID ID of the event
-     * @param received The time we claim to have received said event
-     * @returns The index of the resulting feed entry for this event
-     */
-    private async publishReceived(eventID: string, received: number) {
-        const prevOldestIndex = await this.getOldestIndex(this.eventLog)
-        const marked = await this.markEventsForDeletion()
-        const newOldestIndex = await this.sweepMarkedEvents(marked, prevOldestIndex)
-
-        const eventMetadata = this.eventMetadata.get(eventID)
-        if (eventMetadata && eventMetadata.index !== -1) {
-            throw new Error("Trying to publish received time twice")
-        }
-        const header = this.eventHeaders.get(eventID)
-        if (!header) {
-            throw new Error("Header unavailable")
-        }
-        try {
-            await this.eventLog.ready()
-            const logBuf = serializeLogEntry({
-                header,
-                received: received,
-                oldestIndex: newOldestIndex
-            })
-            const {length, byteLength} = await this.eventLog.append(logBuf)
-            this.emit('publishReceivedTime', eventID, received)
-            await this.clearSweptEvents(prevOldestIndex, newOldestIndex)
-            return length - 1
-        } catch (e) {
-            console.error("ERROR", e)
-            throw e
-        }
-    }
-
-    /**
-     * To be called whenever we add another peer's `received` time to an event
-     * It recalculates our consensus timestamp and then acts appropriately
-     * @param eventID The event's ID
-     */
-    private async onMemberReceivedTime(eventID: string) {
-        const eventMetadata = this.eventMetadata.get(eventID)
-        if (!eventMetadata) {
-            throw new Error("Event not found")
-        }
-        const collectedTimestamps = Array.from(eventMetadata.membersReceived.values())
-        // If we have a received time of our own
-        if (eventMetadata.index !== -1) {
-            // Add our contribution
-            collectedTimestamps.push(eventMetadata.received)
-        }
-        const totalPeers = this.peers.size
-            + (eventMetadata.index !== -1 ? 1 : 0) // Adding our own timestamp if it's been published
-        const consensusTime = calculateConsensusTime(collectedTimestamps, totalPeers)
-
-        if (consensusTime == -1) {
-            return
-        }
-
-        if (eventMetadata.consensus !== consensusTime) {
-            this.emit('consensusTimeChanged', eventID, eventMetadata.consensus, consensusTime)
-            eventMetadata.consensus = consensusTime
-            this.eventMetadata.set(eventID, eventMetadata)
-        }
-
-        // We have not yet published a received time
-        if (eventMetadata.index == -1) {
-            const index = await this.publishReceived(eventID, consensusTime)
-            eventMetadata.received = consensusTime
-            eventMetadata.index = index
-            this.eventMetadata.set(eventID, eventMetadata)
-        }
-
-        // Message is determined to have been published at a false claimed time
-        // if the consensus time differs too much from claimed time
-        if (Math.abs(eventMetadata.claimed - consensusTime) > CLAIMED_TOLERANCE) {
-            // Remove from timeline
-            const prevTime = this.timeline.unsetTime(eventID)
-            if (prevTime) {
-                const roundedTime = Math.floor(prevTime / 1000)
-                await this.onTimelineRemove(eventID, roundedTime, consensusTime)
-            } else {
-                this.emit('timelineRejectedEvent', eventID, eventMetadata.claimed, consensusTime)
-            }
-            return
-        }
-
-        const currentEventTime = this.timeline.getTime(eventID)
-        // Event is not in timeline yet
-        if (!currentEventTime) {
-            this.timeline.setTime(eventID, eventMetadata.claimed)
-            await this.onTimelineAdd(eventID, eventMetadata.claimed, consensusTime)
-        }
-    }
-
-    /**
-     * Calculates the hash for an event header.
-     * This is used as the ID for events.
-     * @param event Header for this event
-     * @returns The `eventID`
-     */
-    private getEventHash(event: FeedEventHeader) {
-        return crypto.createHash('sha256')
-            .update(this.topic)
-            .update(event.eventType)
-            .update(event.claimed.toString())
-            .update(event.payloadHash)
-            .digest('hex')
-    }
-
-    /**
-     * Verifies an event header; if valid, it is added to our store. 
-     * @param event Header of an event
-     * @returns Enum indicating the verification result
-     */
-    private async insertEventHeader(event: FeedEventHeader) {
-        if (this.eventHeaders.get(event.proof.signal)) {
-            // Already verified it previously
-            return VerificationResult.VALID
-        }
-
-        const eventID = this.getEventHash(event)
-
-        const proof = event.proof
-        if (proof.signal !== eventID) {
-            return HeaderVerificationError.HASH_MISMATCH
-        }
-        if (proof.rlnIdentifier !== rlnIdentifier(this.topic, event.eventType)) {
-            return HeaderVerificationError.UNEXPECTED_RLN_IDENTIFIER
-        }
-        const specs = this.nullifierSpecs.get(event.eventType)
-        if (!specs) {
-            return HeaderVerificationError.UNKNOWN_EVENT_TYPE
-        }
-        for (let i = 0; i < specs.length; i++) {
-            if (proof.externalNullifiers[i].messageLimit
-                !== specs[i].messageLimit) {
-                return HeaderVerificationError.UNEXPECTED_MESSAGE_LIMIT
-            }
-
-            if (proof.externalNullifiers[i].nullifier
-                !== getEpoch(specs[i].epoch, event.claimed).toFixed(0)) {
-                return HeaderVerificationError.UNEXPECTED_NULLIFIER
-            }
-        }
-        const result = await this.rln.submitProof(proof, event.claimed)
-        if (result === VerificationResult.VALID) {
-            this.eventHeaders.set(event.proof.signal, event)
-        }
-        return result
+        this.addEventType("POST", [spec, spec])
     }
 
     /**
      * Register a new event type for this feed 
      * @param eventType Name for this type
      * @param specs Specifications for the nullifiers used in this event
-     * @param maxPayloadSize Maximum size for the attached payload buffer
      */
-    public addEventType(eventType: string, specs: NullifierSpec[], maxPayloadSize: number) {
+    public addEventType(eventType: string, specs: NullifierSpec[]) {
         this.nullifierSpecs.set(eventType, specs)
-        this.maxPayloadSize.set(eventType, maxPayloadSize)
     }
 
     /**
-     * Public API for the publication of a new event
-     * @param eventID ID for this event
-     * @param header Event header
-     * @param payload Buffer containing the event's payload payload
+     * Get the nullifier specs for a given event type
+     * @param eventType Name of the event type
+     * @returns Nullifier specs for this event type
      */
-    public async addEvent(eventID: string, header: FeedEventHeader, payload: Buffer) {
-        let eventMetadata = this.eventMetadata.get(eventID)
-        if (eventMetadata) {
-            return { result: false, eventID, exists: true }
-        }
-
-        if (!(await this.validatePayload(eventID, header.eventType, payload))) {
-            return { result: false, eventID }
-        }
-        await this.drive.put(`/events/${eventID}/payload`, payload)
-        const result = await this.insertEventHeader(header)
-        if (result == VerificationResult.VALID) {
-            eventMetadata = {
-                payloadInvalid: false,
-                index: -1,
-                received: header.claimed,
-                consensus: -1,
-                claimed: header.claimed,
-                membersReceived: new Map()
-            }
-            this.eventMetadata.set(eventID, eventMetadata)
-            const index = await this.publishReceived(eventID, header.claimed)
-            eventMetadata.index = index
-            this.unconfirmedTimeline.setTime(eventID, header.claimed)
-            this.timeline.setTime(eventID, header.claimed)
-            await this.onTimelineAdd(eventID, header.claimed, -1)
-        }
-        return { result, eventID }
-    }
-
-    public isEventInTimeline(eventID: string) {
-        return !!this.timeline.getTime(eventID)
+    public getNullifierSpecs(eventType: string) {
+        return this.nullifierSpecs.get(eventType)
     }
 
     /**
-     * Public API for the creation and publication of a new event
-     * @param eventType Type for this event
-     * @param payload Buffer containing the event's payload payload
-     * @returns Enum indicating the result of the process.
+     * Shutdown this Lambdadelta instance. Does not delete any already persisted data.
+     * Does not disconnect from the network, but ignores incoming messages.
      */
-    public async newEvent(eventType: string, payload: Buffer) {
-        const nullifiers = await this.nullifierRegistry.createNullifier(eventType)
-        const [eventHeader, eventID] = await createEvent(this.rln, this.topic, eventType, nullifiers, payload)
-        return await this.addEvent(eventID, eventHeader, payload)
+    public async shutdown() {
+        await this.relayer.stop()
+        await this.sync.stop()
+        this.feed.close()
     }
 
     /**
-     * Fetch a particular event by its `eventID`
-     * @param eventID ID of the event
-     * @returns Event data or `null` if the event is not available
-     */
-    public async getEventByID(eventID: string) {
-        const eventHeader = this.eventHeaders.get(eventID)
-        const payloadBuf = await this.drive.get(`/events/${eventID}/payload`)
-        if (!payloadBuf || !eventHeader) return null
-        return {header: eventHeader, payload: payloadBuf}
-    }
-
-    /**
-     * Get events from the timeline dated between `startTime` and `endTime`
-     * @param startTime Events with this timestamp or newer will be included
-     * @param endTime Events with this timestamp or older will be included
-     * @param maxLength Maximum number of results
-     * @returns list of event data
+     * Get confirmed events from the feed
+     * @returns Array of event data
      */
     public async getEvents(
         startTime: number = 0,
         endTime?: number,
         maxLength?: number
-        ): Promise<{
-            header: FeedEventHeader,
-            payload: Buffer
-        }[]> {
-            const events = (await Promise.all(this.timeline.getEvents(startTime, endTime, maxLength, true)
-                    .map(async ([time, eventID]) => await this.getEventByID(eventID))))
-                    .filter(e => e != null)
-            return events as {
-                header: FeedEventHeader,
-                payload: Buffer
-            }[]
+    ) {
+        return this.feed.getEvents(startTime, endTime, maxLength)
     }
+
+    /**
+     * Get a single event based on its ID
+     * @param eventID ID of the event
+     * @returns Event data
+     */
+    public async getEventByID(eventID: string) {
+        return this.feed.getEventByID(eventID)
+    }
+
+    /**
+     * Public API for the creation and publication of a new event
+     * @param eventType Type for this event
+     * @param payloadHash Hash of the payload for this event
+     * @param relay Boolean indicating if the event should be relayed through the Dandelion++ protocol (true) or published directly (false, default)
+     * @returns Object with the result of the operation, the event ID, and a boolean indicating if the event already existed
+     */
+    public async newEvent(eventType: string, payloadHash: string, relay: boolean = false) {
+        const nullifiers = await this.nullifierRegistry.createNullifier(eventType)
+        const [eventHeader, proof, eventID] = await createEvent(this.rln, this.topicHash, eventType, nullifiers, payloadHash)
+        const result = await verifyEventHeader(proof, eventHeader, this.topicHash, this.nullifierSpecs, this.rln)
+        if (this.feed.eventExists(eventID)) {
+            return { result: false, eventID, exists: true }
+        }
+        if (result == VerificationResult.VALID) {
+            if (relay) {
+                const relayResult = await this.relayer.relayEvent(eventHeader, proof)
+                return { result: relayResult.result, eventID, exists: relayResult.exists || false }
+            }
+            this.log.info(`Publishing event ${eventID.slice(-6)} to feed`)
+            return await this.feed.addEvent(proof, eventHeader)
+        }
+        return {result, eventID, exists: false}
+    }
+
+    public getSubLogger(settings?: ISettingsParam<unknown>) {
+        return this.log.getSubLogger(settings)
+    }
+
+    /**
+     * Returns a namespaced identifier for a given topic and namespace.
+     * Ensures that different applications based on this library, 
+     * as well as incompatible versions of the same app,
+     * will generate different hashes for the same topic.
+     * Topic hashes are used by nodes in order to find each other through the DHT.
+     * Thanks to this, incompatible nodes will not try to connect to each other.
+     * @param topic Topic name
+     * @param namespace Namespace for the hash
+     * @returns A hash commitment to this topic
+     */
+    private getTopicHash(topic: string, namespace: string) {
+        return crypto
+            .createHash('sha256')
+            .update(Lambdadelta.appID)
+            .update(Lambdadelta.protocolVersion)
+            .update(this.groupID)
+            .update(namespace)
+            .update(topic).digest()
+    }
+
 }

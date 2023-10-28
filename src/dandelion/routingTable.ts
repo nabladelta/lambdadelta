@@ -1,4 +1,4 @@
-import { getRandomElement, getRandomIndex, getRandomInt, getTimestampInSeconds, isSubset } from "../utils"
+import { getRandomIndex, getRandomInt, getTimestampInSeconds, isSubset } from "../utils.js"
 
 export class RoutingTable {
     private maxDestinations: number

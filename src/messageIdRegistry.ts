@@ -1,26 +1,32 @@
-import { nullifierInput } from "@nabladelta/rln";
-import Corestore from "corestore";
-import Hyperbee from "hyperbee";
-import { deserializeInteger, getEpoch, serializeInteger } from "./utils";
-import { NullifierSpec } from "./lambdadelta";
-import AsyncLock from "async-lock";
-
+import { nullifierInput } from "@nabladelta/rln"
+import AsyncLock from "async-lock"
+import { getEpoch } from "./utils.js"
+import { NullifierSpec } from "./verifyEventHeader.js"
+import type { Datastore } from 'interface-datastore'
+import { Key } from 'interface-datastore'
+import { numberToUint8Array, uint8ArrayToNumber } from "./protobuf/serialize.js"
 interface SpecsProvider {
     getNullifierSpecs(eventType: string): NullifierSpec[] | undefined
 }
 
-export class NullifierRegistry {
-    private registry: Hyperbee<string, Buffer>
+/**
+ * Keeps track of the last used message ID for a given nullifier
+ * so that we can create unique nullifiers for each event.
+ * The job of this class is to provide strictly
+ * monotonically increasing integers for each given nullifier.
+ * @internal
+ */
+export class MessageIdRegistry {
     private feed: SpecsProvider
     private lock: AsyncLock
+    private datastore: Datastore
+    private storePrefix: string
 
-    constructor(corestore: Corestore, feed: SpecsProvider) {
-        this.registry = new Hyperbee(corestore.get({name: 'nullifiers'}), {
-            valueEncoding: 'binary',
-            keyEncoding: 'utf-8'
-        })
+    constructor(feed: SpecsProvider, storePrefix: string, datastore: Datastore) {
         this.feed = feed
         this.lock = new AsyncLock()
+        this.datastore = datastore
+        this.storePrefix = storePrefix
     }
 
     /**
@@ -31,27 +37,33 @@ export class NullifierRegistry {
      * @returns integer ID or null
      */
     public async getLastUsedMessageId(eventType: string, index: number, nullifier: string) {
-        const { value } = await this.registry.get(`${eventType}.${index}.${nullifier}`) || { value: null }
-        if (value == null || value == undefined) {
-            return null
+        try {
+            const value = await this.datastore.get(new Key(`${this.storePrefix}/messageIDs/${eventType}/${index}/${nullifier}`))
+            if (value === null || value === undefined) {
+                return null
+            }
+            const returnVal = uint8ArrayToNumber(value)
+            if (returnVal === false || isNaN(returnVal)) {
+                return null
+            }
+            return returnVal
+        } catch (e) {
+            if ((e as any).code == "ERR_NOT_FOUND") {
+                return null
+            }
+            throw e
         }
-        return deserializeInteger(value)
     }
 
     /**
-     * Set the last used message ID for a nullifier. Will only replace a previous value with a greater one.
+     * Set the last used message ID for a nullifier
      * @param eventType The name of the event type
      * @param index The index of the nullifier within the proof
      * @param nullifier The nullifier string the message ID refers to
      * @param messageId The new message ID
      */
     private async setLastUsedMessageId(eventType: string, index: number, nullifier: string, messageId: number) {
-        await this.registry.put(`${eventType}.${index}.${nullifier}`, serializeInteger(messageId), { 
-            cas: (prev, next) => {
-                const previousId = deserializeInteger(prev)
-                const nextId = deserializeInteger(next)
-                return nextId > previousId // Never allow next id to decrement
-            }})
+        await this.datastore.put(new Key(`${this.storePrefix}/messageIDs/${eventType}/${index}/${nullifier}`), numberToUint8Array(messageId))
     }
 
     /**

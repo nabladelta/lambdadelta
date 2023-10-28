@@ -1,6 +1,6 @@
 import 'jest'
 import { RoutingTable } from '../src'
-import { sleep } from './utils'
+import delay from "delay"
 
 describe('Routing Table', () => {
     it('Performs basic routing', async () => {
@@ -47,7 +47,7 @@ describe('Routing Table', () => {
         expect(!t.getCurrentDestinations().includes(destinations[0]))
         expect(!t.getCurrentDestinations().includes(destinations[1]))
         const destinations_2 = t.getCurrentDestinations()
-        await sleep(3000)
+        await delay(3000)
         expect(t.getCurrentDestinations()[0] != destinations_2[0])
     })
 })

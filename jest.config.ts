@@ -1,8 +1,6 @@
 export default {
     moduleFileExtensions: ["ts", "tsx", "js"],
-    transform: {
-      "^.+\\.(ts|tsx)$": "ts-jest",
-    },
+    transform: {},
     testMatch: [
       "**/tests/**/*.spec.ts",
       "**/tests/**/*.test.ts",
