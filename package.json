@@ -1,11 +1,17 @@
 {
-  "name": "p2test",
-  "version": "1.0.0",
-  "description": "",
+  "name": "@nabladelta/lambdadelta",
+  "version": "0.2.0",
+  "description": "P2P Event Feed",
+  "repository": "https://github.com/nabladelta/lambdadelta",
   "main": "src/index.ts",
   "type": "module",
   "engines": {
     "node": ">=18.0.0"
+  },
+  "exports": {
+    "import": "./dist/src/index.js",
+    "require": "./dist/src/index.js",
+    "types": "./dist/src/index.d.ts"
   },
   "scripts": {
     "build": "tsc",
@@ -13,8 +19,8 @@
     "start": "run-s build start:run",
     "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --coverage"
   },
-  "author": "",
-  "license": "ISC",
+  "author": "moot",
+  "license": "MIT",
   "dependencies": {
     "@chainsafe/libp2p-gossipsub": "^10.1.0",
     "@chainsafe/libp2p-noise": "^13.0.1",
