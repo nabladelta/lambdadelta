@@ -9,8 +9,6 @@ import { mplex } from '@libp2p/mplex'
 import { tcp } from '@libp2p/tcp'
 import { webRTC, webRTCDirect } from '@libp2p/webrtc'
 import { webSockets } from '@libp2p/websockets'
-import { ipnsSelector } from 'ipns/selector'
-import { ipnsValidator } from 'ipns/validator'
 import { autoNATService } from 'libp2p/autonat'
 import { circuitRelayTransport, circuitRelayServer, type CircuitRelayService } from 'libp2p/circuit-relay'
 import { dcutrService } from 'libp2p/dcutr'
@@ -70,14 +68,7 @@ export function libp2pDefaults (): Libp2pOptions<DefaultLibp2pServices> {
       upnp: uPnPNATService(),
       pubsub: gossipsub(),
       dcutr: dcutrService(),
-      dht: kadDHT({
-        validators: {
-          ipns: ipnsValidator
-        },
-        selectors: {
-          ipns: ipnsSelector
-        }
-      }),
+      dht: kadDHT(),
       relay: circuitRelayServer({
         advertise: true
       }),
