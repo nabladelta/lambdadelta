@@ -46,7 +46,6 @@
     "hyperdrive": "11.6.1",
     "hyperswarm": "4.7.3",
     "protomux-rpc": "^1.5.0",
-
     "random-access-memory": "6.2.0",
     "rlnjs": "3.3.0",
     "sorted-btree": "^1.8.1",

@@ -390,7 +390,7 @@ export abstract class LDNodeBase<Feed extends Lambdadelta> extends TypedEmitter<
             if (e instanceof HandshakeError) {
                 this.emit("handshakeFailure", e.code, e.peerID)
             }
-            this.log.error(`Failed handshake: ${(e as any).message}`)
+            this.log.error(`Failed handshake: ${(e as any).code} ${(e as any).message}`)
             stream.destroy()
         }
     }
