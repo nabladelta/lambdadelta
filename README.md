@@ -6,19 +6,70 @@
 npm i @nabladelta/lambdadelta
 ```
 
-Built on [hypercore](https://github.com/holepunchto/hypercore) and secured by the [Rate Limiting Nullifier](https://github.com/Rate-Limiting-Nullifier/).
+Built on [js-libp2p](https://github.com/libp2p/js-libp2p) and secured by the [Rate Limiting Nullifier](https://github.com/Rate-Limiting-Nullifier/).
 Provides a decentralized, peer to peer, (optionally) permissionless multiwriter event feed that is both anonymous and private, which can be used as a platform to build many kinds of decentralized applications.
 
 ## Usage
 
-To try it out, you need to create a group, instantiate a Node, then subscribe to a topic and publish events to it.
+To try it out, you need to create an RLN group, instantiate a Lambdadelta instance, and add messages to it.
 
 ``` ts
-import { FileProvider, GroupDataProvider, MemoryProvider, RLN } from "@nabladelta/rln"
-import { LDNode } from "@nabladelta/lambdadelta"
-import createTestnet from "@hyperswarm/testnet"
-```
+import { gossipsub } from '@chainsafe/libp2p-gossipsub'
+import { noise } from '@chainsafe/libp2p-noise'
+import { yamux } from '@chainsafe/libp2p-yamux'
+import { mplex } from '@libp2p/mplex'
+import { tcp } from '@libp2p/tcp'
+import { GroupDataProvider, MemoryProvider, RLN } from '@nabladelta/rln'
+import { createLibp2p } from 'libp2p'
+import { identifyService } from 'libp2p/identify'
+import { MemoryDatastore } from 'datastore-core'
+import { Identity } from '@semaphore-protocol/identity'
+import { Logger } from "tslog"
+import delay from "delay"
+import { kadDHT } from '@libp2p/kad-dht'
+import { Lambdadelta } from "@nabladelta/lambdadelta"
 
+```
+Create libp2p nodes:
+``` ts
+const createNode = async () => {
+  const node = await createLibp2p({
+    addresses: {
+      listen: ['/ip4/0.0.0.0/tcp/0']
+    },
+    transports: [tcp()],
+    streamMuxers: [yamux(), mplex()],
+    connectionEncryption: [noise()],
+    services: {
+      pubsub: gossipsub({
+        allowPublishToZeroPeers: true
+        }),
+      identify: identifyService(),
+      dht: kadDHT({
+        allowQueryWithZeroPeers: true,
+      })
+    }
+  })
+
+  return node
+}
+
+const libp2p = await createNode()
+const libp2pB = await createNode()
+
+await libp2p.peerStore.patch(libp2pB.peerId, {
+    multiaddrs: libp2pB.getMultiaddrs()
+})
+
+await libp2pB.peerStore.patch(libp2p.peerId, {
+    multiaddrs: libp2p.getMultiaddrs()
+})
+await libp2p.start()
+await libp2pB.start()
+
+await libp2p.dial(libp2pB.peerId)
+await libp2pB.dial(libp2p.peerId)
+```
 Initialize the nodes, ensuring they are part of the same group and share a common gid:
 
 ``` ts
@@ -30,29 +81,23 @@ const gData = MemoryProvider.write(
     GroupDataProvider.createEvent(new Identity(secretB).commitment),
 ], undefined)
 
-const gid = 'exampleGroupID'
-const testnet = await createTestnet(3)
-const anode = new LDNode(secretA, gid, await RLN.loadMemory(secretA, gData), { memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
-const bnode = new LDNode(secretB, gid, await RLN.loadMemory(secretB, gData), { memstore: true, swarmOpts: {bootstrap: testnet.bootstrap}})
+const rlnstore = new MemoryDatastore()
+const rlnstoreB = new MemoryDatastore()
+const rln = await RLN.loadMemory(secretA, gData, rlnstore)
+const rlnB = await RLN.loadMemory(secretB, gData, rlnstoreB)
 
-await Promise.all([anode.ready(), bnode.ready()])
+const nodeA = await Lambdadelta.create({topic: 'a', groupID: '1', rln, libp2p})
+const nodeB = await Lambdadelta.create({topic: 'a', groupID: '1', rln: rlnB, libp2p: libp2pB})
+
 ```
-
+Start producing new events:
 ``` ts
-const TOPIC = 'example'
-const TOPICB = 'other'
-await anode.join([TOPIC, TOPICB])
-await bnode.join([TOPIC, TOPICB])
-const a = anode.getTopic(TOPIC)!
-const b = bnode.getTopic(TOPIC)!
-
-await a.newEvent("POST", Buffer.from("some message"))
+await nodeA.newEvent('POST', 'hello world')
 ```
 
 After a while events propagate to all nodes that have joined the topic:
 
 ``` ts
-const events = (await b.getEvents())
-                .map(e => e.payload.toString())
-console.log(events)
+await delay(2000)
+console.log((await nodeA.getEvents()).map(e => e.header.payloadHash))
 ```
