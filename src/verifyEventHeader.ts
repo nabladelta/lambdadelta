@@ -25,12 +25,6 @@ export interface FeedEventHeader {
 }
 
 /**
- * @typedef NullifierSpec Spec for a nullifier
- * @property {number} epoch Epoch length in seconds
- * @property {number} messageLimit Message limit per epoch
- */
-
-/**
  * Nullifier spec for a given event type.
  * This determines the nullifier's required epoch length and message limit.
  * Necessary for verifying event rln proofs.
@@ -92,6 +86,12 @@ export enum HeaderVerificationError {
  * @returns The verification result
  */
 export async function verifyEventHeader(proof: RLNGFullProof, header: FeedEventHeader, topic: string, nullifierSpecs: Map<string, NullifierSpec[]>, rln: RLN) {
+    // Theoretically 64 characters is the max length of a hash or IPFS CID
+    // But we'll be generous and allow 128 characters
+    // To account for future new multihash options
+    if (header.payloadHash.length > 128) {
+        return HeaderVerificationError.SIZE
+    }
     const eventID = getEventHash(header, topic)
 
     if (proof.signal !== eventID) {
