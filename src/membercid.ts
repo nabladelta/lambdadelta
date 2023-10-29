@@ -1,5 +1,5 @@
 import { RLN, nullifierInput, RLNGFullProof, VerificationResult } from '@nabladelta/rln'
-import { getMemberCIDEpoch, getMemberCIDEpochs, getTimestampInSeconds } from './utils.js'
+import { getMemberCIDEpoch, getMemberCIDEpochs, getTimestampInSeconds, rlnIdentifier } from './utils.js'
 
 /**
  * Enum for membership verification results
@@ -31,13 +31,13 @@ const RLN_IDENTIFIER = 'MEMBERCID'
  * @param rln The RLN instance for generating the proof
  * @returns The membership proof
  */
-export async function generateMemberCID(ownPublicKey: string, rln: RLN) {
+export async function generateMemberCID(ownPublicKey: string, rln: RLN, topic: string) {
     const externalNullifier: nullifierInput = {
         nullifier: getMemberCIDEpoch().toString(),
         messageId: 0,
         messageLimit: 1
     }
-    return await rln.createProof(ownPublicKey, [externalNullifier, externalNullifier], RLN_IDENTIFIER, true)
+    return await rln.createProof(ownPublicKey, [externalNullifier, externalNullifier], rlnIdentifier(topic, RLN_IDENTIFIER), true)
 }
 
 /**
@@ -48,7 +48,7 @@ export async function generateMemberCID(ownPublicKey: string, rln: RLN) {
  * @param toleranceMs Maximum time difference between the current time and the proof's epoch
  * @returns The verification result
  */
-export async function verifyMemberCIDProof(proof: RLNGFullProof, peerPublicKey: string, rln: RLN, toleranceMs: number = 10000) {
+export async function verifyMemberCIDProof(proof: RLNGFullProof, peerPublicKey: string, rln: RLN, topic: string, toleranceMs: number = 10000) {
     const nullifier = proof.externalNullifiers[0]
     const allowedEpochs = getMemberCIDEpochs(toleranceMs).map(epoch => epoch.toString())
     if (
@@ -63,7 +63,7 @@ export async function verifyMemberCIDProof(proof: RLNGFullProof, peerPublicKey: 
         return MembershipVerificationResult.INVALID_MESSAGE_LIMIT
     }
 
-    if (proof.rlnIdentifier !== RLN_IDENTIFIER) {
+    if (proof.rlnIdentifier !== rlnIdentifier(topic, RLN_IDENTIFIER)) {
         return MembershipVerificationResult.INVALID_IDENTIFIER
     }
 

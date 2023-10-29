@@ -377,7 +377,7 @@ export class LambdadeltaSync<Feed extends LambdadeltaFeed> {
             }
         }
         if (!this.ownMembershipProof || this.ownMembershipProof.externalNullifiers[0].nullifier !== getMemberCIDEpoch().toString()) {
-            this.ownMembershipProof = await generateMemberCID(this.libp2p.peerId.toString(), this.rln)
+            this.ownMembershipProof = await generateMemberCID(this.libp2p.peerId.toString(), this.rln, this.feed.topic)
             await this.store.put(key, serializeFullProof(this.ownMembershipProof))
         }
         return this.ownMembershipProof
@@ -394,7 +394,7 @@ export class LambdadeltaSync<Feed extends LambdadeltaFeed> {
         if (this.peerMembershipProofs.has(peerId.toString()) && this.peerMembershipProofs.get(peerId.toString())?.externalNullifiers[0].nullifier === nullifier) {
             return VerificationResult.VALID
         }
-        const result = await verifyMemberCIDProof(proof, peerId.toString(), this.rln, this.memberCIDToleranceMs)
+        const result = await verifyMemberCIDProof(proof, peerId.toString(), this.rln, this.feed.topic, this.memberCIDToleranceMs)
         if (result == VerificationResult.VALID) {
             this.peerMembershipProofs.set(peerId.toString(), proof)
         }
