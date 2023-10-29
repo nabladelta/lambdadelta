@@ -27,6 +27,8 @@ export function convertProofToIProof(proof: Proof): IProof {
 }
 
 export function convertFullProofToIFullProof(fullProof: RLNGFullProof): IRLNGFullProof | false {
+    // Discard unknown fields
+    fullProof = RLNGFullProof.clone(fullProof)
     if (!fullProof.snarkProof) return false
     if (!fullProof.snarkProof.proof) return false
     if (!fullProof.snarkProof.publicSignals) return false
