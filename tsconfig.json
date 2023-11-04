@@ -8,7 +8,8 @@
     "rootDir": "./src",       // Source files directory
     "resolveJsonModule": true,
     "skipLibCheck": true,     // Skip type checking of all declaration files
-    "strict": true
+    "strict": true,
+    "declaration": true,     // Generate corresponding .d.ts file
   },
   "baseUrl": "./",
   "include": ["src/**/*.ts"],
