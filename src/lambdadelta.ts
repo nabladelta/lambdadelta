@@ -59,6 +59,18 @@ export interface LambdadeltaOptions {
     logger?: Logger<unknown>;
 }
 
+export interface LambdadeltaConstructorOptions<Feed extends LambdadeltaFeed> {
+    topic: string,
+    groupID: string,
+    rln: RLN,
+    store: Datastore,
+    libp2p: Libp2p<{ pubsub: PubSub; dht: KadDHT }>,
+    feed: (...args: ConstructorParameters<typeof LambdadeltaFeed>) => Feed,
+    sync: (...args: ConstructorParameters<typeof LambdadeltaSync>) => LambdadeltaSync<LambdadeltaFeed>,
+    relayer: (...args: ConstructorParameters<typeof EventRelayer>) => EventRelayer<LambdadeltaFeed, LambdadeltaSync<LambdadeltaFeed>>,
+    initialSyncPeriodMs: number,
+    logger?: Logger<unknown>
+}
 
 /**
  * Main class for the Lambdadelta library
@@ -67,7 +79,7 @@ export interface LambdadeltaOptions {
  * @typeParam Sync Type of the peer sync for this instance
  * @typeParam Relayer Type of the Dandelion++ relayer for this instance
  */
-export class Lambdadelta<Feed extends LambdadeltaFeed, Sync extends LambdadeltaSync<Feed>, Relayer extends EventRelayer<Feed, Sync>> {
+export class Lambdadelta<Feed extends LambdadeltaFeed> {
     public static appID = "LDD"
     public static protocolVersion = "1.0.0"
     public static protocol = `/lambdadelta/${this.protocolVersion}`
@@ -83,13 +95,14 @@ export class Lambdadelta<Feed extends LambdadeltaFeed, Sync extends LambdadeltaS
     private topicName: string
     private topicHash: string
     private groupID: string
-    private feed: Feed
-    private sync: Sync
-    private relayer: Relayer
-    private store: Datastore
+    protected feed: Feed
+    protected sync: LambdadeltaSync<LambdadeltaFeed>
+    protected relayer: EventRelayer<LambdadeltaFeed, LambdadeltaSync<LambdadeltaFeed>>
+    protected store: Datastore
     protected nullifierSpecs: Map<string, NullifierSpec[]> = new Map()
     private log: Logger<unknown>
     private _libp2p: Libp2p<{ pubsub: PubSub; dht: KadDHT }>
+    protected encryption: Crypter
 
     public get topic(): string {
         return this.topicName
@@ -103,29 +116,32 @@ export class Lambdadelta<Feed extends LambdadeltaFeed, Sync extends LambdadeltaS
         return this._libp2p
     }
 
-    private constructor(
-        topic: string,
-        groupID: string,
-        rln: RLN,
-        store: Datastore,
-        libP2P: Libp2p<{ pubsub: PubSub; dht: KadDHT }>,
-        feed: (...args: ConstructorParameters<typeof LambdadeltaFeed>) => Feed,
-        sync: (...args: ConstructorParameters<typeof LambdadeltaSync>) => Sync,
-        relayer: (...args: ConstructorParameters<typeof EventRelayer>) => Relayer,
-        { initialSyncPeriodMs, logger}: {initialSyncPeriodMs: number, logger?: Logger<unknown>}
+    constructor(
+        {
+            topic,
+            groupID,
+            rln,
+            store,
+            libp2p,
+            feed,
+            sync,
+            relayer,
+            initialSyncPeriodMs,
+            logger
+        }: LambdadeltaConstructorOptions<Feed>
     ) {
         this.store = store
         this.rln = rln
         this.topicName = topic
         this.groupID = groupID
-        this._libp2p = libP2P
+        this._libp2p = libp2p
         this.topicHash = this.getTopicHash(topic, 'public').toString('hex')
         const encryptionKey = this.getTopicHash(topic, 'key').toString('hex')
         const crypter: Crypter = {
             encrypt: (data: Uint8Array) => encrypt(data, encryptionKey),
             decrypt: (data: Uint8Array) => decrypt(data, encryptionKey)
         }
-
+        this.encryption = crypter
         this.log = logger?.getSubLogger({name: this.topicName}) || new Logger({
             name: `LDD-${this.topicName}`,
             prettyLogTemplate: "{{yyyy}}-{{mm}}-{{dd}} {{hh}}:{{MM}}:{{ss}}:{{ms}} {{logLevelName}}\t[{{name}}]\t",
@@ -137,9 +153,10 @@ export class Lambdadelta<Feed extends LambdadeltaFeed, Sync extends LambdadeltaS
         this.nullifierRegistry = new MessageIdRegistry(this, this.prefix.mid, this.store)
         const memberTracker = new MemberTracker(this.getSubLogger({name: "tracker"}))
 
-        this.feed = feed(this.prefix.feed, this.topicHash, memberTracker, this.store, this.getSubLogger({name: "feed"}))
-        this.sync = sync(this.prefix.sync, this.prefix.sync, this.feed, this.store, memberTracker, this.rln, crypter, this.nullifierSpecs, libP2P, this.getSubLogger({name: 'sync'}), initialSyncPeriodMs)
-        this.relayer = relayer(this.prefix.relayer, this.prefix.relayer, this.feed, this.sync, this.store, memberTracker, libP2P, crypter, this.getSubLogger({name: 'relayer'}))
+        this.feed = feed({storePrefix: this.prefix.feed, topic: this.topicHash, memberTracker, store, logger: this.getSubLogger({name: "feed"})})
+        
+        this.sync = sync(this.prefix.sync, this.prefix.sync, this.feed, this.store, memberTracker, this.rln, crypter, this.nullifierSpecs, libp2p, this.getSubLogger({name: 'sync'}), initialSyncPeriodMs)
+        this.relayer = relayer(this.prefix.relayer, this.prefix.relayer, this.feed, this.sync, this.store, memberTracker, libp2p, crypter, this.getSubLogger({name: 'relayer'}))
     }
 
     /**
@@ -164,13 +181,12 @@ export class Lambdadelta<Feed extends LambdadeltaFeed, Sync extends LambdadeltaS
             sync: (...args: ConstructorParameters<typeof LambdadeltaSync>) => Sync,
             relayer: (...args: ConstructorParameters<typeof EventRelayer>) => Relayer,
         }
-    ): Promise<Lambdadelta<Feed, Sync, Relayer>> {
+    ): Promise<Lambdadelta<Feed>> {
         store = store || new MemoryDatastore()
         libp2p = libp2p || await createLibp2p(store)
         const {feed, sync, relayer} = components
-        const lambdadelta = new Lambdadelta<Feed, Sync, Relayer>(topic, groupID, rln, store, libp2p, feed, sync, relayer, {logger, initialSyncPeriodMs: initialSyncPeriodMs || 0})
-        await lambdadelta.relayer.start()
-        await lambdadelta.sync.start()
+        const lambdadelta = new Lambdadelta<Feed>({ topic, groupID, rln, store, libp2p, feed, sync, relayer, logger, initialSyncPeriodMs: initialSyncPeriodMs || 0})
+        await lambdadelta.start()
         return lambdadelta
     }
 
@@ -186,6 +202,11 @@ export class Lambdadelta<Feed extends LambdadeltaFeed, Sync extends LambdadeltaS
             sync: LambdadeltaSync.create,
             relayer: EventRelayer.create
         })
+    }
+
+    public async start() {
+        await this.relayer.start()
+        await this.sync.start()
     }
 
     /**

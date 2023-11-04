@@ -108,6 +108,23 @@ interface EventMetadata {
     membersReceived: Map<string, number> // peerID => time received
 }
 
+
+export interface LambdadeltaFeedConstructorOptions {
+    storePrefix: string,
+    topic: string,
+    memberTracker: MemberTracker,
+    store: Datastore,
+    logger: Logger<unknown>,
+    peerTolerance?: number,
+    claimedTolerance?: number,
+    quorum?: number
+    delays?: {
+        deletion?: number,
+        unconfirmedDeletion?: number,
+        deadlockFailsafe?: number
+    }
+}
+
 /**
  * Represents a Lambdadelta feed of events but without the networking synchronization or RLN verification.
  * Receives a stream of events from peers, produces a stream of events to be propagated of peers, persists events, calculates consensus, and keeps track of the timeline
@@ -141,33 +158,30 @@ export class LambdadeltaFeed {
     private processing = false
     private _ready: Promise<void>
 
-    constructor(
-        storePrefix: string,
-        topic: string,
-        memberTracker: MemberTracker,
-        store: Datastore,
-        logger: Logger<unknown>,
-        config?: {
-            peerTolerance?: number,
-            claimedTolerance?: number,
-            quorum?: number
-            delays?: {
-                deletion?: number,
-                unconfirmedDeletion?: number,
-                deadlockFailsafe?: number
-            }
-        }) {
-        this.peerTolerance = config?.peerTolerance ?? this.peerTolerance
-        this.claimedTolerance = config?.claimedTolerance ?? this.claimedTolerance
-        this.quorum = config?.quorum ?? this.quorum
+    constructor({
+            storePrefix,
+            topic,
+            memberTracker,
+            store,
+            logger,
+            peerTolerance,
+            claimedTolerance,
+            quorum,
+            delays
+        }: LambdadeltaFeedConstructorOptions) {
+
+        this.peerTolerance = peerTolerance ?? this.peerTolerance
+        this.claimedTolerance = claimedTolerance ?? this.claimedTolerance
+        this.quorum = quorum ?? this.quorum
         this.store = store
         this._topic = topic
         this.memberTracker = memberTracker
         this.storePrefix = storePrefix
         this.log = logger
-        this.deletionDelaySeconds = config?.delays?.deletion ?? this.deletionDelaySeconds
-        this.unconfirmedEventDeletionDelaySeconds = config?.delays?.unconfirmedDeletion ?? this.unconfirmedEventDeletionDelaySeconds
-        this.deadlockPreventionDelaySeconds = config?.delays?.deadlockFailsafe ?? this.deadlockPreventionDelaySeconds
+        this.deletionDelaySeconds = delays?.deletion ?? this.deletionDelaySeconds
+        this.unconfirmedEventDeletionDelaySeconds = delays?.unconfirmedDeletion ?? this.unconfirmedEventDeletionDelaySeconds
+        this.deadlockPreventionDelaySeconds = delays?.deadlockFailsafe ?? this.deadlockPreventionDelaySeconds
+
         this._ready = (async () => {
             await this.reloadEventLog()
         })()
@@ -658,6 +672,22 @@ export class LambdadeltaFeed {
         const events = (await Promise.all(this.timeline.getEvents(startTime, endTime, maxLength, true)
                 .map(async ([time, eventID]) => (await this.getEventByID(eventID))! )))
                 .filter(e => e != null)
+        return events
+    }
+
+    /**
+     * Get eventIds from the timeline dated between `startTime` and `endTime`
+     * @param startTime Events with this timestamp or newer will be included
+     * @param endTime Events with this timestamp or older will be included
+     * @param maxLength Maximum number of results
+     * @returns list of event data
+     */
+    public getEventIds(
+        startTime: number = 0,
+        endTime?: number,
+        maxLength?: number
+    ) {
+        const events = this.timeline.getEvents(startTime, endTime, maxLength, true)
         return events
     }
 
