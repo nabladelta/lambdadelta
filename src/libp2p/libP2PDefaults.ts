@@ -66,7 +66,11 @@ export function libp2pDefaults (): Libp2pOptions<DefaultLibp2pServices> {
       identify: identifyService(),
       autoNAT: autoNATService(),
       upnp: uPnPNATService(),
-      pubsub: gossipsub(),
+      pubsub: gossipsub(
+      {
+        allowPublishToZeroPeers: true,
+      }
+      ),
       dcutr: dcutrService(),
       dht: kadDHT(),
       relay: circuitRelayServer({

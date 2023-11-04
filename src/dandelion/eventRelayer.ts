@@ -250,8 +250,6 @@ export class EventRelayer<Feed extends LambdadeltaFeed, Sync extends Lambdadelta
         const { peerId: remotePeer, subscriptions } = subscriptionChange
         const peerId = String(remotePeer)
 
-        this.log.info(`Peer ${peerId} subscribed`)
-
         const subscription = subscriptions.find(e => e.topic === this.feed.topic)
         if (!subscription) {
             return
@@ -263,6 +261,7 @@ export class EventRelayer<Feed extends LambdadeltaFeed, Sync extends Lambdadelta
         if (this.peers.has(peerId)) {
             return
         }
+        this.log.info(`Peer ${peerId} subscribed`)
 
         const timeoutController = new TimeoutController(5000)
         const { signal } = timeoutController

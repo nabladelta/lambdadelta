@@ -148,7 +148,7 @@ export class LambdadeltaFeed {
     private store: Datastore
     private storePrefix: string
     private memberTracker: MemberTracker
-    private log: Logger<unknown>
+    protected log: Logger<unknown>
     private deletionDelaySeconds: number = 100 // Over 1.5 minutes
     private unconfirmedEventDeletionDelaySeconds: number = 600 // 10 minutes
     private deadlockPreventionDelaySeconds: number = 300 // 5 minutes
