@@ -2,7 +2,7 @@ import { Lambdadelta, LambdadeltaConstructorOptions, LambdadeltaOptions } from "
 import { generateMemberCID, verifyMemberCIDProof, MembershipVerificationResult } from "./membercid.js"
 import { Timeline } from "./timeline.js"
 import { RoutingTable } from "./dandelion/routingTable.js"
-import { NullifierSpec } from "./verifyEventHeader.js"
+import { NullifierSpec, HeaderVerificationError } from "./verifyEventHeader.js"
 import { EventRelayer } from "./dandelion/eventRelayer.js"
 import { LambdadeltaFeed, LambdadeltaFeedConstructorOptions } from "./feed.js"
 import { LambdadeltaSync } from "./sync.js"
@@ -46,5 +46,5 @@ export {
     FeedEventHeader,
     MessageIdRegistry,
     serializeFullProof, serializePeerMessage, serializeStoredEvent, deserializeFullProof, deserializePeerMessage, deserializeStoredEvent,
-    
+    HeaderVerificationError
 }

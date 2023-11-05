@@ -80,20 +80,23 @@ export interface LambdadeltaConstructorOptions<Feed extends LambdadeltaFeed> {
  * @typeParam Relayer Type of the Dandelion++ relayer for this instance
  */
 export class Lambdadelta<Feed extends LambdadeltaFeed> {
-    public static appID = "LDD"
-    public static protocolVersion = "1.0.0"
-    public static protocol = `/lambdadelta/${this.protocolVersion}`
-    public static storePrefix = {
-        sync: `${this.protocol}/sync`,
-        feed: `${this.protocol}/feed`,
-        mid: `${this.protocol}/mid`,
-        relayer: `${this.protocol}/dandelion`,
-        main: `${this.protocol}/main`
+    public static appID = "LDD" as const
+    public static protocolVersion = "1.0.0" as const
+    public static protocol = `/lambdadelta/${this.protocolVersion}` as const
+    public static get storePrefix () {
+        return {
+            base: `${this.protocol}`,
+            sync: `${this.protocol}/sync`,
+            feed: `${this.protocol}/feed`,
+            mid: `${this.protocol}/mid`,
+            relayer: `${this.protocol}/dandelion`,
+            main: `${this.protocol}/main`
+        } as const
     }
     private rln: RLN
     private nullifierRegistry: MessageIdRegistry
     private topicName: string
-    private topicHash: string
+    protected topicHash: string
     private groupID: string
     protected feed: Feed
     protected sync: LambdadeltaSync<LambdadeltaFeed>

@@ -370,8 +370,11 @@ export class LambdadeltaFeed {
             if (event === QueueControl.STOP) {
                 break
             }
-            await this.processQueueEvent(event)
             // Run garbage collection
+            await this.gc()
+            // Process the event
+            await this.processQueueEvent(event)
+            // Run garbage collection again
             await this.gc()
         }
     }
@@ -692,13 +695,22 @@ export class LambdadeltaFeed {
     }
 
     /**
+     * If an event is scheduled for deletion
+     * @param eventID 
+     * @returns boolean indicating if the event is scheduled for deletion
+     */
+    public isScheduledForDeletion(eventID: string) {
+        return this.deletionTimeline.getTime(eventID) !== undefined
+    }
+
+    /**
      * Async iterable for all events that have been published
      * @returns Async iterable of event data
      */
     public async * publishedEvents(): AsyncIterable<OutgoingEvent> {
         const publishedIDs = []
         for (const [eventID, metadata] of this.metadata) {
-            if (metadata.published) {
+            if (metadata.published && !this.isScheduledForDeletion(eventID)) {
                 publishedIDs.push(eventID)
             }
         }
@@ -709,6 +721,8 @@ export class LambdadeltaFeed {
             yield { eventProof: event.proof, header: event.header, received: metadata.received }
         }
     }
+
+    // Hooks
 
     protected async onTimelineAdd(eventID: string, time: number) {
 
