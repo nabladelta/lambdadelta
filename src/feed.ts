@@ -385,6 +385,10 @@ export class LambdadeltaFeed {
      */
     private async processQueueEvent(event: FeedReceivedEvent) {
         const eventID = event.eventProof.signal
+        if (this.isScheduledForDeletion(eventID)) {
+            // If the event is scheduled for deletion, ignore it
+            return
+        }
         await this.insertEventHeader(event.eventProof, event.header)
         await this.onEventHeaderSync(eventID, event.header)
 
