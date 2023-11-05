@@ -279,15 +279,19 @@ export class LambdadeltaFeed {
         const currentTime = Date.now()
         // Delete events that have been scheduled for deletion now
         const eventsToDelete = this.deletionTimeline.getEvents(0, currentTime, undefined, true)
+        let count = 0
         for (const [_, eventID] of eventsToDelete) {
             await this.deleteEvent(eventID)
         }
+        if (count > 0) this.log.info(`Deleted ${count} events scheduled for deletion.`)
         // Delete events that have been unconfirmed for too long
         const timeOfDeletableEvents = currentTime - (this.unconfirmedEventDeletionDelaySeconds * 1000)
         const unconfirmedEvents = this.unconfirmedTimeline.getEvents(0, timeOfDeletableEvents, undefined, true)
+        count = 0
         for (const [_, eventID] of unconfirmedEvents) {
             await this.deleteEvent(eventID)
         }
+        if (count > 0) this.log.info(`Deleted ${count} unconfirmed events.`)
     }
 
     /**
@@ -549,6 +553,9 @@ export class LambdadeltaFeed {
      * @returns Boolean indicating if the event was published
      */
     private async publishReceived(eventID: string, received: number) {
+        if (this.isScheduledForDeletion(eventID)) {
+            return false
+        }
         const { proof, header } = await this.getEventByID(eventID) || {}
         if (!proof || !header) {
             return false
